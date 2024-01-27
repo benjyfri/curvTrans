@@ -8,7 +8,6 @@ from tqdm import tqdm
 import os
 import wandb
 import argparse
-import dgl
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import numpy as np
@@ -16,6 +15,42 @@ import torch
 from scipy.sparse import csgraph
 from scipy.sparse import csr_matrix
 from model import *
+import os
+import torch
+from torch.utils.data import DataLoader
+from torch.utils.data.dataset import random_split
+from torchvision import transforms
+import h5py
+
+
+class PointCloudDataset(torch.utils.data.Dataset):
+    def __init__(self, file_path):
+        self.file_path = file_path
+        self.hdf5_file = h5py.File(file_path, 'r')
+        self.point_clouds_group = self.hdf5_file['point_clouds']
+        self.num_point_clouds = len(self.point_clouds_group)
+        self.indices = list(range(self.num_point_clouds))
+
+    def __len__(self):
+        return self.num_point_clouds
+
+    def __getitem__(self, idx):
+        point_cloud_name = f"point_cloud_{self.indices[idx]}"
+
+        # Load point cloud data
+        point_cloud = torch.tensor(self.point_clouds_group[point_cloud_name], dtype=torch.float32)
+
+        # Load metadata from attributes
+        metadata = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
+                    self.point_clouds_group[point_cloud_name].attrs}
+
+        return {"point_cloud": point_cloud, "metadata": metadata}
+
+
+def create_dataloader(file_path, batch_size, shuffle=True):
+    dataset = PointCloudDataset(file_path)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=4)
+    return dataloader
 class TransformerNetwork(nn.Module):
     def __init__(self, input_dim=3, hidden_dim=64, output_dim=2, num_layers=2, num_heads=3, positional_encoding_type='sinusoidal'):
         super(TransformerNetwork, self).__init__()

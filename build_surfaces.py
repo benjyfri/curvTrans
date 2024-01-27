@@ -3,6 +3,7 @@ import random
 import plotly.graph_objects as go
 import numpy as np
 import plotly.express as px
+import h5py
 
 def samplePoints(a, b, c, d, e, count):
     def surface_function(x, y):
@@ -36,37 +37,67 @@ def createDataSet():
     test_path = os.path.join(os.getcwd(), 'test_surfaces')
     if not os.path.exists(test_path):
         os.makedirs(test_path)
-    counter = 0
-    for gau_cur in [0, 1, -1]:
-        for mean_cur in [0, 1, -1]:
-            if gau_cur == 1 and mean_cur == 0:
-                continue
-            for k in range(5000):
-                a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gau_cur, mean_curv=mean_cur)
-                point_cloud = samplePoints(a, b, c, d, e, count=20)
-                patch_file_name = train_path + f'\\{counter}.npy'
-                info_name = train_path + f'\\{counter}_info.npy'
-                np.save(patch_file_name, point_cloud)
-                np.save(info_name, np.array([a , b , c , d , e , H , K , gau_cur , mean_cur]))
-                counter += 1
-                if counter % 500 == 0:
-                    print(f'Counter is = {counter}')
 
-    counter = 0
-    for gau_cur in [0, 1, -1]:
-        for mean_cur in [0, 1, -1]:
-            if gau_cur == 1 and mean_cur == 0:
-                continue
-            for k in range(500):
-                a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gau_cur, mean_curv=mean_cur)
-                point_cloud = samplePoints(a, b, c, d, e, count=20)
-                patch_file_name = test_path + f'\\{counter}.npy'
-                info_name = test_path + f'\\{counter}_info.npy'
-                np.save(patch_file_name, point_cloud)
-                np.save(info_name, np.array([a , b , c , d , e , H , K , gau_cur , mean_cur]))
-                counter += 1
-                if counter % 500 == 0:
-                    print(f'Counter is = {counter}')
+    new_file_path_train = "train_surfaces.h5"
+    new_file_path_test = "test_surfaces.h5"
+    with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
+        point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
+        counter = 0
+        for gau_cur in [0, 1, -1]:
+            for mean_cur in [0, 1, -1]:
+                if gau_cur == 1 and mean_cur == 0:
+                    continue
+                for k in range(5000):
+                    a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gau_cur, mean_curv=mean_cur)
+                    point_cloud = samplePoints(a, b, c, d, e, count=20)
+                    point_clouds_group.create_dataset(f"point_cloud_{counter}", data=point_cloud)
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['a'] = a
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['b'] = b
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['c'] = c
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['d'] = d
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['e'] = e
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['H'] = H
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['K'] = K
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['gau_cur'] = gau_cur
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['mean_cur'] = mean_cur
+
+
+                    # patch_file_name = train_path + f'\\{counter}.npy'
+                    # info_name = train_path + f'\\{counter}_info.npy'
+                    # np.save(patch_file_name, point_cloud)
+                    # np.save(info_name, np.array([a , b , c , d , e , H , K , gau_cur , mean_cur]))
+                    counter += 1
+                    if counter % 500 == 0:
+                        print(f'Counter is = {counter}')
+
+    with h5py.File(new_file_path_test, "w") as new_hdf5_test_file:
+        point_clouds_group = new_hdf5_test_file.create_group("point_clouds")
+        counter = 0
+        for gau_cur in [0, 1, -1]:
+            for mean_cur in [0, 1, -1]:
+                if gau_cur == 1 and mean_cur == 0:
+                    continue
+                for k in range(500):
+                    a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gau_cur, mean_curv=mean_cur)
+                    point_cloud = samplePoints(a, b, c, d, e, count=20)
+                    point_clouds_group.create_dataset(f"point_cloud_{counter}", data=point_cloud)
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['a'] = a
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['b'] = b
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['c'] = c
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['d'] = d
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['e'] = e
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['H'] = H
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['K'] = K
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['gau_cur'] = gau_cur
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['mean_cur'] = mean_cur
+
+                    # patch_file_name = train_path + f'\\{counter}.npy'
+                    # info_name = train_path + f'\\{counter}_info.npy'
+                    # np.save(patch_file_name, point_cloud)
+                    # np.save(info_name, np.array([a , b , c , d , e , H , K , gau_cur , mean_cur]))
+                    counter += 1
+                    if counter % 500 == 0:
+                        print(f'Counter is = {counter}')
 def createFunction(gaussian_curv, mean_curv, epsilon=0.05):
     if gaussian_curv==1 and mean_curv==0:
         raise ValueError("gaussian_curv==1 and mean_curv==0 is impossible")
