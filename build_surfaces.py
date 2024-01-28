@@ -58,8 +58,7 @@ def createDataSet():
                     point_clouds_group[f"point_cloud_{counter}"].attrs['e'] = e
                     point_clouds_group[f"point_cloud_{counter}"].attrs['H'] = H
                     point_clouds_group[f"point_cloud_{counter}"].attrs['K'] = K
-                    point_clouds_group[f"point_cloud_{counter}"].attrs['gau_cur'] = gau_cur
-                    point_clouds_group[f"point_cloud_{counter}"].attrs['mean_cur'] = mean_cur
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['class'] = counter // 5000
 
 
                     # patch_file_name = train_path + f'\\{counter}.npy'
@@ -88,8 +87,7 @@ def createDataSet():
                     point_clouds_group[f"point_cloud_{counter}"].attrs['e'] = e
                     point_clouds_group[f"point_cloud_{counter}"].attrs['H'] = H
                     point_clouds_group[f"point_cloud_{counter}"].attrs['K'] = K
-                    point_clouds_group[f"point_cloud_{counter}"].attrs['gau_cur'] = gau_cur
-                    point_clouds_group[f"point_cloud_{counter}"].attrs['mean_cur'] = mean_cur
+                    point_clouds_group[f"point_cloud_{counter}"].attrs['class'] = counter // 500
 
                     # patch_file_name = train_path + f'\\{counter}.npy'
                     # info_name = train_path + f'\\{counter}_info.npy'
