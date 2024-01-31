@@ -14,8 +14,6 @@ import numpy as np
 import torch
 from scipy.sparse import csgraph
 from scipy.sparse import csr_matrix
-from PCT_Pytorch_main.model import *
-from PCT_Pytorch_main.util import *
 import os
 import torch
 from torch.utils.data import DataLoader
@@ -24,7 +22,30 @@ from torchvision import transforms
 import h5py
 import sklearn.metrics as metrics
 import time
+import torch.nn as nn
+def positional_encoding_nerf(points):
+  """
+  Creates positional encoding for a 3D point cloud using sinusoidal functions.
 
+  Args:
+      points: A NumPy array of shape (N, 3) representing the point cloud.
+
+  Returns:
+      A NumPy array of shape (N, C) where C is the number of encoding dimensions.
+  """
+  dims = points.shape[-1]  # Number of dimensions (3 for 3D points)
+  channels = dims * 2  # Two channels per dimension (sin and cos)
+  encoding = np.zeros((points.shape[0], channels))
+
+  for i in range(channels):
+    frequency = 1 / np.power(10000, 2 * (i // 2) / dims)
+    channel_id = i % 2
+    if channel_id == 0:
+      encoding[:, i] = np.sin(points[:, i // 2] * frequency)
+    else:
+      encoding[:, i] = np.cos(points[:, i // 2] * frequency)
+
+  return encoding
 
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path):
@@ -42,63 +63,50 @@ class PointCloudDataset(torch.utils.data.Dataset):
 
         # Load point cloud data
         point_cloud = torch.tensor(self.point_clouds_group[point_cloud_name], dtype=torch.float32)
-        lpe = createLPE(point_cloud)
+        lpe, pcl = createLPE(point_cloud)
+        lpe = torch.tensor(lpe, dtype=torch.float32)
+        point_cloud = torch.tensor(pcl, dtype=torch.float32)
+        # lpe = torch.tensor([])
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
 
         return {"point_cloud": point_cloud, "lpe": lpe, "info": info}
 
+
+
 class TransformerNetwork(nn.Module):
-    def __init__(self, input_dim=3, hidden_dim=64, output_dim=2, num_layers=2, num_heads=3, positional_encoding_type='sinusoidal'):
+    def __init__(self, input_dim=3, output_dim=5, num_heads=3, num_layers=2):
         super(TransformerNetwork, self).__init__()
-        # Positional encoding layer
-        if positional_encoding_type == 'sinusoidal':
-            self.positional_encoding_type = 'sinusoidal'
-            self.positional_encoding = nn.Embedding(21, input_dim)
-        elif positional_encoding_type == 'learnable':
-            self.positional_encoding_type = 'learnable'
-            self.positional_encoding = nn.Parameter(torch.rand(21, input_dim))
-        elif positional_encoding_type == 'laplacian':
-            self.positional_encoding_type = 'laplacian'
-            self.positional_encoding = None
-        else:
-            raise ValueError("Invalid positional_encoding_type. Choose 'sinusoidal' or 'learnable'.")
 
-        # Transformer Encoder
-        self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=input_dim,
-                nhead=num_heads,
-                dim_feedforward=hidden_dim
-            ),
-            num_layers=num_layers
-        )
+        # Define a list to hold the multihead attention and residual layers
+        self.layers = nn.ModuleList([
+            nn.ModuleList([
+                nn.MultiheadAttention(embed_dim=input_dim, num_heads=num_heads),
+                nn.LayerNorm(input_dim)
+            ]) for _ in range(num_layers)
+        ])
 
-        # Fully connected layer for output
-        self.fc_output = nn.Linear(input_dim, output_dim)
+        # Classifier layer
+        self.fc = nn.Linear(input_dim, output_dim)
 
     def forward(self, x):
-        # Add positional encoding to the input
-        if isinstance(self.positional_encoding, nn.Embedding):
-            position = torch.arange(0, 21).unsqueeze(1).to(x.device)
-            x = x + self.positional_encoding(position).permute(1, 0, 2)
-        elif isinstance(self.positional_encoding, nn.Parameter):
-            x = x + self.positional_encoding.unsqueeze(0)
+        # Transpose input for the first MultiheadAttention layer
+        x = x.permute(0, 2, 1)  # Assuming the input has dimensions (batch_size, 21, 3)
 
-        # Transformer Encoder
-        x = self.transformer_encoder(x)
+        # Apply multihead attention and residual layers
+        for attn_layer, norm_layer in self.layers:
+            attn_output, _ = attn_layer(x, x, x)
+            x = x + attn_output
+            x = norm_layer(x)
 
-        # Global average pooling
-        x = torch.mean(x, dim=1)
+        # Sum along the sequence dimension (assuming the sequence dimension is 21)
+        attn_output_sum = x.sum(dim=1)
 
-        # Fully connected layer for output
-        output = self.fc_output(x)
+        # Classification layer
+        output = self.fc(attn_output_sum)
 
-        # Split the output into k1 and k2
-        k1, k2 = torch.chunk(output, 2, dim=1)
-
-        return k1, k2
+        return output
 def createLPE(data):
     umbrella = create_triangles_ring(data[1:, :], data[0, :])
     centroids = umbrella[:, 2, :]
@@ -125,7 +133,8 @@ def createLPE(data):
     mat = csr_matrix((weights, (row, col)), shape=(21, 21)).toarray()
     lap = csgraph.laplacian(mat)
     lpe = laplacian_pe(lap, 15)
-    return lpe
+    pcl = np.concatenate([(data[0,:]).unsqueeze(0),p1])
+    return lpe, pcl
 def laplacian_pe(lap, k):
 
     # select eigenvectors with smaller eigenvalues O(n + klogk)
@@ -177,7 +186,7 @@ def test(model, dataloader, loss_function, device, args):
     with torch.no_grad():
         for batch in dataloader:
             data, lpe, info = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info']
-            label_class = info['class'].to(device)
+            label_class = info['class'].to(device).long()
             if args.use_lpe == 1:
                 data = torch.cat([data, lpe], dim=2).to(device)
             data = data.permute(0, 2, 1)
@@ -212,13 +221,16 @@ def train_and_test(args):
     test_dataset = PointCloudDataset(file_path='test_surfaces.h5')
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
-
-    model = Pct(args, output_channels=8).to(device)
+    input_dim = 3
+    if args.use_lpe==1:
+        input_dim = 18
+    model = TransformerNetwork(input_dim=input_dim, output_dim=6, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers).to(device)
     num_params = sum(p.numel() for p in model.parameters())
-    print(num_params)
+    print(f'Num of parameters in NN: {num_params}')
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
-    scheduler = MultiStepLR(optimizer, milestones=[50, 100, 150], gamma=0.1)
-    criterion = cal_loss
+    milestones = np.linspace(args.lr_jumps,num_epochs,num_epochs//args.lr_jumps)
+    scheduler = MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
+    criterion = nn.CrossEntropyLoss(reduction='mean')
 
     # Training loop
     for epoch in range(num_epochs):
@@ -231,12 +243,13 @@ def train_and_test(args):
         with tqdm(train_dataloader, desc=f'Epoch {epoch + 1}/{num_epochs}', leave=False) as tqdm_bar:
             for batch in tqdm_bar:
                 data, lpe, info = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info']
-                label_class = info['class'].to(device)
+                label_class = info['class'].to(device).long()
                 if args.use_lpe==1:
                     data= torch.cat([data, lpe], dim=2).to(device)
                 data =  data.permute(0, 2, 1)
                 logits = model(data)
                 loss = criterion(logits, label_class)
+
 
                 # Backward pass and optimization
                 optimizer.zero_grad()
@@ -263,13 +276,14 @@ def train_and_test(args):
 
         test_loss, acc_test ,  avg_per_class_acc_test = test(model, test_dataloader, criterion, device, args)
         scheduler.step()
+        print(f'LR: {current_lr}')
         print({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test,
                        "avg_per_class_acc_train":avg_per_class_acc_train, "avg_per_class_acc_test" : avg_per_class_acc_test })
         if args.use_wandb:
             wandb.log({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test,
                        "avg_per_class_acc_train":avg_per_class_acc_train, "avg_per_class_acc_test" : avg_per_class_acc_test })
     # Save the trained model if needed
-    torch.save(model.state_dict(), args.exp_name+'_trained_model.pth')
+    # torch.save(model.state_dict(), args.exp_name+'_trained_model.pth')
 def configArgsPCT():
     parser = argparse.ArgumentParser(description='Point Cloud Recognition')
     parser.add_argument('--exp_name', type=str, default='exp', metavar='N',
@@ -302,17 +316,17 @@ def configArgsPCT():
                         help='use angles in learning ')
     parser.add_argument('--use_lpe', type=int, default=0, metavar='N',
                         help='use laplacian positional encoding')
-    parser.add_argument('--loss', type=int, default=1, metavar='N',
-                        help='0 is for K1 and K2; 1 for gaussian and mean curvature; 2 for variances ')
+    parser.add_argument('--num_of_heads', type=int, default=3, metavar='N',
+                        help='how many attention heads to use')
+    parser.add_argument('--num_of_attention_layers', type=int, default=2, metavar='N',
+                        help='how many attention layers to use')
+    parser.add_argument('--lr_jumps', type=int, default=10, metavar='N',
+                        help='Lower lr *0.1 every amount of jumps')
     args = parser.parse_args()
     return args
 if __name__ == '__main__':
     args = configArgsPCT()
-    args.use_wandb=1
-    args.exp_name='classification_PCT'
-    print(args)
     train_and_test(args)
     wandb.finish()
-    print("yay")
 
 

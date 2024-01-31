@@ -47,6 +47,24 @@ def createDataSet():
             for mean_cur in [0, 1, -1]:
                 if gau_cur == 1 and mean_cur == 0:
                     continue
+                # saddles are all the same!
+                if gau_cur == -1:
+                    for k in range(5000):
+                        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=-1, mean_curv=-33)
+                        point_cloud = samplePoints(a, b, c, d, e, count=20)
+                        point_clouds_group.create_dataset(f"point_cloud_{counter}", data=point_cloud)
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['a'] = a
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['b'] = b
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['c'] = c
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['d'] = d
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['e'] = e
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['H'] = H
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['K'] = K
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['class'] = counter // 5000
+                        counter += 1
+                        if counter % 500 == 0:
+                            print(f'Counter is = {counter}')
+                    break
                 for k in range(5000):
                     a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gau_cur, mean_curv=mean_cur)
                     point_cloud = samplePoints(a, b, c, d, e, count=20)
@@ -59,12 +77,6 @@ def createDataSet():
                     point_clouds_group[f"point_cloud_{counter}"].attrs['H'] = H
                     point_clouds_group[f"point_cloud_{counter}"].attrs['K'] = K
                     point_clouds_group[f"point_cloud_{counter}"].attrs['class'] = counter // 5000
-
-
-                    # patch_file_name = train_path + f'\\{counter}.npy'
-                    # info_name = train_path + f'\\{counter}_info.npy'
-                    # np.save(patch_file_name, point_cloud)
-                    # np.save(info_name, np.array([a , b , c , d , e , H , K , gau_cur , mean_cur]))
                     counter += 1
                     if counter % 500 == 0:
                         print(f'Counter is = {counter}')
@@ -76,6 +88,25 @@ def createDataSet():
             for mean_cur in [0, 1, -1]:
                 if gau_cur == 1 and mean_cur == 0:
                     continue
+                # saddles are all the same!
+                if gau_cur == -1:
+                    for k in range(500):
+                        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=-1, mean_curv=-33)
+                        point_cloud = samplePoints(a, b, c, d, e, count=20)
+                        point_clouds_group.create_dataset(f"point_cloud_{counter}", data=point_cloud)
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['a'] = a
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['b'] = b
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['c'] = c
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['d'] = d
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['e'] = e
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['H'] = H
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['K'] = K
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['class'] = counter // 5000
+                        counter += 1
+                        if counter % 100 == 0:
+                            print(f'Counter is = {counter}')
+                            plotFunc(a, b, c, d, e)
+                    break
                 for k in range(500):
                     a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gau_cur, mean_curv=mean_cur)
                     point_cloud = samplePoints(a, b, c, d, e, count=20)
@@ -88,11 +119,6 @@ def createDataSet():
                     point_clouds_group[f"point_cloud_{counter}"].attrs['H'] = H
                     point_clouds_group[f"point_cloud_{counter}"].attrs['K'] = K
                     point_clouds_group[f"point_cloud_{counter}"].attrs['class'] = counter // 500
-
-                    # patch_file_name = train_path + f'\\{counter}.npy'
-                    # info_name = train_path + f'\\{counter}_info.npy'
-                    # np.save(patch_file_name, point_cloud)
-                    # np.save(info_name, np.array([a , b , c , d , e , H , K , gau_cur , mean_cur]))
                     counter += 1
                     if counter % 500 == 0:
                         print(f'Counter is = {counter}')
