@@ -62,7 +62,7 @@ class PointCloudDataset(torch.utils.data.Dataset):
         point_cloud_name = f"point_cloud_{self.indices[idx]}"
 
         # Load point cloud data
-        point_cloud = torch.tensor(self.point_clouds_group[point_cloud_name], dtype=torch.float32)
+        point_cloud = self.point_clouds_group[point_cloud_name]
         lpe, pcl = createLPE(point_cloud)
         lpe = torch.tensor(lpe, dtype=torch.float32)
         point_cloud = torch.tensor(pcl, dtype=torch.float32)
@@ -133,7 +133,7 @@ def createLPE(data):
     mat = csr_matrix((weights, (row, col)), shape=(21, 21)).toarray()
     lap = csgraph.laplacian(mat)
     lpe = laplacian_pe(lap, 15)
-    pcl = np.concatenate([(data[0,:]).unsqueeze(0),p1])
+    pcl = np.concatenate([(data[0, :][np.newaxis]), p1])
     return lpe, pcl
 def laplacian_pe(lap, k):
 
