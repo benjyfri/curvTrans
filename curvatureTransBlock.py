@@ -180,9 +180,8 @@ def create_triangles_ring(point_cloud, centroid):
 def test(model, dataloader, loss_function, device, args):
     model.eval()  # Set the model to evaluation mode
     total_loss = 0.0
+    total_acc_loss = 0.0
     count = 0
-    test_pred = []
-    test_true = []
     with torch.no_grad():
         for batch in dataloader:
             data, lpe, info = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info']
@@ -194,16 +193,13 @@ def test(model, dataloader, loss_function, device, args):
             logits = model(data)
             loss = loss_function(logits, label_class)
             preds = logits.max(dim=1)[1]
-            test_true.append(label_class.cpu().numpy())
-            test_pred.append(preds.detach().cpu().numpy())
+            total_acc_loss += torch.mean((preds == label_class).float())
             total_loss += loss.item()
             count = count + 1
-    test_true = np.concatenate(test_true)
-    test_pred = np.concatenate(test_pred)
-    test_acc = metrics.accuracy_score(test_true, test_pred)
-    avg_per_class_acc = metrics.balanced_accuracy_score(test_true, test_pred)
+
+    test_acc = total_acc_loss / (count)
     average_loss = total_loss / (count * args.batch_size)
-    return average_loss, test_acc ,  avg_per_class_acc
+    return average_loss, test_acc
 
 
 def train_and_test(args):
@@ -236,6 +232,7 @@ def train_and_test(args):
     for epoch in range(num_epochs):
         model.train()  # Set the model to training mode
         total_train_loss = 0.0
+        total_train_acc_loss = 0.0
         count = 0
         train_pred = []
         train_true = []
@@ -259,29 +256,21 @@ def train_and_test(args):
                 current_lr = optimizer.param_groups[0]['lr']
 
                 total_train_loss += loss.item()
+                preds = logits.max(dim=1)[1]
+                total_train_acc_loss += torch.mean((preds == label_class).float())
+
                 count = count + 1
 
-                preds = logits.max(dim=1)[1]
-                train_true.append(label_class.cpu().numpy())
-                train_pred.append(preds.detach().cpu().numpy())
-
-
                 tqdm_bar.set_postfix(train_loss=f'{(loss.item() / args.batch_size):.4f}')
-
-        train_true = np.concatenate(train_true)
-        train_pred = np.concatenate(train_pred)
-        acc_train = metrics.accuracy_score( train_true , train_pred )
-        avg_per_class_acc_train = metrics.balanced_accuracy_score( train_true , train_pred )
+        acc_train = (total_train_acc_loss / (count))
         train_loss = (total_train_loss / (args.batch_size * count))
 
-        test_loss, acc_test ,  avg_per_class_acc_test = test(model, test_dataloader, criterion, device, args)
+        test_loss, acc_test = test(model, test_dataloader, criterion, device, args)
         scheduler.step()
         print(f'LR: {current_lr}')
-        print({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test,
-                       "avg_per_class_acc_train":avg_per_class_acc_train, "avg_per_class_acc_test" : avg_per_class_acc_test })
+        print({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test })
         if args.use_wandb:
-            wandb.log({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test,
-                       "avg_per_class_acc_train":avg_per_class_acc_train, "avg_per_class_acc_test" : avg_per_class_acc_test })
+            wandb.log({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test})
     # Save the trained model if needed
     # torch.save(model.state_dict(), args.exp_name+'_trained_model.pth')
 def configArgsPCT():

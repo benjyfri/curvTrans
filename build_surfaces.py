@@ -101,7 +101,7 @@ def createDataSet():
                         point_clouds_group[f"point_cloud_{counter}"].attrs['e'] = e
                         point_clouds_group[f"point_cloud_{counter}"].attrs['H'] = H
                         point_clouds_group[f"point_cloud_{counter}"].attrs['K'] = K
-                        point_clouds_group[f"point_cloud_{counter}"].attrs['class'] = counter // 5000
+                        point_clouds_group[f"point_cloud_{counter}"].attrs['class'] = counter // 500
                         counter += 1
                         if counter % 100 == 0:
                             print(f'Counter is = {counter}')
