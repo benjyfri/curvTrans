@@ -23,7 +23,7 @@ import h5py
 import sklearn.metrics as metrics
 import time
 import torch.nn as nn
-def positional_encoding_nerf(points):
+def positional_encoding_nerf(points , channels_per_dim=5):
   """
   Creates positional encoding for a 3D point cloud using sinusoidal functions.
 
@@ -34,27 +34,27 @@ def positional_encoding_nerf(points):
       A NumPy array of shape (N, C) where C is the number of encoding dimensions.
   """
   dims = points.shape[-1]  # Number of dimensions (3 for 3D points)
-  channels = dims * 2  # Two channels per dimension (sin and cos)
+  channels = dims * channels_per_dim  # Two channels per dimension (sin and cos)
   encoding = np.zeros((points.shape[0], channels))
 
   for i in range(channels):
-    frequency = 1 / np.power(10000, 2 * (i // 2) / dims)
-    channel_id = i % 2
+    frequency = 1 / np.power(10000, channels_per_dim * (i // channels_per_dim) / dims)
+    channel_id = i % channels_per_dim
     if channel_id == 0:
-      encoding[:, i] = np.sin(points[:, i // 2] * frequency)
+      encoding[:, i] = np.sin(points[:, i // channels_per_dim] * frequency)
     else:
-      encoding[:, i] = np.cos(points[:, i // 2] * frequency)
+      encoding[:, i] = np.cos(points[:, i // channels_per_dim] * frequency)
 
   return encoding
 
 class PointCloudDataset(torch.utils.data.Dataset):
-    def __init__(self, file_path):
+    def __init__(self, file_path, args):
         self.file_path = file_path
         self.hdf5_file = h5py.File(file_path, 'r')
         self.point_clouds_group = self.hdf5_file['point_clouds']
         self.num_point_clouds = len(self.point_clouds_group)
         self.indices = list(range(self.num_point_clouds))
-
+        self.use_lpe = args.use_lpe
     def __len__(self):
         return self.num_point_clouds
 
@@ -63,10 +63,13 @@ class PointCloudDataset(torch.utils.data.Dataset):
 
         # Load point cloud data
         point_cloud = self.point_clouds_group[point_cloud_name]
-        lpe, pcl = createLPE(point_cloud)
-        lpe = torch.tensor(lpe, dtype=torch.float32)
-        point_cloud = torch.tensor(pcl, dtype=torch.float32)
-        # lpe = torch.tensor([])
+        if self.use_lpe==1:
+            lpe, pcl = createLPE(point_cloud)
+            lpe = torch.tensor(lpe, dtype=torch.float32)
+            point_cloud = torch.tensor(pcl, dtype=torch.float32)
+        else:
+            point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
+            lpe = torch.tensor([])
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
@@ -213,8 +216,8 @@ def train_and_test(args):
     learning_rate = args.lr
 
     # Create instances for training and testing datasets
-    train_dataset = PointCloudDataset(file_path="train_surfaces.h5")
-    test_dataset = PointCloudDataset(file_path='test_surfaces.h5')
+    train_dataset = PointCloudDataset(file_path="train_surfaces.h5" , args=args)
+    test_dataset = PointCloudDataset(file_path='test_surfaces.h5' , args=args)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     input_dim = 3
