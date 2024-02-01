@@ -139,7 +139,7 @@ def createLPE(data, lpe_dim):
     g = dgl.from_scipy(csr_matrix((weights, (row, col)), shape=(21, 21)))
     # lap = csgraph.laplacian(mat)
     # lpe = laplacian_pe(lap, 15)
-    lpe = dgl.laplacian_pe(g, lpe_dim)
+    lpe = dgl.lap_pe(g, lpe_dim)
     pcl = np.concatenate([(data[0, :][np.newaxis]), p1])
     return lpe, pcl
 def laplacian_pe(lap, k):
