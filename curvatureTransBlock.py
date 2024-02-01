@@ -14,6 +14,7 @@ import numpy as np
 import torch
 from scipy.sparse import csgraph
 from scipy.sparse import csr_matrix
+from scipy.sparse import spmatrix
 import os
 import torch
 from torch.utils.data import DataLoader
@@ -23,6 +24,7 @@ import h5py
 import sklearn.metrics as metrics
 import time
 import torch.nn as nn
+import dgl
 def positional_encoding_nerf(points , channels_per_dim=5):
   """
   Creates positional encoding for a 3D point cloud using sinusoidal functions.
@@ -65,7 +67,6 @@ class PointCloudDataset(torch.utils.data.Dataset):
         point_cloud = self.point_clouds_group[point_cloud_name]
         if self.use_lpe==1:
             lpe, pcl = createLPE(point_cloud)
-            lpe = torch.tensor(lpe, dtype=torch.float32)
             point_cloud = torch.tensor(pcl, dtype=torch.float32)
         else:
             point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
@@ -110,6 +111,37 @@ class TransformerNetwork(nn.Module):
         output = self.fc(attn_output_sum)
 
         return output
+class TN(nn.Module):
+    def __init__(self, input_dim=3, output_dim=5, num_heads=3, num_layers=2):
+        super(TN, self).__init__()
+
+        # Define a list to hold the multihead attention and residual layers
+        self.MHA_1 = nn.MultiheadAttention(embed_dim=input_dim, num_heads=num_heads),
+        self.MHA_2 = nn.MultiheadAttention(embed_dim=input_dim, num_heads=num_heads),
+        self.lN_1 = nn.LayerNorm(input_dim)
+        self.lN_2 = nn.LayerNorm(input_dim)
+
+        # Classifier layer
+        self.fc = nn.Linear(input_dim, output_dim)
+
+    def forward(self, x):
+        # Transpose input for the first MultiheadAttention layer
+        x = x.permute(0, 2, 1)  # Assuming the input has dimensions (batch_size, 21, 3)
+
+        attn_output, _ = MHA_1(x, x, x)
+        x = x + attn_output
+        x = lN_1(x)
+        attn_output, _ = MHA_2(x, x, x)
+        x = x + attn_output
+        x = lN_2(x)
+
+        # Sum along the sequence dimension (assuming the sequence dimension is 21)
+        attn_output_sum = x.sum(dim=1)
+
+        # Classification layer
+        output = self.fc(attn_output_sum)
+
+        return output
 def createLPE(data):
     umbrella = create_triangles_ring(data[1:, :], data[0, :])
     centroids = umbrella[:, 2, :]
@@ -133,9 +165,12 @@ def createLPE(data):
     row = np.array(a)
     col = np.array(b)
     weights = np.array(distances_list)
-    mat = csr_matrix((weights, (row, col)), shape=(21, 21)).toarray()
-    lap = csgraph.laplacian(mat)
-    lpe = laplacian_pe(lap, 15)
+    # mat = csr_matrix((weights, (row, col)), shape=(21, 21)).toarray()
+    g = dgl.from_scipy(csr_matrix((weights, (row, col)), shape=(21, 21)))
+    dgl.laplacian_pe(g, 2)
+    # lap = csgraph.laplacian(mat)
+    # lpe = laplacian_pe(lap, 15)
+    lpe = dgl.laplacian_pe(g, 15)
     pcl = np.concatenate([(data[0, :][np.newaxis]), p1])
     return lpe, pcl
 def laplacian_pe(lap, k):
@@ -196,7 +231,7 @@ def test(model, dataloader, loss_function, device, args):
             logits = model(data)
             loss = loss_function(logits, label_class)
             preds = logits.max(dim=1)[1]
-            total_acc_loss += torch.mean((preds == label_class).float())
+            total_acc_loss += torch.mean((preds == label_class).float()).item()
             total_loss += loss.item()
             count = count + 1
 
@@ -260,7 +295,7 @@ def train_and_test(args):
 
                 total_train_loss += loss.item()
                 preds = logits.max(dim=1)[1]
-                total_train_acc_loss += torch.mean((preds == label_class).float())
+                total_train_acc_loss += torch.mean((preds == label_class).float()).item()
 
                 count = count + 1
 
