@@ -57,6 +57,7 @@ class PointCloudDataset(torch.utils.data.Dataset):
         self.num_point_clouds = len(self.point_clouds_group)
         self.indices = list(range(self.num_point_clouds))
         self.use_lpe = args.use_lpe
+        self.lpe_dim = args.lpe_dim
     def __len__(self):
         return self.num_point_clouds
 
@@ -66,7 +67,7 @@ class PointCloudDataset(torch.utils.data.Dataset):
         # Load point cloud data
         point_cloud = self.point_clouds_group[point_cloud_name]
         if self.use_lpe==1:
-            lpe, pcl = createLPE(point_cloud)
+            lpe, pcl = createLPE(point_cloud, self.lpe_dim)
             point_cloud = torch.tensor(pcl, dtype=torch.float32)
         else:
             point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
@@ -142,7 +143,7 @@ class TN(nn.Module):
         output = self.fc(attn_output_sum)
 
         return output
-def createLPE(data):
+def createLPE(data, lpe_dim):
     umbrella = create_triangles_ring(data[1:, :], data[0, :])
     centroids = umbrella[:, 2, :]
     p1 = umbrella[:, 0, :]
@@ -167,10 +168,9 @@ def createLPE(data):
     weights = np.array(distances_list)
     # mat = csr_matrix((weights, (row, col)), shape=(21, 21)).toarray()
     g = dgl.from_scipy(csr_matrix((weights, (row, col)), shape=(21, 21)))
-    dgl.laplacian_pe(g, 2)
     # lap = csgraph.laplacian(mat)
     # lpe = laplacian_pe(lap, 15)
-    lpe = dgl.laplacian_pe(g, 15)
+    lpe = dgl.laplacian_pe(g, lpe_dim)
     pcl = np.concatenate([(data[0, :][np.newaxis]), p1])
     return lpe, pcl
 def laplacian_pe(lap, k):
@@ -257,8 +257,8 @@ def train_and_test(args):
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     input_dim = 3
     if args.use_lpe==1:
-        input_dim = 18
-    model = TransformerNetwork(input_dim=input_dim, output_dim=6, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers).to(device)
+        input_dim = 3 + args.lpe_dim
+    model = TransformerNetwork(input_dim=input_dim, output_dim=4, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers).to(device)
     num_params = sum(p.numel() for p in model.parameters())
     print(f'Num of parameters in NN: {num_params}')
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
@@ -343,6 +343,8 @@ def configArgsPCT():
                         help='use angles in learning ')
     parser.add_argument('--use_lpe', type=int, default=0, metavar='N',
                         help='use laplacian positional encoding')
+    parser.add_argument('--lpe_dim', type=int, default=0, metavar='N',
+                        help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--num_of_heads', type=int, default=3, metavar='N',
                         help='how many attention heads to use')
     parser.add_argument('--num_of_attention_layers', type=int, default=2, metavar='N',
