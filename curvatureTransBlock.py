@@ -112,37 +112,6 @@ class TransformerNetwork(nn.Module):
         output = self.fc(attn_output_sum)
 
         return output
-class TN(nn.Module):
-    def __init__(self, input_dim=3, output_dim=5, num_heads=3, num_layers=2):
-        super(TN, self).__init__()
-
-        # Define a list to hold the multihead attention and residual layers
-        self.MHA_1 = nn.MultiheadAttention(embed_dim=input_dim, num_heads=num_heads),
-        self.MHA_2 = nn.MultiheadAttention(embed_dim=input_dim, num_heads=num_heads),
-        self.lN_1 = nn.LayerNorm(input_dim)
-        self.lN_2 = nn.LayerNorm(input_dim)
-
-        # Classifier layer
-        self.fc = nn.Linear(input_dim, output_dim)
-
-    def forward(self, x):
-        # Transpose input for the first MultiheadAttention layer
-        x = x.permute(0, 2, 1)  # Assuming the input has dimensions (batch_size, 21, 3)
-
-        attn_output, _ = MHA_1(x, x, x)
-        x = x + attn_output
-        x = lN_1(x)
-        attn_output, _ = MHA_2(x, x, x)
-        x = x + attn_output
-        x = lN_2(x)
-
-        # Sum along the sequence dimension (assuming the sequence dimension is 21)
-        attn_output_sum = x.sum(dim=1)
-
-        # Classification layer
-        output = self.fc(attn_output_sum)
-
-        return output
 def createLPE(data, lpe_dim):
     umbrella = create_triangles_ring(data[1:, :], data[0, :])
     centroids = umbrella[:, 2, :]
@@ -272,8 +241,6 @@ def train_and_test(args):
         total_train_loss = 0.0
         total_train_acc_loss = 0.0
         count = 0
-        train_pred = []
-        train_true = []
         # Use tqdm to create a progress bar for the training loop
         with tqdm(train_dataloader, desc=f'Epoch {epoch + 1}/{num_epochs}', leave=False) as tqdm_bar:
             for batch in tqdm_bar:

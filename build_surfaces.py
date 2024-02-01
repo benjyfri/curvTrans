@@ -71,7 +71,7 @@ def createDataSet():
                      size_of_pcl=20)
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=20):
-    for k in range(500):
+    for k in range(amount_of_pcl):
         a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv)
         point_cloud = samplePoints(a, b, c, d, e, count=20)
         point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
@@ -83,7 +83,7 @@ def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, a
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['H'] = H
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['K'] = K
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['class'] = label
-    plotFunc(a, b, c, d, e, point_cloud)
+    # plotFunc(a, b, c, d, e, point_cloud)
 def createFunction(gaussian_curv, mean_curv, epsilon=0.05):
     if gaussian_curv==1 and mean_curv==0:
         raise ValueError("gaussian_curv==1 and mean_curv==0 is impossible")
