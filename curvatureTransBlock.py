@@ -141,7 +141,7 @@ class PointCloudDataset(torch.utils.data.Dataset):
             lpe, pcl = createLPE(point_cloud, self.lpe_dim)
             point_cloud = torch.tensor(pcl, dtype=torch.float32)
         else:
-            point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
+            point_cloud = torch.tensor(np.array(point_cloud), dtype=torch.float32)
             lpe = torch.tensor([])
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
@@ -406,7 +406,7 @@ def configArgsPCT():
                         help='how many attention heads to use')
     parser.add_argument('--num_of_attention_layers', type=int, default=2, metavar='N',
                         help='how many attention layers to use')
-    parser.add_argument('--lr_jumps', type=int, default=10, metavar='N',
+    parser.add_argument('--lr_jumps', type=int, default=50, metavar='N',
                         help='Lower lr *0.1 every amount of jumps')
     args = parser.parse_args()
     return args
