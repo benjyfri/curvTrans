@@ -23,6 +23,7 @@ from torchvision import transforms
 import h5py
 import sklearn.metrics as metrics
 import time
+import torch.nn.functional as F
 import torch.nn as nn
 import dgl
 def positional_encoding_nerf(points , channels_per_dim=5):
@@ -49,6 +50,76 @@ def positional_encoding_nerf(points , channels_per_dim=5):
 
   return encoding
 
+
+def knn(x, k):
+    inner = -2 * torch.matmul(x.transpose(2, 1), x)
+    xx = torch.sum(x ** 2, dim=1, keepdim=True)
+    pairwise_distance = -xx - inner - xx.transpose(2, 1)
+
+    idx = pairwise_distance.topk(k=k, dim=-1)[1]  # (batch_size, num_points, k)
+    return idx
+def get_graph_feature(x, k=20, idx=None):
+    batch_size = x.size(0)
+    num_points = x.size(2)
+    x = x.view(batch_size, -1, num_points)
+    if idx is None:
+        idx = knn(x, k=k)  # (batch_size, num_points, k)
+    device = torch.device('cuda')
+
+    idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
+
+    idx = idx + idx_base
+
+    idx = idx.view(-1)
+
+    _, num_dims, _ = x.size()
+
+    x = x.transpose(2,
+                    1).contiguous()  # (batch_size, num_points, num_dims)  -> (batch_size*num_points, num_dims) #   batch_size * num_points * k + range(0, batch_size*num_points)
+    feature = x.view(batch_size * num_points, -1)[idx, :]
+    feature = feature.view(batch_size, num_points, k, num_dims)
+    x = x.view(batch_size, num_points, 1, num_dims).repeat(1, 1, k, 1)
+
+    feature = torch.cat((feature - x, x), dim=3).permute(0, 3, 1, 2).contiguous()
+
+    return feature
+class DGCNN(nn.Module):
+    def __init__(self,input_dim=3, emb_dims=512):
+        super(DGCNN, self).__init__()
+        self.conv1 = nn.Conv2d(6, 64, kernel_size=1, bias=False)
+        self.conv2 = nn.Conv2d(64, 64, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=1, bias=False)
+        self.conv4 = nn.Conv2d(128, 256, kernel_size=1, bias=False)
+        self.conv5 = nn.Conv2d(512, emb_dims, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.bn3 = nn.BatchNorm2d(128)
+        self.bn4 = nn.BatchNorm2d(256)
+        self.bn5 = nn.BatchNorm2d(emb_dims)
+
+    def forward(self, x):
+        batch_size = x.size(0)
+        x = x.permute(0, 2, 1)
+        x = get_graph_feature(x, k=21)
+        batch_size, num_points, num_dims = x.size()
+        # x = x.permute(0, 2, 1)  # Adjust input dimensions for 1D convolution
+
+        x = F.relu(self.bn1(self.conv1(x)))
+        x1 = x.max(dim=-1, keepdim=True)[0]
+
+        x = F.relu(self.bn2(self.conv2(x)))
+        x2 = x.max(dim=-1, keepdim=True)[0]
+
+        x = F.relu(self.bn3(self.conv3(x)))
+        x3 = x.max(dim=-1, keepdim=True)[0]
+
+        x = F.relu(self.bn4(self.conv4(x)))
+        x4 = x.max(dim=-1, keepdim=True)[0]
+
+        x = torch.cat((x1, x2, x3, x4), dim=1)
+
+        x = F.relu(self.bn5(self.conv5(x))).view(batch_size, -1, num_points)
+        return x
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
@@ -81,13 +152,15 @@ class PointCloudDataset(torch.utils.data.Dataset):
 
 
 class TransformerNetwork(nn.Module):
-    def __init__(self, input_dim=3, output_dim=5, num_heads=3, num_layers=2):
+    def __init__(self, input_dim=3, output_dim=5, num_heads=1, num_layers=1, emb_dim=512):
         super(TransformerNetwork, self).__init__()
-
-        # Define a list to hold the multihead attention and residual layers
+        # Define a list to hold the multihead attention, feedforward, and normalization layers
         self.layers = nn.ModuleList([
             nn.ModuleList([
                 nn.MultiheadAttention(embed_dim=input_dim, num_heads=num_heads),
+                nn.Linear(input_dim, 4 * input_dim),  # Feedforward layer
+                nn.ReLU(),  # Nonlinearity
+                nn.Linear(4 * input_dim, input_dim),  # Output projection
                 nn.LayerNorm(input_dim)
             ]) for _ in range(num_layers)
         ])
@@ -99,10 +172,16 @@ class TransformerNetwork(nn.Module):
         # Transpose input for the first MultiheadAttention layer
         x = x.permute(0, 2, 1)  # Assuming the input has dimensions (batch_size, 21, 3)
 
-        # Apply multihead attention and residual layers
-        for attn_layer, norm_layer in self.layers:
+        # Apply multihead attention, feedforward, and residual layers
+        for attn_layer, ff_layer, relu, out_proj, norm_layer in self.layers:
             attn_output, _ = attn_layer(x, x, x)
             x = x + attn_output
+            x = norm_layer(x)
+
+            ff_output = ff_layer(x)
+            ff_output = relu(ff_output)  # Apply nonlinearity
+            ff_output = out_proj(ff_output)
+            x = x + ff_output  # Residual connection
             x = norm_layer(x)
 
         # Sum along the sequence dimension (assuming the sequence dimension is 21)
@@ -195,6 +274,9 @@ def test(model, dataloader, loss_function, device, args):
             label_class = info['class'].to(device).long()
             if args.use_lpe == 1:
                 data = torch.cat([data, lpe], dim=2).to(device)
+            if args.use_second_deg:
+                x, y, z = data.unbind(dim=2)
+                data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
             data = data.permute(0, 2, 1)
 
             logits = model(data)
@@ -212,6 +294,7 @@ def test(model, dataloader, loss_function, device, args):
 def train_and_test(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(device)
+    print(args)
     if args.use_wandb:
         wandb.login(key="ed8e8f26d1ee503cda463f300a605cb35e75ad23")
         wandb.init(project="Curvature-transformer-POC", name=args.exp_name)
@@ -225,6 +308,8 @@ def train_and_test(args):
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     input_dim = 3
+    if args.use_second_deg:
+        input_dim = 9
     if args.use_lpe==1:
         input_dim = 3 + args.lpe_dim
     model = TransformerNetwork(input_dim=input_dim, output_dim=4, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers).to(device)
@@ -248,6 +333,9 @@ def train_and_test(args):
                 label_class = info['class'].to(device).long()
                 if args.use_lpe==1:
                     data= torch.cat([data, lpe], dim=2).to(device)
+                if args.use_second_deg:
+                    x, y, z = data.unbind(dim=2)
+                    data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
                 data =  data.permute(0, 2, 1)
                 logits = model(data)
                 loss = criterion(logits, label_class)
@@ -286,7 +374,7 @@ def configArgsPCT():
                         help='Size of batch)')
     parser.add_argument('--test_batch_size', type=int, default=512, metavar='batch_size',
                         help='Size of batch)')
-    parser.add_argument('--epochs', type=int, default=250, metavar='N',
+    parser.add_argument('--epochs', type=int, default=100, metavar='N',
                         help='number of episode to train ')
     parser.add_argument('--use_sgd', type=bool, default=True,
                         help='Use SGD')
@@ -308,11 +396,13 @@ def configArgsPCT():
                         help='Pretrained model path')
     parser.add_argument('--use_wandb', type=int, default=0, metavar='N',
                         help='use angles in learning ')
+    parser.add_argument('--use_second_deg', type=int, default=0, metavar='N',
+                        help='use second degree embedding ')
     parser.add_argument('--use_lpe', type=int, default=0, metavar='N',
                         help='use laplacian positional encoding')
     parser.add_argument('--lpe_dim', type=int, default=0, metavar='N',
                         help='laplacian positional encoding amount of eigens to take')
-    parser.add_argument('--num_of_heads', type=int, default=3, metavar='N',
+    parser.add_argument('--num_of_heads', type=int, default=1, metavar='N',
                         help='how many attention heads to use')
     parser.add_argument('--num_of_attention_layers', type=int, default=2, metavar='N',
                         help='how many attention layers to use')
