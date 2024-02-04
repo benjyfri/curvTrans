@@ -191,6 +191,45 @@ class TransformerNetwork(nn.Module):
         output = self.fc(attn_output_sum)
 
         return output
+class TransformerNetworkPCT(nn.Module):
+    def __init__(self, input_dim=3, output_dim=4, num_heads=1, num_layers=1, att_per_layer=4):
+        super(TransformerNetworkPCT, self).__init__()
+        # Define a list to hold the multihead attention, feedforward, and normalization layers
+        self.args = args
+        self.conv1 = nn.Conv1d(input_dim, 64, kernel_size=1, bias=False)
+        self.conv2 = nn.Conv1d(64, 64, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.bn2 = nn.BatchNorm1d(64)
+
+        self.layers = nn.ModuleList([
+            nn.MultiheadAttention(embed_dim=64, num_heads=num_heads)
+            for _ in range(att_per_layer)
+        ])
+
+        self.conv_fuse = nn.Sequential(nn.Conv1d(256, 256, kernel_size=1, bias=False),
+                                       nn.BatchNorm1d(256),
+                                       nn.LeakyReLU(negative_slope=0.2))
+        self.linear3 = nn.Linear(256, output_dim)
+
+    def forward(self, x):
+        xyz = x.permute(0, 2, 1)
+        batch_size, _, _ = x.size()
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = x.permute(0, 2, 1)
+
+        att_list = []
+        # Apply multihead attention, feedforward, and residual layers
+        for attn_layer in self.layers:
+            x, _ = attn_layer(x, x, x)
+            att_list.append(x)
+        concatenated_tensor = torch.cat(att_list, dim=-1)
+        x = concatenated_tensor.permute(0, 2, 1)
+        x = self.conv_fuse(x)
+        x = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
+        x = self.linear3(x)
+
+        return x
 def createLPE(data, lpe_dim):
     umbrella = create_triangles_ring(data[1:, :], data[0, :])
     centroids = umbrella[:, 2, :]
@@ -268,6 +307,9 @@ def test(model, dataloader, loss_function, device, args):
     total_loss = 0.0
     total_acc_loss = 0.0
     count = 0
+    label_correct = {label: 0 for label in range(args.output_dim)}
+    label_total = {label: 0 for label in range(args.output_dim)}
+
     with torch.no_grad():
         for batch in dataloader:
             data, lpe, info = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info']
@@ -284,11 +326,24 @@ def test(model, dataloader, loss_function, device, args):
             preds = logits.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label_class).float()).item()
             total_loss += loss.item()
-            count = count + 1
+            count += 1
 
-    test_acc = total_acc_loss / (count)
+            # Update per-label statistics
+            for label in range(args.output_dim):
+                correct_mask = (preds == label_class) & (label_class == label)
+                label_correct[label] += correct_mask.sum().item()
+                label_total[label] += (label_class == label).sum().item()
+
+    # Overall accuracy
+    test_acc = total_acc_loss / count
     average_loss = total_loss / (count * args.batch_size)
-    return average_loss, test_acc
+
+    # Calculate per-label accuracies
+    label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
+                       for label in range(args.output_dim)}
+
+    return average_loss, test_acc, label_accuracies
+
 
 
 def train_and_test(args):
@@ -312,7 +367,11 @@ def train_and_test(args):
         input_dim = 9
     if args.use_lpe==1:
         input_dim = 3 + args.lpe_dim
-    model = TransformerNetwork(input_dim=input_dim, output_dim=4, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers).to(device)
+    if args.use_pct:
+        model = TransformerNetworkPCT(input_dim=input_dim, output_dim=4, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers, att_per_layer=4).to(device)
+    else:
+        model = TransformerNetwork(input_dim=input_dim, output_dim=4, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers).to(device)
+
     num_params = sum(p.numel() for p in model.parameters())
     print(f'Num of parameters in NN: {num_params}')
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
@@ -358,14 +417,19 @@ def train_and_test(args):
         acc_train = (total_train_acc_loss / (count))
         train_loss = (total_train_loss / (args.batch_size * count))
 
-        test_loss, acc_test = test(model, test_dataloader, criterion, device, args)
+        test_loss, acc_test, label_accuracies = test(model, test_dataloader, criterion, device, args)
         scheduler.step()
         print(f'LR: {current_lr}')
-        print({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test })
+        print({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test,
+                       "label_0": label_accuracies[0], "label_1": label_accuracies[1], "label_2": label_accuracies[2], "label_3": label_accuracies[3]})
         if args.use_wandb:
-            wandb.log({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test})
-    # Save the trained model if needed
-    # torch.save(model.state_dict(), args.exp_name+'_trained_model.pth')
+            wandb.log({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test,
+                       "label_0": label_accuracies[0], "label_1": label_accuracies[1], "label_2": label_accuracies[2], "label_3": label_accuracies[3]})
+
+    # Save the trained model
+    # torch.save(model.state_dict(), f'{args.exp_name}_trained_model.pth')
+    # print(f'Trained model saved to {args.exp_name}_trained_model.pth')
+
 def configArgsPCT():
     parser = argparse.ArgumentParser(description='Point Cloud Recognition')
     parser.add_argument('--exp_name', type=str, default='exp', metavar='N',
@@ -400,12 +464,18 @@ def configArgsPCT():
                         help='use second degree embedding ')
     parser.add_argument('--use_lpe', type=int, default=0, metavar='N',
                         help='use laplacian positional encoding')
+    parser.add_argument('--use_pct', type=int, default=0, metavar='N',
+                        help='use PCT transformer version')
     parser.add_argument('--lpe_dim', type=int, default=0, metavar='N',
                         help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--num_of_heads', type=int, default=1, metavar='N',
                         help='how many attention heads to use')
-    parser.add_argument('--num_of_attention_layers', type=int, default=2, metavar='N',
+    parser.add_argument('--num_of_attention_layers', type=int, default=1, metavar='N',
                         help='how many attention layers to use')
+    parser.add_argument('--att_per_layer', type=int, default=4, metavar='N',
+                        help='how many attention heads in each layer')
+    parser.add_argument('--output_dim', type=int, default=4, metavar='N',
+                        help='how many labels are used')
     parser.add_argument('--lr_jumps', type=int, default=50, metavar='N',
                         help='Lower lr *0.1 every amount of jumps')
     args = parser.parse_args()
@@ -413,6 +483,6 @@ def configArgsPCT():
 if __name__ == '__main__':
     args = configArgsPCT()
     train_and_test(args)
-    wandb.finish()
+    # wandb.finish()
 
 
