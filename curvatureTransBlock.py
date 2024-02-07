@@ -150,7 +150,26 @@ class PointCloudDataset(torch.utils.data.Dataset):
         return {"point_cloud": point_cloud, "lpe": lpe, "info": info}
 
 
+class MLP(nn.Module):
+    def __init__(self, input_size, num_layers, num_neurons_per_layer, output_size):
+        super(MLP, self).__init__()
+        layers = []
+        layers.append(nn.Linear(input_size, num_neurons_per_layer))  # input layer
 
+        for _ in range(num_layers - 1):
+            layers.append(nn.BatchNorm1d(num_neurons_per_layer))  # Batch normalization
+            layers.append(nn.ReLU())  # ReLU activation
+            layers.append(nn.Linear(num_neurons_per_layer, num_neurons_per_layer))
+
+        layers.append(nn.BatchNorm1d(num_neurons_per_layer))  # Batch normalization
+        layers.append(nn.ReLU())  # ReLU activation
+        layers.append(nn.Linear(num_neurons_per_layer, output_size))  # output layer
+
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = x.reshape(x.size(0), -1)
+        return self.model(x)
 class TransformerNetwork(nn.Module):
     def __init__(self, input_dim=3, output_dim=5, num_heads=1, num_layers=1, emb_dim=512):
         super(TransformerNetwork, self).__init__()
@@ -369,6 +388,8 @@ def train_and_test(args):
         input_dim = 3 + args.lpe_dim
     if args.use_pct:
         model = TransformerNetworkPCT(input_dim=input_dim, output_dim=4, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers, att_per_layer=4).to(device)
+    elif args.use_mlp:
+        model = MLP(input_size= input_dim * 21, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=4).to(device)
     else:
         model = TransformerNetwork(input_dim=input_dim, output_dim=4, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers).to(device)
 
@@ -466,10 +487,16 @@ def configArgsPCT():
                         help='use laplacian positional encoding')
     parser.add_argument('--use_pct', type=int, default=0, metavar='N',
                         help='use PCT transformer version')
+    parser.add_argument('--use_mlp', type=int, default=0, metavar='N',
+                        help='use PCT transformer version')
     parser.add_argument('--lpe_dim', type=int, default=0, metavar='N',
                         help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--num_of_heads', type=int, default=1, metavar='N',
                         help='how many attention heads to use')
+    parser.add_argument('--num_neurons_per_layer', type=int, default=64, metavar='N',
+                        help='how many neurons per layer to use')
+    parser.add_argument('--num_mlp_layers', type=int, default=4, metavar='N',
+                        help='how many mlp layers to use')
     parser.add_argument('--num_of_attention_layers', type=int, default=1, metavar='N',
                         help='how many attention layers to use')
     parser.add_argument('--att_per_layer', type=int, default=4, metavar='N',
