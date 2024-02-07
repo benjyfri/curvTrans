@@ -22,11 +22,12 @@ def test(model, dataloader, loss_function, device, args):
         for batch in dataloader:
             data, lpe, info = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info']
             label_class = info['class'].to(device).long()
-            if args.use_lpe == 1:
-                data = torch.cat([data, lpe], dim=2).to(device)
             if args.use_second_deg:
                 x, y, z = data.unbind(dim=2)
                 data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
+            if args.use_lpe == 1:
+                data = torch.cat([data, lpe], dim=2).to(device)
+
             data = data.permute(0, 2, 1)
 
             logits = model(data)
@@ -74,7 +75,7 @@ def train_and_test(args):
     if args.use_second_deg:
         input_dim = 9
     if args.use_lpe==1:
-        input_dim = 3 + args.lpe_dim
+        input_dim = input_dim + args.lpe_dim
     if args.use_pct:
         model = TransformerNetworkPCT(input_dim=input_dim, output_dim=4, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers, att_per_layer=4).to(device)
     elif args.use_mlp:
@@ -100,11 +101,11 @@ def train_and_test(args):
             for batch in tqdm_bar:
                 data, lpe, info = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info']
                 label_class = info['class'].to(device).long()
-                if args.use_lpe==1:
-                    data= torch.cat([data, lpe], dim=2).to(device)
                 if args.use_second_deg:
                     x, y, z = data.unbind(dim=2)
                     data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
+                if args.use_lpe == 1:
+                    data = torch.cat([data, lpe], dim=2).to(device)
                 data =  data.permute(0, 2, 1)
                 logits = model(data)
                 loss = criterion(logits, label_class)
