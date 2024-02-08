@@ -10,10 +10,13 @@ import torch.nn as nn
 from models import MLP, TransformerNetwork, TransformerNetworkPCT
 from data import PointCloudDataset
 
+
 def test(model, dataloader, loss_function, device, args):
     model.eval()  # Set the model to evaluation mode
     total_loss = 0.0
     total_acc_loss = 0.0
+    total_H_loss = 0.0  # Loss for H
+    total_K_loss = 0.0  # Loss for K
     count = 0
     label_correct = {label: 0 for label in range(args.output_dim)}
     label_total = {label: 0 for label in range(args.output_dim)}
@@ -21,7 +24,12 @@ def test(model, dataloader, loss_function, device, args):
     with torch.no_grad():
         for batch in dataloader:
             data, lpe, info = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info']
-            label_class = info['class'].to(device).long()
+            if args.output_dim == 2:
+                H = info['H'].to(device).float()
+                K = info['K'].to(device).float()
+                label = torch.stack([H, K], dim=1)
+            if args.output_dim == 4:
+                label = info['class'].to(device).long()
             if args.use_second_deg:
                 x, y, z = data.unbind(dim=2)
                 data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
@@ -30,26 +38,41 @@ def test(model, dataloader, loss_function, device, args):
 
             data = data.permute(0, 2, 1)
 
-            logits = model(data)
-            loss = loss_function(logits, label_class)
-            preds = logits.max(dim=1)[1]
-            total_acc_loss += torch.mean((preds == label_class).float()).item()
+            output = model(data)
+            if args.output_dim == 2:
+                # Calculate and log loss for H and K
+                H_loss = loss_function(output[:, 0], H)  # Loss for H
+                K_loss = loss_function(output[:, 1], K)  # Loss for K
+                total_H_loss += H_loss.item()
+                total_K_loss += K_loss.item()
+                loss = H_loss + K_loss
+            else:
+                loss = loss_function(output, label)
+            if args.output_dim == 4:
+                preds = output.max(dim=1)[1]
+                total_acc_loss += torch.mean((preds == label).float()).item()
             total_loss += loss.item()
             count += 1
 
-            # Update per-label statistics
-            for label in range(args.output_dim):
-                correct_mask = (preds == label_class) & (label_class == label)
-                label_correct[label] += correct_mask.sum().item()
-                label_total[label] += (label_class == label).sum().item()
+            if args.output_dim == 4:
+                # Update per-label statistics
+                for label_name in range(args.output_dim):
+                    correct_mask = (preds == label_name) & (label == label_name)
+                    label_correct[label_name] += correct_mask.sum().item()
+                    label_total[label_name] += (label == label_name).sum().item()
 
     # Overall accuracy
-    test_acc = total_acc_loss / count
+    if args.output_dim == 4:
+        test_acc = (total_acc_loss / (count))
+        label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
+                            for label in range(args.output_dim)}
+    if args.output_dim == 2:
+        test_acc = 0
+        # Calculate average loss for H and K
+        avg_H_loss = total_H_loss / count
+        avg_K_loss = total_K_loss / count
+        label_accuracies = {'H_loss': avg_H_loss, 'K_loss': avg_K_loss}
     average_loss = total_loss / (count * args.batch_size)
-
-    # Calculate per-label accuracies
-    label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
-                       for label in range(args.output_dim)}
 
     return average_loss, test_acc, label_accuracies
 
@@ -77,38 +100,55 @@ def train_and_test(args):
     if args.use_lpe==1:
         input_dim = input_dim + args.lpe_dim
     if args.use_pct:
-        model = TransformerNetworkPCT(input_dim=input_dim, output_dim=4, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers, att_per_layer=4).to(device)
+        model = TransformerNetworkPCT(input_dim=input_dim, output_dim=args.output_dim, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers, att_per_layer=4).to(device)
     elif args.use_mlp:
-        model = MLP(input_size= input_dim * 21, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=4).to(device)
+        model = MLP(input_size= input_dim * 21, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim).to(device)
     else:
-        model = TransformerNetwork(input_dim=input_dim, output_dim=4, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers).to(device)
+        model = TransformerNetwork(input_dim=input_dim, output_dim=args.output_dim, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers).to(device)
 
     num_params = sum(p.numel() for p in model.parameters())
     print(f'Num of parameters in NN: {num_params}')
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     milestones = np.linspace(args.lr_jumps,num_epochs,num_epochs//args.lr_jumps)
     scheduler = MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
-    criterion = nn.CrossEntropyLoss(reduction='mean')
-
+    if args.output_dim == 4:
+        criterion = nn.CrossEntropyLoss(reduction='mean')
+    else:
+        criterion = nn.MSELoss()
     # Training loop
     for epoch in range(num_epochs):
         model.train()  # Set the model to training mode
         total_train_loss = 0.0
         total_train_acc_loss = 0.0
+        total_H_loss = 0.0  # Loss for H
+        total_K_loss = 0.0  # Loss for K
         count = 0
         # Use tqdm to create a progress bar for the training loop
         with tqdm(train_dataloader, desc=f'Epoch {epoch + 1}/{num_epochs}', leave=False) as tqdm_bar:
             for batch in tqdm_bar:
                 data, lpe, info = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info']
-                label_class = info['class'].to(device).long()
+                if args.output_dim ==2:
+                    H = info['H'].to(device).float()
+                    K = info['K'].to(device).float()
+                    label = torch.stack([H,K],dim=1)
+                if args.output_dim == 4:
+                    label = info['class'].to(device).long()
                 if args.use_second_deg:
                     x, y, z = data.unbind(dim=2)
                     data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
                 if args.use_lpe == 1:
                     data = torch.cat([data, lpe], dim=2).to(device)
                 data =  data.permute(0, 2, 1)
-                logits = model(data)
-                loss = criterion(logits, label_class)
+                output = model(data)
+                if args.output_dim == 2:
+                    # Calculate and log loss for H and K
+                    H_loss = criterion(output[:, 0], H)  # Loss for H
+                    K_loss = criterion(output[:, 1], K)  # Loss for K
+                    total_H_loss += H_loss.item()
+                    total_K_loss += K_loss.item()
+                    loss = H_loss + K_loss
+                else:
+                    loss = criterion(output, label)
 
 
                 # Backward pass and optimization
@@ -119,23 +159,38 @@ def train_and_test(args):
                 current_lr = optimizer.param_groups[0]['lr']
 
                 total_train_loss += loss.item()
-                preds = logits.max(dim=1)[1]
-                total_train_acc_loss += torch.mean((preds == label_class).float()).item()
+                if args.output_dim == 4:
+                    preds = output.max(dim=1)[1]
+                    total_train_acc_loss += torch.mean((preds == label).float()).item()
 
                 count = count + 1
 
                 tqdm_bar.set_postfix(train_loss=f'{(loss.item() / args.batch_size):.4f}')
-        acc_train = (total_train_acc_loss / (count))
+
         train_loss = (total_train_loss / (args.batch_size * count))
+
+        if args.output_dim == 4:
+            acc_train = (total_train_acc_loss / (count))
+        if args.output_dim == 2:
+            acc_train = 0
+            # Calculate average loss for H and K
+            avg_H_loss = total_H_loss / count
+            avg_K_loss = total_K_loss / count
+            if args.use_wandb:
+                wandb.log({"epoch": epoch, "train_H_loss": avg_H_loss, "train_K_loss": avg_K_loss})
+
 
         test_loss, acc_test, label_accuracies = test(model, test_dataloader, criterion, device, args)
         scheduler.step()
         print(f'LR: {current_lr}')
-        print({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test,
-                       "label_0": label_accuracies[0], "label_1": label_accuracies[1], "label_2": label_accuracies[2], "label_3": label_accuracies[3]})
+
+        print({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test})
+        for key in label_accuracies:
+            print(key, ":", label_accuracies[key])
         if args.use_wandb:
-            wandb.log({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test,
-                       "label_0": label_accuracies[0], "label_1": label_accuracies[1], "label_2": label_accuracies[2], "label_3": label_accuracies[3]})
+            wandb.log({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test})
+            for key in label_accuracies:
+                wandb.log({"epoch": epoch, key : label_accuracies[key]})
 
     # Save the trained model
     # torch.save(model.state_dict(), f'{args.exp_name}_trained_model.pth')
@@ -179,7 +234,7 @@ def configArgsPCT():
                         help='use PCT transformer version')
     parser.add_argument('--use_mlp', type=int, default=0, metavar='N',
                         help='use PCT transformer version')
-    parser.add_argument('--lpe_dim', type=int, default=0, metavar='N',
+    parser.add_argument('--lpe_dim', type=int, default=3, metavar='N',
                         help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--num_of_heads', type=int, default=1, metavar='N',
                         help='how many attention heads to use')

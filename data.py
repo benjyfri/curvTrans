@@ -4,7 +4,7 @@ from scipy.sparse import csr_matrix
 import torch
 import h5py
 import dgl
-
+from utils import createLPEembedding
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
@@ -23,7 +23,9 @@ class PointCloudDataset(torch.utils.data.Dataset):
         # Load point cloud data
         point_cloud = self.point_clouds_group[point_cloud_name]
         if self.use_lpe==1:
-            lpe, pcl = createLPE(point_cloud, self.lpe_dim)
+            # lpe, pcl = createLPE(point_cloud, self.lpe_dim)
+            lpe, pcl = createLPEembedding(point_cloud, self.lpe_dim)
+            lpe = torch.tensor(lpe, dtype=torch.float32)
             point_cloud = torch.tensor(pcl, dtype=torch.float32)
         else:
             point_cloud = torch.tensor(np.array(point_cloud), dtype=torch.float32)
