@@ -49,6 +49,9 @@ def sort_by_first_eigenvector(eigenvectors):
 
     # Sort the rows of the matrix based on the absolute values of the entries in the first eigenvector
     sorted_indices = np.argsort(abs_eigenvector)
+
+    # make 0 (a.k.a centroid) be the first canonical entry
+    sorted_indices = [0] + [x for x in sorted_indices if x != 0]
     sorted_matrix = eigenvectors[sorted_indices]
 
     return sorted_indices , sorted_matrix

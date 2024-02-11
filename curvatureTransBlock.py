@@ -94,7 +94,9 @@ def train_and_test(args):
     test_dataset = PointCloudDataset(file_path='test_surfaces.h5' , args=args)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
-    input_dim = 3
+    input_dim = 0
+    if args.use_xyz:
+        input_dim = 3
     if args.use_second_deg:
         input_dim = 9
     if args.use_lpe==1:
@@ -236,6 +238,8 @@ def configArgsPCT():
                         help='use PCT transformer version')
     parser.add_argument('--lpe_dim', type=int, default=3, metavar='N',
                         help='laplacian positional encoding amount of eigens to take')
+    parser.add_argument('--use_xyz', type=int, default=1, metavar='N',
+                        help='use xyz coordinates as part of input')
     parser.add_argument('--num_of_heads', type=int, default=1, metavar='N',
                         help='how many attention heads to use')
     parser.add_argument('--num_neurons_per_layer', type=int, default=64, metavar='N',
