@@ -35,7 +35,8 @@ def test(model, dataloader, loss_function, device, args):
                 data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
             if args.use_lpe == 1:
                 data = torch.cat([data, lpe], dim=2).to(device)
-
+            if args.use_xyz == 0:
+                data = data[:, :, 3:]
             data = data.permute(0, 2, 1)
 
             output = model(data)
@@ -140,6 +141,8 @@ def train_and_test(args):
                     data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
                 if args.use_lpe == 1:
                     data = torch.cat([data, lpe], dim=2).to(device)
+                if args.use_xyz==0:
+                    data = data[:,:,3:]
                 data =  data.permute(0, 2, 1)
                 output = model(data)
                 if args.output_dim == 2:
