@@ -2,7 +2,7 @@ import numpy as np
 from scipy.spatial import distance_matrix
 from scipy.linalg import eigh
 
-def createLap(point_cloud):
+def createLap(point_cloud, normalized):
     # Calculate pairwise distances between points
     distances = distance_matrix(point_cloud, point_cloud)
 
@@ -14,7 +14,13 @@ def createLap(point_cloud):
     # Create diagonal matrix from column sums
     diag_matrix = np.diag(column_sums)
 
-    return diag_matrix - weights
+    Laplacian = diag_matrix - weights
+    # Maybe better to use?
+    if normalized:
+        inv_D_sqrt = np.sqrt(np.linalg.inv(diag_matrix))
+        identity = np.ones(weights.shape[0])
+        Laplacian = identity - (inv_D_sqrt @ weights @ inv_D_sqrt)
+    return Laplacian
 
 def top_k_smallest_eigenvectors(graph, k):
     """
@@ -56,8 +62,8 @@ def sort_by_first_eigenvector(eigenvectors):
 
     return sorted_indices , sorted_matrix
 
-def createLPEembedding(point_cloud, emb_size=5):
-    l = createLap(point_cloud)
+def createLPEembedding(point_cloud, emb_size=5, normalize=False):
+    l = createLap(point_cloud, normalize)
     eigvecs = top_k_smallest_eigenvectors(l, emb_size)
     indices, fixed_eigs = sort_by_first_eigenvector(eigvecs)
     pcl_fixed = np.array(point_cloud)[indices]
