@@ -191,7 +191,7 @@ def train_and_test(args):
 
         print({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test})
         for key in label_accuracies:
-            print({"label_" + str(key), ":", label_accuracies[key]})
+            print("label_" + str(key), ":", label_accuracies[key])
         if args.use_wandb:
             wandb.log({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test})
             for key in label_accuracies:
