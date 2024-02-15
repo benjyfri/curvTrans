@@ -38,42 +38,42 @@ def createDataSet():
     if not os.path.exists(test_path):
         os.makedirs(test_path)
 
-    new_file_path_train = "train_surfaces.h5"
-    new_file_path_test = "test_surfaces.h5"
+    new_file_path_train = "train_surfaces_40.h5"
+    new_file_path_test = "test_surfaces_40.h5"
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, counter=0, amount_of_pcl=10000,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, counter=10000, amount_of_pcl=5000,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, counter=15000, amount_of_pcl=5000,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, counter=20000, amount_of_pcl=5000,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, counter=25000, amount_of_pcl=5000,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
         addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, counter=30000, amount_of_pcl=10000,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
 
     with h5py.File(new_file_path_test, "w") as new_hdf5_test_file:
         point_clouds_group = new_hdf5_test_file.create_group("point_clouds")
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, counter=0, amount_of_pcl=1000,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, counter=1000, amount_of_pcl=500,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, counter=1500, amount_of_pcl=500,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, counter=2000, amount_of_pcl=500,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, counter=2500, amount_of_pcl=500,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
         addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, counter=3000, amount_of_pcl=1000,
-                     size_of_pcl=20)
+                     size_of_pcl=40)
 
-def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=20):
+def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40):
     for k in range(amount_of_pcl):
         a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv)
-        point_cloud = samplePoints(a, b, c, d, e, count=20)
+        point_cloud = samplePoints(a, b, c, d, e, count=size_of_pcl)
         point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = a
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['b'] = b
@@ -131,8 +131,8 @@ def createFunction(gaussian_curv, mean_curv, epsilon=0.05):
 
 import plotly.graph_objects as go
 
-def plotPcl(a, b, c, d, e, sample_count=20):
-    # Generate 20 random points within the specified range
+def plotPcl(a, b, c, d, e, sample_count=40):
+    # Generate 40 random points within the specified range
     sampled_points = samplePoints(a, b, c, d, e, count=sample_count)
 
     # Create 3D scatter plot for sampled points using Plotly Express
@@ -209,7 +209,7 @@ def plotMultiplePcls(parameter_sets, index=1):
         if i != index and i>0:
             continue
         # Generate sampled points for the current set of parameters
-        sampled_points = samplePoints(*params, count=20)
+        sampled_points = samplePoints(*params, count=40)
 
         color = colors[i]
         name = names[i]
@@ -218,7 +218,7 @@ def plotMultiplePcls(parameter_sets, index=1):
                                    z=[point[2] for point in sampled_points],
                                    mode='markers',
                                    marker=dict(size=8, color=color),
-                                   text=[f'{j + 1}' for j in range(20)],
+                                   text=[f'{j + 1}' for j in range(40)],
                                    textposition='middle center',
                                    name=f'{name}'))
 

@@ -91,8 +91,12 @@ def train_and_test(args):
     learning_rate = args.lr
 
     # Create instances for training and testing datasets
-    train_dataset = PointCloudDataset(file_path="train_surfaces.h5" , args=args)
-    test_dataset = PointCloudDataset(file_path='test_surfaces.h5' , args=args)
+    if args.sampled_points==20:
+        train_dataset = PointCloudDataset(file_path="train_surfaces.h5" , args=args)
+        test_dataset = PointCloudDataset(file_path='test_surfaces.h5' , args=args)
+    if args.sampled_points==40:
+        train_dataset = PointCloudDataset(file_path="train_surfaces_40.h5" , args=args)
+        test_dataset = PointCloudDataset(file_path='test_surfaces_40.h5' , args=args)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     input_dim = 0
@@ -105,7 +109,7 @@ def train_and_test(args):
     if args.use_pct:
         model = TransformerNetworkPCT(input_dim=input_dim, output_dim=args.output_dim, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers, att_per_layer=4).to(device)
     elif args.use_mlp:
-        model = MLP(input_size= input_dim * 21, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim).to(device)
+        model = MLP(input_size= input_dim * (args.sampled_points + 1), num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim).to(device)
     else:
         model = TransformerNetwork(input_dim=input_dim, output_dim=args.output_dim, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers).to(device)
 
@@ -257,6 +261,8 @@ def configArgsPCT():
                         help='how many labels are used')
     parser.add_argument('--lr_jumps', type=int, default=50, metavar='N',
                         help='Lower lr *0.1 every amount of jumps')
+    parser.add_argument('--sampled_points', type=int, default=20, metavar='N',
+                        help='How many points where sampled around centroid')
     args = parser.parse_args()
     return args
 if __name__ == '__main__':
