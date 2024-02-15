@@ -68,3 +68,26 @@ def createLPEembedding(point_cloud, emb_size=5, normalize=False):
     indices, fixed_eigs = sort_by_first_eigenvector(eigvecs)
     pcl_fixed = np.array(point_cloud)[indices]
     return pcl_fixed, fixed_eigs
+
+def positional_encoding_nerf(points, channels_per_dim=5):
+    """
+    Creates separable positional encoding for a 3D point cloud using sinusoidal functions.
+
+    Args:
+        points: A NumPy array of shape (N, 3) representing the point cloud.
+        channels_per_dim (optional): Number of encoding channels per dimension (default: 5).
+
+    Returns:
+        A NumPy array of shape (N, C) where C is the number of encoding dimensions.
+    """
+    dims = points.shape[-1]  # Number of dimensions (3 for 3D points)
+    channels = 2 * dims * channels_per_dim  # 2 channels per dimension (sin and cos)
+    encoding = np.zeros((points.shape[0], channels))
+
+    for i in range(dims):
+        for channel_id in range(channels_per_dim):
+            frequency = 1 / np.power(10000, channel_id / dims)
+            # Calculate and store sine and cosine separately
+            encoding[:, i * 2 + 0] = np.sin(points[:, i] * frequency)
+            encoding[:, i * 2 + 1] = np.cos(points[:, i] * frequency)
+    return encoding

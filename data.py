@@ -4,7 +4,7 @@ from scipy.sparse import csr_matrix
 import torch
 import h5py
 import dgl
-from utils import createLPEembedding
+from utils import createLPEembedding, positional_encoding_nerf
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
@@ -12,8 +12,8 @@ class PointCloudDataset(torch.utils.data.Dataset):
         self.point_clouds_group = self.hdf5_file['point_clouds']
         self.num_point_clouds = len(self.point_clouds_group)
         self.indices = list(range(self.num_point_clouds))
-        self.use_lpe = args.use_lpe
         self.lpe_dim = args.lpe_dim
+        self.PE_dim = args.PE_dim
     def __len__(self):
         return self.num_point_clouds
 
@@ -22,7 +22,7 @@ class PointCloudDataset(torch.utils.data.Dataset):
 
         # Load point cloud data
         point_cloud = self.point_clouds_group[point_cloud_name]
-        if self.use_lpe==1:
+        if self.lpe_dim!=0:
             # lpe, pcl = createLPE(point_cloud, self.lpe_dim)
             pcl , lpe = createLPEembedding(point_cloud, self.lpe_dim)
             lpe = torch.tensor(lpe, dtype=torch.float32)
@@ -30,11 +30,18 @@ class PointCloudDataset(torch.utils.data.Dataset):
         else:
             point_cloud = torch.tensor(np.array(point_cloud), dtype=torch.float32)
             lpe = torch.tensor([])
+
+        if self.PE_dim!=0:
+            # lpe, pcl = createLPE(point_cloud, self.lpe_dim)
+            pe = positional_encoding_nerf(point_cloud, self.PE_dim)
+            pe = torch.tensor(pe, dtype=torch.float32)
+        else:
+            pe = torch.tensor([])
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
 
-        return {"point_cloud": point_cloud, "lpe": lpe, "info": info}
+        return {"point_cloud": point_cloud, "lpe": lpe, "info": info, "pe": pe}
 
 def createLPE(data, lpe_dim):
     umbrella = create_triangles_ring(data[1:, :], data[0, :])

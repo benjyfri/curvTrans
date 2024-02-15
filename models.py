@@ -3,29 +3,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-def positional_encoding_nerf(points , channels_per_dim=5):
-  """
-  Creates positional encoding for a 3D point cloud using sinusoidal functions.
 
-  Args:
-      points: A NumPy array of shape (N, 3) representing the point cloud.
-
-  Returns:
-      A NumPy array of shape (N, C) where C is the number of encoding dimensions.
-  """
-  dims = points.shape[-1]  # Number of dimensions (3 for 3D points)
-  channels = dims * channels_per_dim  # Two channels per dimension (sin and cos)
-  encoding = np.zeros((points.shape[0], channels))
-
-  for i in range(channels):
-    frequency = 1 / np.power(10000, channels_per_dim * (i // channels_per_dim) / dims)
-    channel_id = i % channels_per_dim
-    if channel_id == 0:
-      encoding[:, i] = np.sin(points[:, i // channels_per_dim] * frequency)
-    else:
-      encoding[:, i] = np.cos(points[:, i // channels_per_dim] * frequency)
-
-  return encoding
 
 
 def knn(x, k):

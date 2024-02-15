@@ -23,7 +23,7 @@ def test(model, dataloader, loss_function, device, args):
 
     with torch.no_grad():
         for batch in dataloader:
-            data, lpe, info = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info']
+            data, lpe, info, pe = batch['point_cloud'].to(device), batch['lpe'].to(device),batch['info'], batch['pe'].to(device)
             if args.output_dim == 2:
                 H = info['H'].to(device).float()
                 K = info['K'].to(device).float()
@@ -33,8 +33,10 @@ def test(model, dataloader, loss_function, device, args):
             if args.use_second_deg:
                 x, y, z = data.unbind(dim=2)
                 data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
-            if args.use_lpe == 1:
+            if args.lpe_dim != 0:
                 data = torch.cat([data, lpe], dim=2).to(device)
+            if args.PE_dim != 0:
+                data = torch.cat([data, pe], dim=2).to(device)
             if args.use_xyz == 0:
                 data = data[:, :, 3:]
             data = data.permute(0, 2, 1)
@@ -104,8 +106,10 @@ def train_and_test(args):
         input_dim = 3
     if args.use_second_deg:
         input_dim = 9
-    if args.use_lpe==1:
-        input_dim = input_dim + args.lpe_dim
+    if args.lpe_dim!=0:
+        input_dim = input_dim + (args.lpe_dim)
+    if args.PE_dim!=0:
+        input_dim = input_dim + (args.PE_dim *3 *2)
     if args.use_pct:
         model = TransformerNetworkPCT(input_dim=input_dim, output_dim=args.output_dim, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers, att_per_layer=4).to(device)
     elif args.use_mlp:
@@ -133,7 +137,7 @@ def train_and_test(args):
         # Use tqdm to create a progress bar for the training loop
         with tqdm(train_dataloader, desc=f'Epoch {epoch + 1}/{num_epochs}', leave=False) as tqdm_bar:
             for batch in tqdm_bar:
-                data, lpe, info = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info']
+                data, lpe, info, pe = batch['point_cloud'].to(device), batch['lpe'].to(device),batch['info'], batch['pe'].to(device)
                 if args.output_dim ==2:
                     H = info['H'].to(device).float()
                     K = info['K'].to(device).float()
@@ -143,10 +147,13 @@ def train_and_test(args):
                 if args.use_second_deg:
                     x, y, z = data.unbind(dim=2)
                     data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
-                if args.use_lpe == 1:
+                if args.lpe_dim != 0:
                     data = torch.cat([data, lpe], dim=2).to(device)
                 if args.use_xyz==0:
                     data = data[:,:,3:]
+                if args.PE_dim != 0:
+                    data = torch.cat([data, pe], dim=2).to(device)
+
                 data =  data.permute(0, 2, 1)
                 output = model(data)
                 if args.output_dim == 2:
@@ -211,34 +218,16 @@ def configArgsPCT():
                         help='Name of the experiment')
     parser.add_argument('--batch_size', type=int, default=512, metavar='batch_size',
                         help='Size of batch)')
-    parser.add_argument('--test_batch_size', type=int, default=512, metavar='batch_size',
-                        help='Size of batch)')
     parser.add_argument('--epochs', type=int, default=100, metavar='N',
                         help='number of episode to train ')
-    parser.add_argument('--use_sgd', type=bool, default=True,
-                        help='Use SGD')
     parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                         help='learning rate (default: 0.001, 0.1 if using sgd)')
-    parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
-                        help='SGD momentum (default: 0.9)')
-    parser.add_argument('--no_cuda', type=bool, default=False,
-                        help='enables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
-    parser.add_argument('--eval', type=bool, default=False,
-                        help='evaluate the model')
-    parser.add_argument('--num_points', type=int, default=21,
-                        help='num of points to use')
-    parser.add_argument('--dropout', type=float, default=0.5,
-                        help='dropout rate')
-    parser.add_argument('--model_path', type=str, default='', metavar='N',
-                        help='Pretrained model path')
     parser.add_argument('--use_wandb', type=int, default=0, metavar='N',
                         help='use angles in learning ')
     parser.add_argument('--use_second_deg', type=int, default=0, metavar='N',
                         help='use second degree embedding ')
-    parser.add_argument('--use_lpe', type=int, default=0, metavar='N',
-                        help='use laplacian positional encoding')
     parser.add_argument('--use_pct', type=int, default=0, metavar='N',
                         help='use PCT transformer version')
     parser.add_argument('--use_mlp', type=int, default=0, metavar='N',
@@ -263,6 +252,8 @@ def configArgsPCT():
                         help='Lower lr *0.1 every amount of jumps')
     parser.add_argument('--sampled_points', type=int, default=20, metavar='N',
                         help='How many points where sampled around centroid')
+    parser.add_argument('--PE_dim', type=int, default=0, metavar='N',
+                        help='Positional embedding size')
     args = parser.parse_args()
     return args
 if __name__ == '__main__':
