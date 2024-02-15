@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 import numpy as np
-from scipy.sparse import csr_matrix
+# from scipy.sparse import csr_matrix
 import torch
 import h5py
 # import dgl
