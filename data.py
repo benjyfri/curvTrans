@@ -3,7 +3,7 @@ import numpy as np
 from scipy.sparse import csr_matrix
 import torch
 import h5py
-import dgl
+# import dgl
 from utils import createLPEembedding, positional_encoding_nerf
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
@@ -43,36 +43,36 @@ class PointCloudDataset(torch.utils.data.Dataset):
 
         return {"point_cloud": point_cloud, "lpe": lpe, "info": info, "pe": pe}
 
-def createLPE(data, lpe_dim):
-    umbrella = create_triangles_ring(data[1:, :], data[0, :])
-    centroids = umbrella[:, 2, :]
-    p1 = umbrella[:, 0, :]
-    p2 = umbrella[:, 1, :]
-    centroid_to_p1_distances = np.linalg.norm(centroids - p1, axis=1)
-    p1_to_p2_distances = np.linalg.norm(p1 - p2, axis=1)
-
-    # Combine the distances into a single list
-    distances_list = list(centroid_to_p1_distances) + list(p1_to_p2_distances)
-
-    a = [0 for x in range(1, 21)]
-    b = [x for x in range(1, 21)]
-    shifted = b[1:] + b[:1]
-    a.extend(b)
-    b.extend(shifted)
-    old_a = a.copy()
-    a.extend(b)
-    b.extend(old_a)
-    distances_list.extend(distances_list)
-    row = np.array(a)
-    col = np.array(b)
-    weights = np.array(distances_list)
-    # mat = csr_matrix((weights, (row, col)), shape=(21, 21)).toarray()
-    g = dgl.from_scipy(csr_matrix((weights, (row, col)), shape=(21, 21)))
-    # lap = csgraph.laplacian(mat)
-    # lpe = laplacian_pe(lap, 15)
-    lpe = dgl.lap_pe(g, lpe_dim)
-    pcl = np.concatenate([(data[0, :][np.newaxis]), p1])
-    return lpe, pcl
+# def createLPE(data, lpe_dim):
+#     umbrella = create_triangles_ring(data[1:, :], data[0, :])
+#     centroids = umbrella[:, 2, :]
+#     p1 = umbrella[:, 0, :]
+#     p2 = umbrella[:, 1, :]
+#     centroid_to_p1_distances = np.linalg.norm(centroids - p1, axis=1)
+#     p1_to_p2_distances = np.linalg.norm(p1 - p2, axis=1)
+#
+#     # Combine the distances into a single list
+#     distances_list = list(centroid_to_p1_distances) + list(p1_to_p2_distances)
+#
+#     a = [0 for x in range(1, 21)]
+#     b = [x for x in range(1, 21)]
+#     shifted = b[1:] + b[:1]
+#     a.extend(b)
+#     b.extend(shifted)
+#     old_a = a.copy()
+#     a.extend(b)
+#     b.extend(old_a)
+#     distances_list.extend(distances_list)
+#     row = np.array(a)
+#     col = np.array(b)
+#     weights = np.array(distances_list)
+#     # mat = csr_matrix((weights, (row, col)), shape=(21, 21)).toarray()
+#     g = dgl.from_scipy(csr_matrix((weights, (row, col)), shape=(21, 21)))
+#     # lap = csgraph.laplacian(mat)
+#     # lpe = laplacian_pe(lap, 15)
+#     lpe = dgl.lap_pe(g, lpe_dim)
+#     pcl = np.concatenate([(data[0, :][np.newaxis]), p1])
+#     return lpe, pcl
 def laplacian_pe(lap, k):
 
     # select eigenvectors with smaller eigenvalues O(n + klogk)
