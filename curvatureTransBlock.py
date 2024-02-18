@@ -208,9 +208,7 @@ def train_and_test(args):
             for key in label_accuracies:
                 wandb.log({"epoch": epoch, "label_"+str(key) : label_accuracies[key]})
 
-    # Save the trained model
-    # torch.save(model.state_dict(), f'{args.exp_name}_trained_model.pth')
-    # print(f'Trained model saved to {args.exp_name}_trained_model.pth')
+    torch.save(model.state_dict(), "your_model_name.pth")
 
 def configArgsPCT():
     parser = argparse.ArgumentParser(description='Point Cloud Recognition')
