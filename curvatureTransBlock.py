@@ -97,8 +97,8 @@ def train_and_test(args):
         train_dataset = PointCloudDataset(file_path="train_surfaces.h5" , args=args)
         test_dataset = PointCloudDataset(file_path='test_surfaces.h5' , args=args)
     if args.sampled_points==40:
-        train_dataset = PointCloudDataset(file_path="train_surfaces_40.h5" , args=args)
-        test_dataset = PointCloudDataset(file_path='test_surfaces_40.h5' , args=args)
+        train_dataset = PointCloudDataset(file_path="train_surfaces_40_stronger_boundaries.h5" , args=args)
+        test_dataset = PointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5' , args=args)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     input_dim = 0
@@ -110,6 +110,7 @@ def train_and_test(args):
         input_dim = input_dim + (args.lpe_dim)
     if args.PE_dim!=0:
         input_dim = input_dim + (args.PE_dim *3 *2)
+    print(f'input size is {input_dim}')
     if args.use_pct:
         model = TransformerNetworkPCT(input_dim=input_dim, output_dim=args.output_dim, num_heads=args.num_of_heads, num_layers=args.num_of_attention_layers, att_per_layer=4).to(device)
     elif args.use_mlp:
@@ -208,7 +209,7 @@ def train_and_test(args):
             for key in label_accuracies:
                 wandb.log({"epoch": epoch, "label_"+str(key) : label_accuracies[key]})
 
-    torch.save(model.state_dict(), "your_model_name.pth")
+    return model
 
 def configArgsPCT():
     parser = argparse.ArgumentParser(description='Point Cloud Recognition')
@@ -254,8 +255,93 @@ def configArgsPCT():
                         help='Positional embedding size')
     args = parser.parse_args()
     return args
+def testPretrainedModel(args, model=None):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if args.sampled_points == 20:
+        test_dataset = PointCloudDataset(file_path='test_surfaces.h5', args=args)
+    elif args.sampled_points == 40:
+        test_dataset = PointCloudDataset(file_path='test_surfaces_40.h5', args=args)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    if model is None:
+        model = MLP(input_size=36 * (args.sampled_points + 1), num_layers=args.num_mlp_layers,
+                    num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim).to(device)
+
+        # Load the saved state dictionary
+        model_path = r"C:\Users\benjy\Downloads\best.pth"  # Update with the path to your saved model
+        model.load_state_dict(torch.load(model_path))
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f'Num of parameters in NN: {num_params}')
+    # Set the model to evaluation mode
+    model.eval()
+    count =0
+    total_acc_loss = 0.0
+    label_correct = {label: 0 for label in range(args.output_dim)}
+    label_total = {label: 0 for label in range(args.output_dim)}
+    wrong_preds = {label: [] for label in range(args.output_dim)}
+    wrong_H_values = {label: [] for label in range(args.output_dim)}
+    wrong_K_values = {label: [] for label in range(args.output_dim)}
+    wrong_predictions_stats = {}  # Store statistics for wrong predictions
+
+    with torch.no_grad():
+        for batch in test_dataloader:
+            data, lpe, info, pe = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info'], batch[
+                'pe'].to(device)
+            if args.output_dim == 4:
+                label = info['class'].to(device).long()
+            if args.use_second_deg:
+                x, y, z = data.unbind(dim=2)
+                data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
+            if args.lpe_dim != 0:
+                data = torch.cat([data, lpe], dim=2).to(device)
+            if args.PE_dim != 0:
+                data = torch.cat([data, pe], dim=2).to(device)
+            if args.use_xyz == 0:
+                data = data[:, :, 3:]
+            data = data.permute(0, 2, 1)
+
+            output = model(data)
+
+            if args.output_dim == 4:
+                preds = output.max(dim=1)[1]
+                total_acc_loss += torch.mean((preds == label).float()).item()
+
+                # Collect data for wrong predictions
+                for i, (pred, actual_label) in enumerate(zip(preds, label.cpu().numpy())):
+                    if pred != actual_label:
+                        wrong_preds[actual_label].append(pred.item())
+                        wrong_H_values[actual_label].append(info['H'][i].item())
+                        wrong_K_values[actual_label].append(info['K'][i].item())
+
+            count += 1
+
+            if args.output_dim == 4:
+                # Update per-label statistics
+                for label_name in range(args.output_dim):
+                    correct_mask = (preds == label_name) & (label == label_name)
+                    label_correct[label_name] += correct_mask.sum().item()
+                    label_total[label_name] += (label == label_name).sum().item()
+
+    if args.output_dim == 4:
+        label_accuracies = {
+            label: label_correct[label] / label_total[label]
+            for label in range(args.output_dim)
+            if label_total[label] != 0
+        }
+        for label, accuracy in label_accuracies.items():
+            print(f"Accuracy for label {label}: {accuracy:.4f}")
+    for label in range(args.output_dim):
+        if len(wrong_preds[label]) > 0:
+            print(f"Label {label}:")
+            print(f"  - Most frequent wrong prediction: {max(wrong_preds[label], key=wrong_preds[label].count)}")
+            print(f"  - Average H for wrong predictions: {np.mean(wrong_H_values[label])}")
+            print(f"  - Average K for wrong predictions: {np.mean(wrong_K_values[label])}")
+            print(f"  - median H for wrong predictions: {np.median(wrong_H_values[label])}")
+            print(f"  - median K for wrong predictions: {np.median(wrong_K_values[label])}")
+
+    # return test_acc, label_accuracies, wrong_predictions_stats
 if __name__ == '__main__':
     args = configArgsPCT()
-    train_and_test(args)
-
+    model = train_and_test(args)
+    testPretrainedModel(args, model=model)
+    torch.save(model.state_dict(), "best_2.pth")
 

@@ -38,8 +38,8 @@ def createDataSet():
     if not os.path.exists(test_path):
         os.makedirs(test_path)
 
-    new_file_path_train = "train_surfaces_40.h5"
-    new_file_path_test = "test_surfaces_40.h5"
+    new_file_path_train = "train_surfaces_40_stronger_boundaries.h5"
+    new_file_path_test = "test_surfaces_40_stronger_boundaries.h5"
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, counter=0, amount_of_pcl=10000,
@@ -72,7 +72,7 @@ def createDataSet():
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40):
     for k in range(amount_of_pcl):
-        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv)
+        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=5, epsilon=0.05)
         point_cloud = samplePoints(a, b, c, d, e, count=size_of_pcl)
         point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = a
@@ -84,7 +84,7 @@ def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, a
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['K'] = K
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['class'] = label
     # plotFunc(a, b, c, d, e, point_cloud)
-def createFunction(gaussian_curv, mean_curv, epsilon=0.05):
+def createFunction(gaussian_curv, mean_curv, boundary=3, epsilon=0.05):
     if gaussian_curv==1 and mean_curv==0:
         raise ValueError("gaussian_curv==1 and mean_curv==0 is impossible")
     okFunc = False
@@ -92,7 +92,7 @@ def createFunction(gaussian_curv, mean_curv, epsilon=0.05):
     while not okFunc:
         okFunc=True
         count += 1
-        a, b, c, d, e = [random.uniform(-5, 5) for _ in range(5)]
+        a, b, c, d, e = [random.uniform(-10, 10) for _ in range(5)]
         K = (4*(a*b)-((c**2))) / (1 + d**2 + e**2)
         H = (2*a*(1 + c**2)-2*d*e*c +2*b*(1 + d**2)) / ( ( (d**2) + (e**2) + 1 )**1.5)
         # zero gaussian curve
@@ -102,12 +102,12 @@ def createFunction(gaussian_curv, mean_curv, epsilon=0.05):
                 continue
         # positive gaussian curv
         if gaussian_curv==1:
-            if K < (10*epsilon):
+            if K < boundary:
                 okFunc=False
                 continue
         # negative gaussian curv
         if gaussian_curv==-1:
-            if K > -(10*epsilon):
+            if K > -(boundary):
                 okFunc=False
                 continue
 
@@ -118,18 +118,35 @@ def createFunction(gaussian_curv, mean_curv, epsilon=0.05):
                 continue
         # positive mean curv
         if mean_curv==1:
-            if H < (10*epsilon):
+            if H < (boundary):
                 okFunc=False
                 continue
         # negative mean curv
         if mean_curv==-1:
-            if H > -(10*epsilon):
+            if H > -(boundary):
                 okFunc=False
                 continue
 
     return a, b, c, d, e, count , H , K
+def createFunctionSpecificHK(gaussian_curv, mean_curv, epsilon=0.05):
+    okFunc = False
+    count = 0
+    while not okFunc:
+        okFunc=True
+        count += 1
+        a, b, c, d, e = [random.uniform(-5, 5) for _ in range(5)]
+        K = (4*(a*b)-((c**2))) / (1 + d**2 + e**2)
+        H = (2*a*(1 + c**2)-2*d*e*c +2*b*(1 + d**2)) / ( ( (d**2) + (e**2) + 1 )**1.5)
 
-import plotly.graph_objects as go
+        if abs(H - mean_curv) > epsilon:
+            okFunc = False
+            continue
+        if abs(K - gaussian_curv)>epsilon:
+            okFunc=False
+            continue
+
+    return a, b, c, d, e, count , H , K
+
 
 def plotPcl(a, b, c, d, e, sample_count=40):
     # Generate 40 random points within the specified range
@@ -192,7 +209,7 @@ def plotFunc(a, b, c, d, e,sampled_points):
 
     # Show the plot
     fig.show()
-def plotMultiplePcls(parameter_sets, index=1):
+def plotMultiplePcls(parameter_sets,names=[], index=1):
     # Create a Plotly figure
     fig = go.Figure()
     import matplotlib.cm as cm
@@ -203,7 +220,8 @@ def plotMultiplePcls(parameter_sets, index=1):
     # Create an array of colors using the 'viridis' colormap
     # colors = cm.Paired(np.linspace(0, 1, num_colors))
     colors = ['red', 'blue', 'green', 'orange', 'purple', 'yellow']
-    names = ['surface', 'valley', 'ridge', 'bowl', 'mountain', 'saddle']
+    if len(names)==0:
+        names = ['surface', 'valley', 'ridge', 'bowl', 'mountain', 'saddle']
     # Iterate over each set of parameters
     for i, params in enumerate(parameter_sets):
         if i != index and i>0:
@@ -254,4 +272,19 @@ if __name__ == '__main__':
     # ]
     # for i in range(1,6):
     #     plotMultiplePcls(parameter_sets, i)
+
+
+    # a1, b1, c1, d1, e1, _, H, K = createFunction(gaussian_curv=-1, mean_curv=-33, boundary=5, epsilon=0.05)
+    # point_cloud = samplePoints(a1, b1, c1, d1, e1, count=40)
+    # plotFunc(a1, b1, c1, d1, e1, point_cloud)
+    # a2, b2, c2, d2, e2, _, H, K = createFunction(gaussian_curv=0, mean_curv=1, boundary=5, epsilon=0.05)
+    # point_cloud = samplePoints(a2, b2, c2, d2, e2, count=40)
+    # plotFunc(a2, b2, c2, d2, e2, point_cloud)
+    #
+    # parameter_sets = [
+    #         (a1, b1, c1, d1, e1),
+    #
+    #         (a2, b2, c2, d2, e2)]
+    # plotMultiplePcls(parameter_sets, names=['saddle', 'valley'])
+
     print("yay")
