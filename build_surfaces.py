@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import numpy as np
 import plotly.express as px
 import h5py
+import matplotlib.pyplot as plt
 
 def samplePoints(a, b, c, d, e, count):
     def surface_function(x, y):
@@ -44,16 +45,22 @@ def createDataSet():
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, counter=0, amount_of_pcl=10000,
                      size_of_pcl=40)
+        print(f'Finished train flat surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, counter=10000, amount_of_pcl=5000,
                      size_of_pcl=40)
+        print(f'Finished train parabolic peak surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, counter=15000, amount_of_pcl=5000,
                      size_of_pcl=40)
+        print(f'Finished train parabolic pit surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, counter=20000, amount_of_pcl=5000,
                      size_of_pcl=40)
+        print(f'Finished train ridge surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, counter=25000, amount_of_pcl=5000,
                      size_of_pcl=40)
+        print(f'Finished train valley surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, counter=30000, amount_of_pcl=10000,
                      size_of_pcl=40)
+        print(f'Finished train saddle surfaces')
 
     with h5py.File(new_file_path_test, "w") as new_hdf5_test_file:
         point_clouds_group = new_hdf5_test_file.create_group("point_clouds")
@@ -93,8 +100,8 @@ def createFunction(gaussian_curv, mean_curv, boundary=3, epsilon=0.05):
         okFunc=True
         count += 1
         a, b, c, d, e = [random.uniform(-10, 10) for _ in range(5)]
-        K = (4*(a*b)-((c**2))) / (1 + d**2 + e**2)
-        H = (2*a*(1 + c**2)-2*d*e*c +2*b*(1 + d**2)) / ( ( (d**2) + (e**2) + 1 )**1.5)
+        K = (4*(a*b)-((c**2))) / ((1 + d**2 + e**2)**2)
+        H = (a*(1 + e**2)-d*e*c +b*(1 + d**2)) / ( ( (d**2) + (e**2) + 1 )**1.5)
         # zero gaussian curve
         if gaussian_curv==0:
             if abs(K) > epsilon:
@@ -135,8 +142,8 @@ def createFunctionSpecificHK(gaussian_curv, mean_curv, epsilon=0.05):
         okFunc=True
         count += 1
         a, b, c, d, e = [random.uniform(-5, 5) for _ in range(5)]
-        K = (4*(a*b)-((c**2))) / (1 + d**2 + e**2)
-        H = (2*a*(1 + c**2)-2*d*e*c +2*b*(1 + d**2)) / ( ( (d**2) + (e**2) + 1 )**1.5)
+        K = (4 * (a * b) - ((c ** 2))) / ((1 + d ** 2 + e ** 2) ** 2)
+        H = (a * (1 + e ** 2) - d * e * c + b * (1 + d ** 2)) / (((d ** 2) + (e ** 2) + 1) ** 1.5)
 
         if abs(H - mean_curv) > epsilon:
             okFunc = False
@@ -255,36 +262,103 @@ def plotMultiplePcls(parameter_sets,names=[], index=1):
 
     # Show the plot
     fig.show()
+
+
+def fit_surface_quadratic_constrained(points):
+    """
+    Fits a quadratic surface constrained to f = 0 to a centered point cloud.
+
+    Args:
+      points: numpy array of shape (N, 3) representing the point cloud.
+
+    Returns:
+      numpy array of shape (5,) representing the surface coefficients
+        [a, b, c, d, e], where:
+          z = a * x**2 + b * y**2 + c * x * y + d * x + e * y
+    """
+
+    # Center the points around the mean
+    centroid = points[0,:]
+    centered_points = points - centroid
+
+    # Design matrix without f term
+    X = np.c_[centered_points[:, 0] ** 2, centered_points[:, 1] ** 2,
+              centered_points[:, 0] * centered_points[:, 1],
+    centered_points[:, 0], centered_points[:, 1]]
+
+    # Extract z-coordinates as target vector
+    z = centered_points[:, 2]
+
+    # Solve the linear system with f coefficient constrained to 0
+    coeffs = np.linalg.lstsq(X, z, rcond=None)[0]
+
+    a, b, c, d, e = coeffs
+
+    K = (4 * (a * b) - ((c ** 2))) / ((1 + d ** 2 + e ** 2) ** 2)
+    H = (a * (1 + e ** 2) - d * e * c + b * (1 + d ** 2)) / (((d ** 2) + (e ** 2) + 1) ** 1.5)
+    return a, b, c, d, e, K, H
+def accuracyHKdependingOnNumOfPoints(sigma=0):
+    H_acc_mean =[]
+    H_acc_median =[]
+    K_acc_mean =[]
+    K_acc_median =[]
+    options = [(0, 0), (1, 1), (1, -1), (0, 1), (0, -1), (-1, -33)]
+    for i in range(5,55):
+        cur_loss_H = []
+        cur_loss_K = []
+        for j in range(50):
+            random_setup = random.choice(options)
+            a1, b1, c1, d1, e1, _, H, K = createFunction(gaussian_curv=random_setup[0], mean_curv=random_setup[1],
+                                                         boundary=5, epsilon=0.05)
+            point_cloud = samplePoints(a1, b1, c1, d1, e1, count=i)
+            point_cloud = np.random.normal(mean=0, std_dev=sigma, size=point_cloud.shape)
+            a2, b2, c2, d2, e2, K2, H2 = fit_surface_quadratic_constrained(point_cloud)
+            cur_loss_H.append(np.linalg.norm(H-H2))
+            cur_loss_K.append(np.linalg.norm(K-K2))
+        H_acc_mean.append(np.mean(cur_loss_H))
+        H_acc_median.append(np.median(cur_loss_H))
+        K_acc_mean.append(np.mean(cur_loss_K))
+        K_acc_median.append(np.median(cur_loss_K))
+    plt.figure(figsize=(10, 6))
+
+    plt.subplot(2, 1, 1)
+    plt.plot(num_points_range, H_acc_mean, label='Mean Loss H')
+    plt.plot(num_points_range, H_acc_median, label='Median Loss H')
+    plt.title(f'Accuracy of H Depending on Number of Points; std = {sigma}')
+    plt.xlabel('Number of Points')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    plt.subplot(2, 1, 2)
+    plt.plot(num_points_range, K_acc_mean, label='Mean Loss K')
+    plt.plot(num_points_range, K_acc_median, label='Median Loss K')
+    plt.title(f'Accuracy of K Depending on Number of Points; std = {sigma}')
+    plt.xlabel('Number of Points')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == '__main__':
     createDataSet()
-    # parameter_sets = [
-    #     (-0.317246927541051, -1.4981434283801311, -0.8403160811352457, 0.45210163040038864, 4.989508427603763),
-    #
-    #     (3.6184079799238305, 0.7546575719059714, 3.3933402363050025, 1.4572342266597076, -4.891390159508835),
-    #
-    #     (-0.25023974028386053, -4.153200676255113, 2.0461446225436664, -4.655450773639295, 0.7272193519327672),
-    #
-    #     (3.838197172376347, 4.353654426721661, 2.9045692276212574, -3.943710916344255, 1.1583435215106501),
-    #
-    #     (-4.056479577616709, -2.2233117868694774, -3.0415162535894478, -3.2630328492056746, -2.682355605186225),
-    #
-    #     (1.2879827469937988, 2.192264473460156, -4.331727514839182, 0.06295771570294662, -0.010133464803817382)
-    # ]
-    # for i in range(1,6):
-    #     plotMultiplePcls(parameter_sets, i)
 
 
     # a1, b1, c1, d1, e1, _, H, K = createFunction(gaussian_curv=-1, mean_curv=-33, boundary=5, epsilon=0.05)
     # point_cloud = samplePoints(a1, b1, c1, d1, e1, count=40)
+    # # a2, b2, c2, d2, e2, K2, H2 = fit_surface_quadratic_constrained(point_cloud)
     # plotFunc(a1, b1, c1, d1, e1, point_cloud)
     # a2, b2, c2, d2, e2, _, H, K = createFunction(gaussian_curv=0, mean_curv=1, boundary=5, epsilon=0.05)
     # point_cloud = samplePoints(a2, b2, c2, d2, e2, count=40)
     # plotFunc(a2, b2, c2, d2, e2, point_cloud)
-    #
+    # #
     # parameter_sets = [
     #         (a1, b1, c1, d1, e1),
     #
     #         (a2, b2, c2, d2, e2)]
     # plotMultiplePcls(parameter_sets, names=['saddle', 'valley'])
 
+
+    for i in range(10):
+        accuracyHKdependingOnNumOfPoints(sigma=i/10)
     print("yay")
