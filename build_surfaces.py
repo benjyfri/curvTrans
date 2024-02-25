@@ -357,8 +357,8 @@ if __name__ == '__main__':
     #
     #         (a2, b2, c2, d2, e2)]
     # plotMultiplePcls(parameter_sets, names=['saddle', 'valley'])
-
-
-    for i in range(10):
-        accuracyHKdependingOnNumOfPoints(sigma=i/10)
+    #
+    #
+    # for i in range(10):
+    #     accuracyHKdependingOnNumOfPoints(sigma=i/10)
     print("yay")
