@@ -227,6 +227,8 @@ def configArgsPCT():
                         help='use angles in learning ')
     parser.add_argument('--use_second_deg', type=int, default=0, metavar='N',
                         help='use second degree embedding ')
+    parser.add_argument('--lpe_normalize', type=int, default=0, metavar='N',
+                        help='use PCT transformer version')
     parser.add_argument('--use_pct', type=int, default=0, metavar='N',
                         help='use PCT transformer version')
     parser.add_argument('--use_mlp', type=int, default=0, metavar='N',

@@ -308,40 +308,72 @@ def accuracyHKdependingOnNumOfPoints(sigma=0):
     H_acc_median =[]
     K_acc_mean =[]
     K_acc_median =[]
+    a_values = []
+    b_values = []
+    c_values = []
+    d_values = []
+    e_values = []
     options = [(0, 0), (1, 1), (1, -1), (0, 1), (0, -1), (-1, -33)]
-    for i in range(5,55):
+    for i in range(5, 55, 5):
         print(f'i : {i}')
         cur_loss_H = []
         cur_loss_K = []
+        a_temp = []
+        b_temp = []
+        c_temp = []
+        d_temp = []
+        e_temp = []
         for j in range(50):
             random_setup = random.choice(options)
             a1, b1, c1, d1, e1, _, H, K = createFunction(gaussian_curv=random_setup[0], mean_curv=random_setup[1],
                                                          boundary=5, epsilon=0.05)
             point_cloud = samplePoints(a1, b1, c1, d1, e1, count=i)
-            noised_point_cloud = point_cloud+np.random.normal(loc=0, scale=sigma, size=point_cloud.shape)
+            noised_point_cloud = point_cloud + np.random.normal(loc=0, scale=sigma, size=point_cloud.shape)
             a2, b2, c2, d2, e2, K2, H2 = fit_surface_quadratic_constrained(noised_point_cloud)
-            cur_loss_H.append(np.linalg.norm(H-H2))
-            cur_loss_K.append(np.linalg.norm(K-K2))
+            cur_loss_H.append(np.linalg.norm(H - H2))
+            cur_loss_K.append(np.linalg.norm(K - K2))
+            a_temp.append(np.linalg.norm(a1-a2))
+            b_temp.append(np.linalg.norm(b1-b2))
+            c_temp.append(np.linalg.norm(c1-c2))
+            d_temp.append(np.linalg.norm(d1-d2))
+            e_temp.append(np.linalg.norm(e1-e2))
         H_acc_mean.append(np.mean(cur_loss_H))
         H_acc_median.append(np.median(cur_loss_H))
         K_acc_mean.append(np.mean(cur_loss_K))
         K_acc_median.append(np.median(cur_loss_K))
-    plt.figure(figsize=(10, 6))
+        a_values.append(np.mean(a_temp))
+        b_values.append(np.mean(b_temp))
+        c_values.append(np.mean(c_temp))
+        d_values.append(np.mean(d_temp))
+        e_values.append(np.mean(e_temp))
 
-    plt.subplot(2, 1, 1)
-    plt.plot(range(5,55), H_acc_mean, label='Mean Loss H')
-    plt.plot(range(5,55), H_acc_median, label='Median Loss H')
+    plt.figure(figsize=(15, 12))
+
+    plt.subplot(3, 1, 1)
+    plt.plot(range(5, 55, 5), H_acc_mean, label='Mean Loss H')
+    plt.plot(range(5, 55, 5), H_acc_median, label='Median Loss H')
     plt.title(f'Accuracy of H Depending on Number of Points; std = {sigma}')
     plt.xlabel('Number of Points')
     plt.ylabel('Loss')
     plt.legend()
 
-    plt.subplot(2, 1, 2)
-    plt.plot(range(5,55), K_acc_mean, label='Mean Loss K')
-    plt.plot(range(5,55), K_acc_median, label='Median Loss K')
+    plt.subplot(3, 1, 2)
+    plt.plot(range(5, 55, 5), K_acc_mean, label='Mean Loss K')
+    plt.plot(range(5, 55, 5), K_acc_median, label='Median Loss K')
     plt.title(f'Accuracy of K Depending on Number of Points; std = {sigma}')
     plt.xlabel('Number of Points')
     plt.ylabel('Loss')
+    plt.legend()
+
+    plt.subplot(3, 1, 3)
+    plt.plot(range(5, 55, 5), a_values, label='Mean Loss a')
+    plt.plot(range(5, 55, 5), b_values, label='Mean Loss b')
+    plt.plot(range(5, 55, 5), c_values, label='Mean Loss c')
+    plt.plot(range(5, 55, 5), d_values, label='Mean Loss d')
+    plt.plot(range(5, 55, 5), e_values, label='Mean Loss e')
+    plt.title(f'Mean Coefficients a, b, c, d, e Depending on Number of Points; std = {sigma}')
+    plt.xlabel('Number of Points')
+    plt.ylabel('Mean Coefficient Value')
     plt.legend()
 
     plt.tight_layout()
@@ -366,6 +398,6 @@ if __name__ == '__main__':
     # plotMultiplePcls(parameter_sets, names=['saddle', 'valley'])
     #
     #
-    for i in range(10):
-        accuracyHKdependingOnNumOfPoints(sigma=((i+1))/(20))
+    for i in range(5):
+        accuracyHKdependingOnNumOfPoints(sigma=((i+1))/(10))
     print("yay")

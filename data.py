@@ -14,6 +14,7 @@ class PointCloudDataset(torch.utils.data.Dataset):
         self.indices = list(range(self.num_point_clouds))
         self.lpe_dim = args.lpe_dim
         self.PE_dim = args.PE_dim
+        self.normalize = args.lpe_normalize
     def __len__(self):
         return self.num_point_clouds
 
@@ -22,13 +23,12 @@ class PointCloudDataset(torch.utils.data.Dataset):
 
         # Load point cloud data
         point_cloud = self.point_clouds_group[point_cloud_name]
+        #get canonical point cloud order
+        pcl, lpe = createLPEembedding(point_cloud, self.lpe_dim, normalize=self.normalize)
+        point_cloud = torch.tensor(pcl, dtype=torch.float32)
         if self.lpe_dim!=0:
-            # lpe, pcl = createLPE(point_cloud, self.lpe_dim)
-            pcl , lpe = createLPEembedding(point_cloud, self.lpe_dim)
             lpe = torch.tensor(lpe, dtype=torch.float32)
-            point_cloud = torch.tensor(pcl, dtype=torch.float32)
         else:
-            point_cloud = torch.tensor(np.array(point_cloud), dtype=torch.float32)
             lpe = torch.tensor([])
 
         if self.PE_dim!=0:
