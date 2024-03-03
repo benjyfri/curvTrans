@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from models import MLP, TransformerNetwork, TransformerNetworkPCT, shapeClassifier
-from data import PointCloudDataset, BasicPointCloudDataset
+from data import BasicPointCloudDataset
 
 
 def test(model, dataloader, loss_function, device, args):
@@ -170,9 +170,9 @@ def configArgsPCT():
 def testPretrainedModel(args, model=None):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if args.sampled_points == 20:
-        test_dataset = PointCloudDataset(file_path='test_surfaces.h5', args=args)
+        test_dataset = BasicPointCloudDataset(file_path='test_surfaces.h5', args=args)
     elif args.sampled_points == 40:
-        test_dataset = PointCloudDataset(file_path='test_surfaces_40.h5', args=args)
+        test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5', args=args)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     if model is None:
         model = MLP(input_size=36 * (args.sampled_points + 1), num_layers=args.num_mlp_layers,
@@ -196,22 +196,10 @@ def testPretrainedModel(args, model=None):
 
     with torch.no_grad():
         for batch in test_dataloader:
-            data, lpe, info, pe = batch['point_cloud'].to(device), batch['lpe'].to(device), batch['info'], batch[
-                'pe'].to(device)
-            if args.output_dim == 4:
-                label = info['class'].to(device).long()
-            if args.use_second_deg:
-                x, y, z = data.unbind(dim=2)
-                data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
-            if args.lpe_dim != 0:
-                data = torch.cat([data, lpe], dim=2).to(device)
-            if args.PE_dim != 0:
-                data = torch.cat([data, pe], dim=2).to(device)
-            if args.use_xyz == 0:
-                data = data[:, :, 3:]
-            data = data.permute(0, 2, 1)
-
-            output = model(data)
+            pcl, info = batch['point_cloud'].to(device), batch['info']
+            label = info['class'].to(device).long()
+            output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+            preds = output.max(dim=1)[1]
 
             if args.output_dim == 4:
                 preds = output.max(dim=1)[1]
