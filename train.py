@@ -255,5 +255,5 @@ if __name__ == '__main__':
     args = configArgsPCT()
     model = train_and_test(args)
     testPretrainedModel(args, model=model)
-    torch.save(model.state_dict(), "best_2.pth")
+    torch.save(model.state_dict(), f'{args.exp_name}.pth')
 
