@@ -64,7 +64,7 @@ def sort_by_first_eigenvector(eigenvectors):
 
 def createLPEembedding(point_cloud, emb_size=5, normalize=False):
     l = createLap(point_cloud, normalize)
-    print(l)
+    # print(l)
     eigvecs = top_k_smallest_eigenvectors(l, emb_size)
     indices, fixed_eigs = sort_by_first_eigenvector(eigvecs)
     pcl_fixed = np.array(point_cloud)[indices]

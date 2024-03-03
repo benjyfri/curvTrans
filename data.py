@@ -23,7 +23,7 @@ class PointCloudDataset(torch.utils.data.Dataset):
 
         # Load point cloud data
         point_cloud = self.point_clouds_group[point_cloud_name]
-        createLPE(point_cloud)
+        # createLPE(point_cloud)
         #get canonical point cloud order
         pcl, lpe = createLPEembedding(point_cloud, self.lpe_dim, normalize=self.normalize)
         point_cloud = torch.tensor(pcl, dtype=torch.float32)
