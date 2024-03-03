@@ -18,7 +18,7 @@ def createLap(point_cloud, normalized):
     # Maybe better to use?
     if normalized:
         inv_D_sqrt = np.sqrt(np.linalg.inv(diag_matrix))
-        identity = np.ones(weights.shape[0])
+        identity = np.eye(weights.shape[0])
         Laplacian = identity - (inv_D_sqrt @ weights @ inv_D_sqrt)
     return Laplacian
 
@@ -64,7 +64,7 @@ def sort_by_first_eigenvector(eigenvectors):
 
 def createLPEembedding(point_cloud, emb_size=5, normalize=False):
     l = createLap(point_cloud, normalize)
-    # print(l)
+
     eigvecs = top_k_smallest_eigenvectors(l, emb_size)
     indices, fixed_eigs = sort_by_first_eigenvector(eigvecs)
     pcl_fixed = np.array(point_cloud)[indices]

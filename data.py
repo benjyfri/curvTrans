@@ -5,6 +5,35 @@ import torch
 import h5py
 # import dgl
 from utils import createLPEembedding, positional_encoding_nerf
+class BasicPointCloudDataset(torch.utils.data.Dataset):
+    def __init__(self, file_path, args):
+        self.file_path = file_path
+        self.hdf5_file = h5py.File(file_path, 'r')
+        self.point_clouds_group = self.hdf5_file['point_clouds']
+        self.num_point_clouds = len(self.point_clouds_group)
+        self.indices = list(range(self.num_point_clouds))
+        self.lpe_dim = args.lpe_dim
+        self.PE_dim = args.PE_dim
+        self.normalize = args.lpe_normalize
+    def __len__(self):
+        return self.num_point_clouds
+
+    def __getitem__(self, idx):
+        point_cloud_name = f"point_cloud_{self.indices[idx]}"
+
+        # Load point cloud data
+        point_cloud = self.point_clouds_group[point_cloud_name]
+        old_pcl = torch.tensor(point_cloud, dtype=torch.float32)
+        # createLPE(point_cloud)
+        #get canonical point cloud order
+        pcl, lpe = createLPEembedding(point_cloud, self.lpe_dim, normalize=self.normalize)
+        point_cloud = torch.tensor(pcl, dtype=torch.float32)
+
+        # Load metadata from attributes
+        info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
+                    self.point_clouds_group[point_cloud_name].attrs}
+
+        return {"point_cloud": point_cloud, "info": info}
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
@@ -23,6 +52,7 @@ class PointCloudDataset(torch.utils.data.Dataset):
 
         # Load point cloud data
         point_cloud = self.point_clouds_group[point_cloud_name]
+        old_pcl = torch.tensor(point_cloud, dtype=torch.float32)
         # createLPE(point_cloud)
         #get canonical point cloud order
         pcl, lpe = createLPEembedding(point_cloud, self.lpe_dim, normalize=self.normalize)
@@ -42,7 +72,7 @@ class PointCloudDataset(torch.utils.data.Dataset):
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
 
-        return {"point_cloud": point_cloud, "lpe": lpe, "info": info, "pe": pe}
+        return {"point_cloud": point_cloud, "lpe": lpe, "info": info, "pe": pe, "old_pcl": old_pcl}
 
 def createLPE(data):
     umbrella = estimate_HK_from_one_ring(data[1:, :], data[0, :], k=3)
