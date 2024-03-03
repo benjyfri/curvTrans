@@ -23,6 +23,7 @@ class PointCloudDataset(torch.utils.data.Dataset):
 
         # Load point cloud data
         point_cloud = self.point_clouds_group[point_cloud_name]
+        createLPE(point_cloud)
         #get canonical point cloud order
         pcl, lpe = createLPEembedding(point_cloud, self.lpe_dim, normalize=self.normalize)
         point_cloud = torch.tensor(pcl, dtype=torch.float32)
@@ -43,36 +44,9 @@ class PointCloudDataset(torch.utils.data.Dataset):
 
         return {"point_cloud": point_cloud, "lpe": lpe, "info": info, "pe": pe}
 
-# def createLPE(data, lpe_dim):
-#     umbrella = create_triangles_ring(data[1:, :], data[0, :])
-#     centroids = umbrella[:, 2, :]
-#     p1 = umbrella[:, 0, :]
-#     p2 = umbrella[:, 1, :]
-#     centroid_to_p1_distances = np.linalg.norm(centroids - p1, axis=1)
-#     p1_to_p2_distances = np.linalg.norm(p1 - p2, axis=1)
-#
-#     # Combine the distances into a single list
-#     distances_list = list(centroid_to_p1_distances) + list(p1_to_p2_distances)
-#
-#     a = [0 for x in range(1, 21)]
-#     b = [x for x in range(1, 21)]
-#     shifted = b[1:] + b[:1]
-#     a.extend(b)
-#     b.extend(shifted)
-#     old_a = a.copy()
-#     a.extend(b)
-#     b.extend(old_a)
-#     distances_list.extend(distances_list)
-#     row = np.array(a)
-#     col = np.array(b)
-#     weights = np.array(distances_list)
-#     # mat = csr_matrix((weights, (row, col)), shape=(21, 21)).toarray()
-#     g = dgl.from_scipy(csr_matrix((weights, (row, col)), shape=(21, 21)))
-#     # lap = csgraph.laplacian(mat)
-#     # lpe = laplacian_pe(lap, 15)
-#     lpe = dgl.lap_pe(g, lpe_dim)
-#     pcl = np.concatenate([(data[0, :][np.newaxis]), p1])
-#     return lpe, pcl
+def createLPE(data):
+    umbrella = estimate_HK_from_one_ring(data[1:, :], data[0, :], k=3)
+
 def laplacian_pe(lap, k):
 
     # select eigenvectors with smaller eigenvalues O(n + klogk)
@@ -83,9 +57,8 @@ def laplacian_pe(lap, k):
     topk_EigVec = np.real(EigVec[:, topk_indices])
 
     return topk_EigVec
-def create_triangles_ring(point_cloud, centroid):
+def estimate_KH_from_one_ring(point_cloud, centroid, k):
     num_points = point_cloud.shape[0]
-    triangles = np.zeros((num_points, 3, 3))
 
     # Calculate the covariance matrix
     cov_matrix = np.cov(point_cloud, rowvar=False)
@@ -108,12 +81,64 @@ def create_triangles_ring(point_cloud, centroid):
     # Sort the points based on angles
     sorted_indices = np.argsort(angles)
     sorted_points = point_cloud[sorted_indices]
+    sampled_indices = np.random.choice(num_points, size=k, replace=False)
+    sampled_points = sorted_points[sampled_indices]
 
-    for i in range(0, num_points):
-        triangles[i] = np.array([sorted_points[i], sorted_points[(i + 1) % num_points], centroid])
+    full_area = 0.0
+    angles_sum = 0.0
+    mean_curvature_normal = np.zeros((3,))
+    for i in range(k):
+        a = centroid
+        b = sampled_points[i]
+        c = sampled_points[(i + 1) % k]
+        d = sampled_points[(i - 1) % k]
+        angle_at_a, angle_at_c, angle_at_d, area = calculate_angle_and_area(a, b, c, d)
+        full_area += area
+        angles_sum += angle_at_a
+        mean_curvature_normal += ((1 / np.tan(angle_at_d)) + (1 / np.tan(angle_at_c))) * (a - b)
+    H_est = ( np.linalg.norm((mean_curvature_normal) / (full_area / 3)) ) / 2
+    K_est = ( 2 * (np.pi) - angles_sum ) / (full_area / 3)
 
-    return triangles
+    return K_est , H_est
 
+def calculate_angle_and_area(a, b, c , d):
+    # Calculate vectors AB and AC
+    ab = b - a
+    ac = c - a
 
+    cb = b - c
+    ca = -ac
+
+    da = a - d
+    db = b - d
+
+    # Calculate dot product of AB and AC
+    dot_product_a = np.dot(ab, ac)
+    dot_product_c = np.dot(ca, cb)
+    dot_product_d = np.dot(da, db)
+
+    ab_magnitude = np.linalg.norm(ab)
+    ac_magnitude = np.linalg.norm(ac)
+
+    cb_magnitude = np.linalg.norm(cb)
+    ca_magnitude = ac_magnitude
+
+    da_magnitude = np.linalg.norm(da)
+    db_magnitude = np.linalg.norm(db)
+
+    # Calculate cosine of the angle at vertex A
+    cos_angle_a = dot_product_a / (ab_magnitude * ac_magnitude)
+    cos_angle_c = dot_product_c / (ca_magnitude * cb_magnitude)
+    cos_angle_d = dot_product_d / (da_magnitude * db_magnitude)
+
+    # Calculate angle at vertex A (in radians)
+    angle_at_a = np.arccos(np.clip(cos_angle_a, -1, 1))
+    angle_at_c = np.arccos(np.clip(cos_angle_c, -1, 1))
+    angle_at_d = np.arccos(np.clip(cos_angle_d, -1, 1))
+
+    # Calculate area of the triangle using cross product
+    area = 0.5 * np.linalg.norm(np.cross(ab, ac))
+
+    return angle_at_a, angle_at_c, angle_at_d, area
 
 

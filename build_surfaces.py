@@ -308,6 +308,8 @@ def accuracyHKdependingOnNumOfPoints(sigma=0):
     H_acc_median =[]
     K_acc_mean =[]
     K_acc_median =[]
+    func_loss_mean = []
+    func_loss_median = []
     a_values = []
     b_values = []
     c_values = []
@@ -318,18 +320,31 @@ def accuracyHKdependingOnNumOfPoints(sigma=0):
         print(f'i : {i}')
         cur_loss_H = []
         cur_loss_K = []
+        cur_func_loss = []
         a_temp = []
         b_temp = []
         c_temp = []
         d_temp = []
         e_temp = []
         for j in range(50):
+            if j % 10 == 0:
+                print(f'j: {j}')
             random_setup = random.choice(options)
             a1, b1, c1, d1, e1, _, H, K = createFunction(gaussian_curv=random_setup[0], mean_curv=random_setup[1],
                                                          boundary=5, epsilon=0.05)
             point_cloud = samplePoints(a1, b1, c1, d1, e1, count=i)
             noised_point_cloud = point_cloud + np.random.normal(loc=0, scale=sigma, size=point_cloud.shape)
-            a2, b2, c2, d2, e2, K2, H2 = fit_surface_quadratic_constrained(noised_point_cloud)
+            noised_point_cloud_centered = noised_point_cloud - noised_point_cloud[0,:]
+            a2, b2, c2, d2, e2, K2, H2 = fit_surface_quadratic_constrained(noised_point_cloud_centered)
+
+            def surface_function(x, y):
+                return a2 * x ** 2 + b2 * y ** 2 + c2 * x * y + d2 * x + e2 * y
+
+            # Calculate the loss for each point in the original point cloud
+            losses = [abs(surface_function(x, y) - h) for (x, y, h) in point_cloud[1:,:]]
+            cur_func_loss.append(np.mean(losses))
+
+
             cur_loss_H.append(np.linalg.norm(H - H2))
             cur_loss_K.append(np.linalg.norm(K - K2))
             a_temp.append(np.linalg.norm(a1-a2))
@@ -341,15 +356,20 @@ def accuracyHKdependingOnNumOfPoints(sigma=0):
         H_acc_median.append(np.median(cur_loss_H))
         K_acc_mean.append(np.mean(cur_loss_K))
         K_acc_median.append(np.median(cur_loss_K))
+        func_loss_mean.append(np.mean(cur_func_loss))
+        func_loss_median.append(np.median(cur_func_loss))
         a_values.append(np.mean(a_temp))
         b_values.append(np.mean(b_temp))
         c_values.append(np.mean(c_temp))
         d_values.append(np.mean(d_temp))
         e_values.append(np.mean(e_temp))
 
-    plt.figure(figsize=(15, 12))
+    plt.figure(figsize=(15, 18))  # Increased height to accommodate more subplots
 
-    plt.subplot(3, 1, 1)
+    # Adjust subplot parameters to increase vertical spacing
+    plt.subplots_adjust(hspace=0.5)  # Increased vertical spacing between subplots
+
+    plt.subplot(4, 1, 1)
     plt.plot(range(5, 55, 5), H_acc_mean, label='Mean Loss H')
     plt.plot(range(5, 55, 5), H_acc_median, label='Median Loss H')
     plt.title(f'Accuracy of H Depending on Number of Points; std = {sigma}')
@@ -357,7 +377,7 @@ def accuracyHKdependingOnNumOfPoints(sigma=0):
     plt.ylabel('Loss')
     plt.legend()
 
-    plt.subplot(3, 1, 2)
+    plt.subplot(4, 1, 2)
     plt.plot(range(5, 55, 5), K_acc_mean, label='Mean Loss K')
     plt.plot(range(5, 55, 5), K_acc_median, label='Median Loss K')
     plt.title(f'Accuracy of K Depending on Number of Points; std = {sigma}')
@@ -365,7 +385,7 @@ def accuracyHKdependingOnNumOfPoints(sigma=0):
     plt.ylabel('Loss')
     plt.legend()
 
-    plt.subplot(3, 1, 3)
+    plt.subplot(4, 1, 3)
     plt.plot(range(5, 55, 5), a_values, label='Mean Loss a')
     plt.plot(range(5, 55, 5), b_values, label='Mean Loss b')
     plt.plot(range(5, 55, 5), c_values, label='Mean Loss c')
@@ -374,10 +394,81 @@ def accuracyHKdependingOnNumOfPoints(sigma=0):
     plt.title(f'Mean Coefficients a, b, c, d, e Depending on Number of Points; std = {sigma}')
     plt.xlabel('Number of Points')
     plt.ylabel('Mean Coefficient Value')
+    # plt.legend()
+
+    plt.subplot(4, 1, 4)
+    plt.plot(range(5, 55, 5), func_loss_mean, label='Mean Loss func')
+    plt.plot(range(5, 55, 5), func_loss_median, label='Median Loss func')
+    plt.title(f'Func_loss Depending on Number of Points; std = {sigma}')
+    plt.xlabel('Number of Points')
+    plt.ylabel('Loss')
     plt.legend()
 
-    plt.tight_layout()
+    plt.tight_layout()  # Tight layout adjustment
     plt.show()
+
+def testNoiseEffect(sigma=0):
+    options = [(0, 0), (1, 1), (1, -1), (0, 1), (0, -1), (-1, -33)]
+    names = ["plane", "pit", "peak", "valley", "ridge", "saddle"]
+    for setup, name in zip(options, names):
+        H_list = []
+        K_list = []
+        H2_list = []
+        K2_list = []
+        a1, b1, c1, d1, e1, _, H, K = createFunction(gaussian_curv=setup[0], mean_curv=setup[1],
+                                                     boundary=5, epsilon=0.05)
+        point_cloud = samplePoints(a1, b1, c1, d1, e1, count=40)
+        for _ in range(30):
+            noised_point_cloud = point_cloud + np.random.normal(loc=0, scale=sigma, size=point_cloud.shape)
+            noised_point_cloud_centered = noised_point_cloud - noised_point_cloud[0, :]
+            a2, b2, c2, d2, e2, K2, H2 = fit_surface_quadratic_constrained(noised_point_cloud_centered)
+            H_list.append(H)
+            K_list.append(K)
+            H2_list.append(H2)
+            K2_list.append(K2)
+        fig = plt.figure(figsize=(16, 12))
+
+        # Plot H and H2
+        ax1 = fig.add_subplot(2, 2, 1)
+        ax1.plot(H_list, label='H')
+        ax1.plot(H2_list, label='H2')
+        ax1.set_xlabel('Setup Index')
+        ax1.set_ylabel('Values')
+        ax1.set_title(f'Comparison of H and H2_estimate')
+        ax1.legend()
+
+        # Plot K and K2
+        ax2 = fig.add_subplot(2, 2, 2)
+        ax2.plot(K_list, label='K')
+        ax2.plot(K2_list, label='K2')
+        ax2.set_xlabel('Setup Index')
+        ax2.set_ylabel('Values')
+        ax2.set_title(f'Comparison of K and K2_estimate')
+        ax2.legend()
+
+        # Plot 3D function
+        ax3 = fig.add_subplot(2, 2, 3, projection='3d')
+        x = np.linspace(-5, 5, 100)
+        y = np.linspace(-5, 5, 100)
+        X, Y = np.meshgrid(x, y)
+        Z = a1 * X ** 2 + b1 * Y ** 2 + c1 * X * Y + d1 * X + e1 * Y
+        ax3.plot_surface(X, Y, Z, cmap='viridis', edgecolor='none')
+        ax3.set_xlabel('X')
+        ax3.set_ylabel('Y')
+        ax3.set_zlabel('Z')
+        ax3.set_title('Original Function Plot')
+
+        # Plot clean point cloud
+        ax4 = fig.add_subplot(2, 2, 4, projection='3d')
+        ax4.scatter(point_cloud[:, 0], point_cloud[:, 1], point_cloud[:, 2], c='b', marker='.', s=150)
+        ax4.scatter(noised_point_cloud_centered[:, 0], noised_point_cloud_centered[:, 1], noised_point_cloud_centered[:, 2], c='r', marker='.', s=150)
+        ax4.set_xlabel('X')
+        ax4.set_ylabel('Y')
+        ax4.set_zlabel('Z')
+        ax4.set_title('Original (blue) and noised (red) pcl')
+
+        plt.tight_layout()
+        plt.show()
 
 if __name__ == '__main__':
     # createDataSet()
@@ -398,6 +489,8 @@ if __name__ == '__main__':
     # plotMultiplePcls(parameter_sets, names=['saddle', 'valley'])
     #
     #
-    for i in range(5):
-        accuracyHKdependingOnNumOfPoints(sigma=((i+1))/(10))
+
+    testNoiseEffect(sigma=0.05)
+    # for i in range(5):
+    #     accuracyHKdependingOnNumOfPoints(sigma=((i+1))/(10))
     print("yay")
