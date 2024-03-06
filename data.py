@@ -21,9 +21,10 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
 
         # Load point cloud data
         point_cloud = self.point_clouds_group[point_cloud_name]
+        point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
         #get canonical point cloud order
-        pcl, lpe = createLPEembedding(point_cloud, self.lpe_dim, normalize=self.normalize)
-        point_cloud = torch.tensor(pcl, dtype=torch.float32)
+        # pcl, lpe = createLPEembedding(point_cloud, self.lpe_dim, normalize=self.normalize)
+        # point_cloud = torch.tensor(pcl, dtype=torch.float32)
 
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
