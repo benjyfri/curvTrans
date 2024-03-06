@@ -238,10 +238,10 @@ def train(args, net, train_loader, test_loader):
         if best_test_loss >= test_loss:
             best_test_loss = test_loss
 
-            if torch.cuda.device_count() > 1:
-                torch.save(net.module.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.best.t7' % args.exp_name)
-            else:
-                torch.save(net.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.best.t7' % args.exp_name)
+            # if torch.cuda.device_count() > 1:
+            #     torch.save(net.module.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.best.t7' % args.exp_name)
+            # else:
+            #     torch.save(net.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.best.t7' % args.exp_name)
 
         if args.use_wandb:
             wandb_log((epoch+1)*(len(train_loader)*args.batch_size), epoch, train_loss, train_r_mse_ab, train_r_rmse_ab, train_r_mae_ab, train_t_mse_ab,
@@ -256,11 +256,11 @@ def train(args, net, train_loader, test_loader):
         print('EPOCH:: %d, Loss: %f, rot_MSE: %f, rot_RMSE: %f, rot_MAE: %f, trans_MSE: %f, trans_RMSE: %f, trans_MAE: %f'
                       % (epoch, test_loss, test_r_mse_ab, test_r_rmse_ab, test_r_mae_ab, test_t_mse_ab, test_t_rmse_ab, test_t_mae_ab))
 
-        if torch.cuda.device_count() > 1:
-            torch.save(net.module.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.%d.t7' % (args.exp_name, epoch))
-        else:
-            torch.save(net.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.%d.t7' % (args.exp_name, epoch))
-        gc.collect()
+        # if torch.cuda.device_count() > 1:
+        #     torch.save(net.module.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.%d.t7' % (args.exp_name, epoch))
+        # else:
+        #     torch.save(net.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.%d.t7' % (args.exp_name, epoch))
+        # gc.collect()
 def wandb_log(example_cnt, epoch, train_loss, train_r_mse_ab, train_r_rmse_ab, train_r_mae_ab, train_t_mse_ab, train_t_rmse_ab, train_t_mae_ab, log_both = 1,  test_loss = 0, test_r_mse_ab = 0, test_r_rmse_ab = 0, test_r_mae_ab = 0, test_t_mse_ab = 0, test_t_rmse_ab = 0, test_t_mae_ab = 0 ):
 
 
