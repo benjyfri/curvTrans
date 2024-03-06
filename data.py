@@ -17,12 +17,13 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         point_cloud_name = f"point_cloud_{self.indices[idx]}"
         point_cloud = self.point_clouds_group[point_cloud_name]
+        point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
 
         #Add noise to point cloud
-        if self.std_dev!=0:
-            noise = np.random.normal(0, self.std_dev, size=point_cloud.shape)
+        if self.std_dev != 0:
+            noise = torch.normal(0, self.std_dev, size=point_cloud.shape, dtype=torch.float32)
             point_cloud = point_cloud + noise
-        point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
+
 
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
