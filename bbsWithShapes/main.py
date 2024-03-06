@@ -216,8 +216,8 @@ def train(args, net, train_loader, test_loader):
 
         scheduler.step()
 
-        test_loss, test_rotations_ab, test_translations_ab, test_rotations_ab_pred, \
-        test_translations_ab_pred, test_eulers_ab = test_one_epoch(args, net, test_loader, epoch)
+        # test_loss, test_rotations_ab, test_translations_ab, test_rotations_ab_pred, \
+        # test_translations_ab_pred, test_eulers_ab = test_one_epoch(args, net, test_loader, epoch)
 
         train_rotations_ab_pred_euler = npmat2euler(train_rotations_ab_pred)
         train_r_mse_ab = np.mean((train_rotations_ab_pred_euler - np.degrees(train_eulers_ab)) ** 2)
@@ -227,16 +227,16 @@ def train(args, net, train_loader, test_loader):
         train_t_rmse_ab = np.sqrt(train_t_mse_ab)
         train_t_mae_ab = np.mean(np.abs(train_translations_ab - train_translations_ab_pred))
 
-        test_rotations_ab_pred_euler = npmat2euler(test_rotations_ab_pred)
-        test_r_mse_ab = np.mean((test_rotations_ab_pred_euler - np.degrees(test_eulers_ab)) ** 2)
-        test_r_rmse_ab = np.sqrt(test_r_mse_ab)
-        test_r_mae_ab = np.mean(np.abs(test_rotations_ab_pred_euler - np.degrees(test_eulers_ab)))
-        test_t_mse_ab = np.mean((test_translations_ab - test_translations_ab_pred) ** 2)
-        test_t_rmse_ab = np.sqrt(test_t_mse_ab)
-        test_t_mae_ab = np.mean(np.abs(test_translations_ab - test_translations_ab_pred))
+        # test_rotations_ab_pred_euler = npmat2euler(test_rotations_ab_pred)
+        # test_r_mse_ab = np.mean((test_rotations_ab_pred_euler - np.degrees(test_eulers_ab)) ** 2)
+        # test_r_rmse_ab = np.sqrt(test_r_mse_ab)
+        # test_r_mae_ab = np.mean(np.abs(test_rotations_ab_pred_euler - np.degrees(test_eulers_ab)))
+        # test_t_mse_ab = np.mean((test_translations_ab - test_translations_ab_pred) ** 2)
+        # test_t_rmse_ab = np.sqrt(test_t_mse_ab)
+        # test_t_mae_ab = np.mean(np.abs(test_translations_ab - test_translations_ab_pred))
 
-        if best_test_loss >= test_loss:
-            best_test_loss = test_loss
+        # if best_test_loss >= test_loss:
+        #     best_test_loss = test_loss
 
             # if torch.cuda.device_count() > 1:
             #     torch.save(net.module.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.best.t7' % args.exp_name)
@@ -244,23 +244,42 @@ def train(args, net, train_loader, test_loader):
             #     torch.save(net.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.best.t7' % args.exp_name)
 
         if args.use_wandb:
+            # wandb_log((epoch+1)*(len(train_loader)*args.batch_size), epoch, train_loss, train_r_mse_ab, train_r_rmse_ab, train_r_mae_ab, train_t_mse_ab,
+            #           train_t_rmse_ab, train_t_mae_ab, 1, test_loss, test_r_mse_ab, test_r_rmse_ab, test_r_mae_ab,
+            #           test_t_mse_ab, test_t_rmse_ab, test_t_mae_ab)
             wandb_log((epoch+1)*(len(train_loader)*args.batch_size), epoch, train_loss, train_r_mse_ab, train_r_rmse_ab, train_r_mae_ab, train_t_mse_ab,
-                      train_t_rmse_ab, train_t_mae_ab, 1, test_loss, test_r_mse_ab, test_r_rmse_ab, test_r_mae_ab,
-                      test_t_mse_ab, test_t_rmse_ab, test_t_mae_ab)
+                      train_t_rmse_ab, train_t_mae_ab, 1, 10, 10, 10, 10,
+                      10, 10, 10)
 
         print('==TRAIN==')
         print('EPOCH:: %d, Loss: %f, rot_MSE: %f, rot_RMSE: %f, rot_MAE: %f, trans_MSE: %f, trans_RMSE: %f, trans_MAE: %f'
                       % (epoch, train_loss, train_r_mse_ab, train_r_rmse_ab, train_r_mae_ab, train_t_mse_ab, train_t_rmse_ab, train_t_mae_ab))
 
-        print('==TEST==')
-        print('EPOCH:: %d, Loss: %f, rot_MSE: %f, rot_RMSE: %f, rot_MAE: %f, trans_MSE: %f, trans_RMSE: %f, trans_MAE: %f'
-                      % (epoch, test_loss, test_r_mse_ab, test_r_rmse_ab, test_r_mae_ab, test_t_mse_ab, test_t_rmse_ab, test_t_mae_ab))
+        # print('==TEST==')
+        # print('EPOCH:: %d, Loss: %f, rot_MSE: %f, rot_RMSE: %f, rot_MAE: %f, trans_MSE: %f, trans_RMSE: %f, trans_MAE: %f'
+        #               % (epoch, test_loss, test_r_mse_ab, test_r_rmse_ab, test_r_mae_ab, test_t_mse_ab, test_t_rmse_ab, test_t_mae_ab))
 
         # if torch.cuda.device_count() > 1:
         #     torch.save(net.module.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.%d.t7' % (args.exp_name, epoch))
         # else:
         #     torch.save(net.state_dict(), args.checkpoint_dir+'checkpoints/%s/models/model.%d.t7' % (args.exp_name, epoch))
         # gc.collect()
+    test_loss, test_rotations_ab, test_translations_ab, test_rotations_ab_pred, \
+        test_translations_ab_pred, test_eulers_ab = test_one_epoch(args, net, test_loader, epoch)
+
+    test_rotations_ab_pred_euler = npmat2euler(test_rotations_ab_pred)
+    test_r_mse_ab = np.mean((test_rotations_ab_pred_euler - np.degrees(test_eulers_ab)) ** 2)
+    test_r_rmse_ab = np.sqrt(test_r_mse_ab)
+    test_r_mae_ab = np.mean(np.abs(test_rotations_ab_pred_euler - np.degrees(test_eulers_ab)))
+    test_t_mse_ab = np.mean((test_translations_ab - test_translations_ab_pred) ** 2)
+    test_t_rmse_ab = np.sqrt(test_t_mse_ab)
+    test_t_mae_ab = np.mean(np.abs(test_translations_ab - test_translations_ab_pred))
+    print('==TEST==')
+    print('EPOCH:: %d, Loss: %f, rot_MSE: %f, rot_RMSE: %f, rot_MAE: %f, trans_MSE: %f, trans_RMSE: %f, trans_MAE: %f'
+          % (
+          epoch, test_loss, test_r_mse_ab, test_r_rmse_ab, test_r_mae_ab, test_t_mse_ab, test_t_rmse_ab, test_t_mae_ab))
+
+
 def wandb_log(example_cnt, epoch, train_loss, train_r_mse_ab, train_r_rmse_ab, train_r_mae_ab, train_t_mse_ab, train_t_rmse_ab, train_t_mae_ab, log_both = 1,  test_loss = 0, test_r_mse_ab = 0, test_r_rmse_ab = 0, test_r_mae_ab = 0, test_t_mse_ab = 0, test_t_rmse_ab = 0, test_t_mae_ab = 0 ):
 
 
