@@ -10,21 +10,19 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.point_clouds_group = self.hdf5_file['point_clouds']
         self.num_point_clouds = len(self.point_clouds_group)
         self.indices = list(range(self.num_point_clouds))
-        self.lpe_dim = args.lpe_dim
-        self.PE_dim = args.PE_dim
-        self.normalize = args.lpe_normalize
+        self.std_dev = args.std_dev
     def __len__(self):
         return self.num_point_clouds
 
     def __getitem__(self, idx):
         point_cloud_name = f"point_cloud_{self.indices[idx]}"
-
-        # Load point cloud data
         point_cloud = self.point_clouds_group[point_cloud_name]
+
+        #Add noise to point cloud
+        if self.std_dev!=0:
+            noise = np.random.normal(0, self.std_dev, size=point_cloud.shape)
+            point_cloud = point_cloud + noise
         point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
-        #get canonical point cloud order
-        # pcl, lpe = createLPEembedding(point_cloud, self.lpe_dim, normalize=self.normalize)
-        # point_cloud = torch.tensor(pcl, dtype=torch.float32)
 
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in

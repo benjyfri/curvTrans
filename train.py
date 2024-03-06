@@ -141,8 +141,10 @@ def configArgsPCT():
                         help='use PCT transformer version')
     parser.add_argument('--use_pct', type=int, default=0, metavar='N',
                         help='use PCT transformer version')
+    parser.add_argument('--std_dev', type=float, default=0, metavar='N',
+                        help='amount of noise to add to data')
     parser.add_argument('--use_mlp', type=int, default=0, metavar='N',
-                        help='use PCT transformer version')
+                        help='use MLP version')
     parser.add_argument('--lpe_dim', type=int, default=3, metavar='N',
                         help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--use_xyz', type=int, default=1, metavar='N',
