@@ -269,7 +269,7 @@ def testPretrainedModel(args, model=None):
                     num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim).to(device)
 
         # Load the saved state dictionary
-        model_path = r"C:\Users\benjy\Downloads\best.pth"  # Update with the path to your saved model
+        model_path = r"best.pt"  # Update with the path to your saved model
         model.load_state_dict(torch.load(model_path))
     num_params = sum(p.numel() for p in model.parameters())
     print(f'Num of parameters in NN: {num_params}')
@@ -345,5 +345,5 @@ if __name__ == '__main__':
     args = configArgsPCT()
     model = train_and_test(args)
     testPretrainedModel(args, model=model)
-    torch.save(model.state_dict(), "best_2.pth")
+    torch.save(model.state_dict(), "best_2.pt")
 
