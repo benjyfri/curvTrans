@@ -25,10 +25,10 @@ def download():
         with zipfile.ZipFile(zipfile_path, 'r') as zip_ref:
             zip_ref.extractall(DATA_DIR)
 
-        # Move the extracted folder to the data directory
-        extracted_folder = os.path.splitext(os.path.basename(www))[0]
-        extracted_folder_path = os.path.join(BASE_DIR, extracted_folder)
-        shutil.move(extracted_folder_path, DATA_DIR)
+        # # Move the extracted folder to the data directory
+        # extracted_folder = os.path.splitext(os.path.basename(www))[0]
+        # extracted_folder_path = os.path.join(BASE_DIR, extracted_folder)
+        # shutil.move(extracted_folder_path, DATA_DIR)
 
         # Remove the downloaded zip file
         os.remove(zipfile_path)
