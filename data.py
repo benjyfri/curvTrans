@@ -11,6 +11,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.num_point_clouds = len(self.point_clouds_group)
         self.indices = list(range(self.num_point_clouds))
         self.std_dev = args.std_dev
+        self.rotate_data = args.rotate_data
     def __len__(self):
         return self.num_point_clouds
 
@@ -18,11 +19,13 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         point_cloud_name = f"point_cloud_{self.indices[idx]}"
         point_cloud = self.point_clouds_group[point_cloud_name]
         point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
-
+        if self.rotate_data:
+            point_cloud = random_rotation(point_cloud)
         #Add noise to point cloud
         if self.std_dev != 0:
             noise = torch.normal(0, self.std_dev, size=point_cloud.shape, dtype=torch.float32)
             point_cloud = point_cloud + noise
+            point_cloud = point_cloud - point_cloud[0,:]
 
 
         # Load metadata from attributes
@@ -168,3 +171,32 @@ def calculate_angle_and_area(a, b, c , d):
     return angle_at_a, angle_at_c, angle_at_d, area
 
 
+def random_rotation(point_cloud):
+    device = point_cloud.device
+    is_rotation = False
+    while is_rotation==False:
+
+        # Generate random rotation angles around x, y, and z axes
+        theta_x = torch.tensor(np.random.uniform(0, 2 * np.pi), device=device)
+        theta_y = torch.tensor(np.random.uniform(0, 2 * np.pi), device=device)
+        theta_z = torch.tensor(np.random.uniform(0, 2 * np.pi), device=device)
+
+        # Rotation matrices around x, y, and z axes
+        Rx = torch.tensor([[1, 0, 0],
+                           [0, torch.cos(theta_x), -torch.sin(theta_x)],
+                           [0, torch.sin(theta_x), torch.cos(theta_x)]], device=device)
+
+        Ry = torch.tensor([[torch.cos(theta_y), 0, torch.sin(theta_y)],
+                           [0, 1, 0],
+                           [-torch.sin(theta_y), 0, torch.cos(theta_y)]], device=device)
+
+        Rz = torch.tensor([[torch.cos(theta_z), -torch.sin(theta_z), 0],
+                           [torch.sin(theta_z), torch.cos(theta_z), 0],
+                           [0, 0, 1]], device=device)
+
+        # Combine rotation matrices
+        R = torch.matmul(Rz, torch.matmul(Ry, Rx))
+        is_rotation = torch.allclose(torch.eye(3, device=device), torch.matmul(R, R.T),atol=1e-06)
+    # Apply rotation to point cloud
+    rotated_point_cloud = torch.matmul(point_cloud, R.T)
+    return rotated_point_cloud

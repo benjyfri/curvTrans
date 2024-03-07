@@ -149,6 +149,8 @@ def configArgsPCT():
                         help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--use_xyz', type=int, default=1, metavar='N',
                         help='use xyz coordinates as part of input')
+    parser.add_argument('--rotate_data', type=int, default=0, metavar='N',
+                        help='use rotated data')
     parser.add_argument('--num_of_heads', type=int, default=1, metavar='N',
                         help='how many attention heads to use')
     parser.add_argument('--num_neurons_per_layer', type=int, default=64, metavar='N',
@@ -304,8 +306,8 @@ def input_visualized_importance(model_name='MLP5layers64Nlpe10xyz2deg40points'):
     return model
 if __name__ == '__main__':
     args = configArgsPCT()
-    # model = train_and_test(args)
-    model = input_visualized_importance()
+    model = train_and_test(args)
+    # model = input_visualized_importance()
     testPretrainedModel(args, model=model.to('cuda'))
     # torch.save(model.state_dict(), f'{args.exp_name}.pt')
     # Compute input saliency
