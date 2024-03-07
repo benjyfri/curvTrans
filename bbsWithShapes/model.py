@@ -468,6 +468,21 @@ class DCP(nn.Module):
 
             src_knn_pcl = src_knn[:, :3, :, :] - src_knn[:, 3:, :, :] #(batch_size, 3, num_of_points, k)
             tgt_knn_pcl = tgt_knn[:, :3, :, :] - tgt_knn[:, 3:, :, :] #(batch_size, 3, num_of_points, k)
+
+            x_scale_src = torch.max(abs(src_knn_pcl[:, 0, :, :]))
+            y_scale_src = torch.max(abs(src_knn_pcl[:, 1, :, :]))
+            z_scale_src = x_scale_src / 2 + y_scale_src / 2
+            src_knn_pcl[:, 0, :, :] = src_knn_pcl[:, 0, :, :] / x_scale_src
+            src_knn_pcl[:, 1, :, :] = src_knn_pcl[:, 1, :] / y_scale_src
+            src_knn_pcl[:, 2, :, :] = src_knn_pcl[:, 2, :, :] / z_scale_src
+            x_scale_tgt = torch.max(abs(tgt_knn_pcl[:, 0, :, :]))
+            y_scale_tgt = torch.max(abs(tgt_knn_pcl[:, 1, :, :]))
+            z_scale_tgt = x_scale_tgt / 2 + y_scale_tgt / 2
+            tgt_knn_pcl[:, 0, :, :] = tgt_knn_pcl[:, 0, :, :] / x_scale_tgt
+            tgt_knn_pcl[:, 1, :, :] = tgt_knn_pcl[:, 1, :, :] / y_scale_tgt
+            tgt_knn_pcl[:, 2, :, :] = tgt_knn_pcl[:, 2, :, :] / z_scale_tgt
+
+
             #
             src_batch_size, _, src_num_of_points,src_k = src_knn_pcl.shape
             tgt_batch_size, _, tgt_num_of_points, tgt_k = tgt_knn_pcl.shape
