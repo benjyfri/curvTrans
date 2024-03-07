@@ -39,8 +39,8 @@ def createDataSet():
     if not os.path.exists(test_path):
         os.makedirs(test_path)
 
-    new_file_path_train = "train_surfaces_40_stronger_boundaries.h5"
-    new_file_path_test = "test_surfaces_40_stronger_boundaries.h5"
+    new_file_path_train = "train_surfaces_rotation_std005.h5"
+    new_file_path_test = "test_surfaces_rotation_std005.h5"
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, counter=0, amount_of_pcl=10000,
@@ -83,10 +83,14 @@ def createDataSet():
                      size_of_pcl=40)
         print(f'Finished test saddle surfaces')
 
-def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40):
+def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40, std=0.05):
     for k in range(amount_of_pcl):
         a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=5, epsilon=0.05)
         point_cloud = samplePoints(a, b, c, d, e, count=size_of_pcl)
+        noise = np.random.normal(loc=0, scale=std, size=point_cloud.shape)
+        rotated_pcl = random_rotation(point_cloud)
+        plot_point_clouds(point_cloud, rotated_pcl + noise)
+        point_cloud = rotated_pcl + noise
         point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = a
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['b'] = b
@@ -470,8 +474,68 @@ def testNoiseEffect(sigma=0):
         plt.tight_layout()
         plt.show()
 
+
+def random_rotation(point_cloud):
+    # Generate random rotation angles around x, y, and z axes
+    theta_x = np.random.uniform(0, 2 * np.pi)
+    theta_y = np.random.uniform(0, 2 * np.pi)
+    theta_z = np.random.uniform(0, 2 * np.pi)
+
+    # Rotation matrices around x, y, and z axes
+    Rx = np.array([[1, 0, 0],
+                   [0, np.cos(theta_x), -np.sin(theta_x)],
+                   [0, np.sin(theta_x), np.cos(theta_x)]])
+
+    Ry = np.array([[np.cos(theta_y), 0, np.sin(theta_y)],
+                   [0, 1, 0],
+                   [-np.sin(theta_y), 0, np.cos(theta_y)]])
+
+    Rz = np.array([[np.cos(theta_z), -np.sin(theta_z), 0],
+                   [np.sin(theta_z), np.cos(theta_z), 0],
+                   [0, 0, 1]])
+
+    # Combine rotation matrices
+    R = np.dot(Rz, np.dot(Ry, Rx))
+
+    # Apply rotation to point cloud
+    rotated_point_cloud = np.dot(point_cloud, R.T)
+    # plot_point_clouds(point_cloud, rotated_point_cloud)
+    is_rotation = np.allclose(np.eye(3), np.dot(R, R.T))
+    if not is_rotation:
+        raise ValueError("not a rotation")
+    return rotated_point_cloud
+def plot_point_clouds(point_cloud1, point_cloud2):
+    """
+    Plot two point clouds in an interactive 3D plot with Plotly.
+
+    Args:
+        point_cloud1 (np.ndarray): First point cloud of shape (41, 3)
+        point_cloud2 (np.ndarray): Second point cloud of shape (41, 3)
+    """
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter3d(
+        x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
+        mode='markers', marker=dict(color='red'), name='Point Cloud 1'
+    ))
+
+    fig.add_trace(go.Scatter3d(
+        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
+        mode='markers', marker=dict(color='blue'), name='Point Cloud 2'
+    ))
+
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(title='X'),
+            yaxis=dict(title='Y'),
+            zaxis=dict(title='Z'),
+        ),
+        margin=dict(r=20, l=10, b=10, t=10)
+    )
+
+    fig.show()
 if __name__ == '__main__':
-    # createDataSet()
+    createDataSet()
 
 
     # a1, b1, c1, d1, e1, _, H, K = createFunction(gaussian_curv=-1, mean_curv=-33, boundary=5, epsilon=0.05)
@@ -490,7 +554,7 @@ if __name__ == '__main__':
     #
     #
 
-    testNoiseEffect(sigma=0.05)
+    # testNoiseEffect(sigma=0.05)
     # for i in range(5):
     #     accuracyHKdependingOnNumOfPoints(sigma=((i+1))/(10))
     print("yay")
