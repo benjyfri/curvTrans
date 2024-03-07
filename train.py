@@ -200,6 +200,7 @@ def testPretrainedModel(args, model=None):
         for batch in test_dataloader:
             pcl, info = batch['point_cloud'].to(device), batch['info']
             label = info['class'].to(device).long()
+            # torch.save(pcl[0].permute(1,0).unsqueeze(1).unsqueeze(0), 'pcl.pt')
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
             preds = output.max(dim=1)[1]
 
@@ -241,9 +242,72 @@ def testPretrainedModel(args, model=None):
             print(f"  - median K for wrong predictions: {np.median(wrong_K_values[label])}")
 
     # return test_acc, label_accuracies, wrong_predictions_stats
+from torch.autograd import Variable
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def input_visualized_importance(model_name='MLP5layers64Nlpe10xyz2deg40points'):
+    input_data = torch.randn(1, 3, 1, 41)  # Assuming input_size is the size of input to the model
+    # input_data = input_data*0 + 5*torch.randn(1, 3, 1, 41)  # Assuming input_size is the size of input to the model
+    # input_data = torch.ones(1, 3, 1, 41)  # Assuming input_size is the size of input to the model
+    # input_data_loaded = torch.load('pcl.pt').to('cpu')
+    # input_data_loaded.requires_grad = True
+    # input_data_loaded = input_data_loaded.float()
+    # input_data = input_data_loaded.clone() # Assuming input_size is the size of input to the model
+    input_data[0, 0, :, 0] = 0
+    input_data[0, 1, :, 0] = 0
+    input_data[0, 2, :, 0] = 0
+
+    args_shape = configArgsPCT()
+    args_shape.batch_size = 1024
+    args_shape.exp = model_name
+    args_shape.use_mlp = 1
+    args_shape.lpe_dim = 10
+    args_shape.num_mlp_layers = 5
+    args_shape.num_neurons_per_layer = 64
+    args_shape.sampled_points = 40
+    args_shape.use_second_deg = 1
+    args_shape.lpe_normalize = 1
+    model = shapeClassifier(args_shape)
+    model.load_state_dict(torch.load(f'{model_name}.pt'))
+    model.eval()
+
+    model.eval()  # Set the model to evaluation mode
+    input_data = Variable(input_data, requires_grad=True)  # Wrap input data in a Variable with gradient tracking
+    output = model(input_data)  # Forward pass
+
+    # Initialize a list to store saliency maps for each output
+    saliency_maps = []
+
+    # Compute and store the gradients of the input data for each output
+    for i in range(4):
+        model.zero_grad()  # Reset gradients
+        output[0, i].backward(retain_graph=True)  # Backward pass to compute gradients
+
+        # Get the gradients of the input data
+        saliency_map = input_data.grad.abs()[0]
+        saliency_map = saliency_map.squeeze().detach().cpu().numpy()  # Remove singleton dimensions and convert to NumPy array
+
+        # Append saliency map to the list
+        saliency_maps.append(saliency_map)
+
+    # Plot all four saliency maps in the same plot
+    plt.figure(figsize=(12, 6))  # Increase figure size for better readability
+    for i, saliency_map in enumerate(saliency_maps):
+        ax = plt.subplot(2, 2, i + 1)
+        sns.heatmap(saliency_map, cmap='hot', ax=ax)  # Plot heatmap
+        plt.title(f'Output {i + 1} Saliency Map')
+        plt.yticks(ticks=range(saliency_map.shape[0]), labels=range(1, saliency_map.shape[0] + 1))
+
+    plt.tight_layout()  # Adjust subplot layout to prevent overlap
+    plt.show()
+    return model
 if __name__ == '__main__':
     args = configArgsPCT()
-    model = train_and_test(args)
-    testPretrainedModel(args, model=model)
-    torch.save(model.state_dict(), f'{args.exp_name}.pt')
+    # model = train_and_test(args)
+    model = input_visualized_importance()
+    testPretrainedModel(args, model=model.to('cuda'))
+    # torch.save(model.state_dict(), f'{args.exp_name}.pt')
+    # Compute input saliency
+    # input_visualized_importance()
 
