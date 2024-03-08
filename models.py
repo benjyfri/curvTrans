@@ -58,6 +58,8 @@ class shapeClassifier(nn.Module):
         return laplacian
 
     def top_k_smallest_eigenvectors(self, graph, k):
+        if k<1:
+            k=1
         eigenvalues, eigenvectors = torch.linalg.eigh(graph)
         return eigenvectors[:,: ,1:k+1]
 
