@@ -430,14 +430,14 @@ class DCP(nn.Module):
         args_shape.batch_size = 1024
         args_shape.exp = 'MLP5layers64Nlpe3xyz2deg40points'
         args_shape.use_mlp = 1
-        args_shape.lpe_dim = 10
-        args_shape.num_mlp_layers = 5
+        args_shape.lpe_dim = 6
+        args_shape.num_mlp_layers = 3
         args_shape.num_neurons_per_layer = 64
         args_shape.sampled_points = 40
-        args_shape.use_second_deg = 1
+        args_shape.use_second_deg = 0
         args_shape.lpe_normalize = 1
         model = shapeClassifier(args_shape)
-        model.load_state_dict(torch.load("MLP5layers64Nlpe10xyz2deg40points.pt"))
+        model.load_state_dict(torch.load("MLP3layers64Nlpe6xyzRotStd005.pt"))
         model.eval()
         self.shape_est = model
         # self.bn = nn.BatchNorm1d(args.added_dimensions)
@@ -470,29 +470,25 @@ class DCP(nn.Module):
             tgt_knn_pcl = tgt_knn[:, :3, :, :] - tgt_knn[:, 3:, :, :] #(batch_size, 3, num_of_points, k)
 
             x_scale_src = torch.max(abs(src_knn_pcl[:, 0, :, :]))
-            y_scale_src = torch.max(abs(src_knn_pcl[:, 1, :, :]))
-            z_scale_src = x_scale_src / 2 + y_scale_src / 2
             src_knn_pcl[:, 0, :, :] = src_knn_pcl[:, 0, :, :] / x_scale_src
-            src_knn_pcl[:, 1, :, :] = src_knn_pcl[:, 1, :] / y_scale_src
-            src_knn_pcl[:, 2, :, :] = src_knn_pcl[:, 2, :, :] / z_scale_src
+            src_knn_pcl[:, 1, :, :] = src_knn_pcl[:, 1, :] / x_scale_src
+            src_knn_pcl[:, 2, :, :] = src_knn_pcl[:, 2, :, :] / x_scale_src
             x_scale_tgt = torch.max(abs(tgt_knn_pcl[:, 0, :, :]))
-            y_scale_tgt = torch.max(abs(tgt_knn_pcl[:, 1, :, :]))
-            z_scale_tgt = x_scale_tgt / 2 + y_scale_tgt / 2
             tgt_knn_pcl[:, 0, :, :] = tgt_knn_pcl[:, 0, :, :] / x_scale_tgt
-            tgt_knn_pcl[:, 1, :, :] = tgt_knn_pcl[:, 1, :, :] / y_scale_tgt
-            tgt_knn_pcl[:, 2, :, :] = tgt_knn_pcl[:, 2, :, :] / z_scale_tgt
+            tgt_knn_pcl[:, 1, :, :] = tgt_knn_pcl[:, 1, :, :] / x_scale_tgt
+            tgt_knn_pcl[:, 2, :, :] = tgt_knn_pcl[:, 2, :, :] / x_scale_tgt
 
 
             #
             src_batch_size, _, src_num_of_points,src_k = src_knn_pcl.shape
             tgt_batch_size, _, tgt_num_of_points, tgt_k = tgt_knn_pcl.shape
 
-            src_output = self.shape_est(src_knn_pcl)
+            src_output = self.shape_est(src_knn_pcl * 20)
             if self.normalize_shape:
                 src_output = (src_output - src_output.mean()) * (src_std / (src_output.std()+ 1e-7)) + src_mean
             src_output = self.shape_multiplier * (src_output.view(src_batch_size, src_num_of_points, -1))
 
-            tgt_output = self.shape_est(tgt_knn_pcl)
+            tgt_output = self.shape_est(tgt_knn_pcl  * 20)
             if self.normalize_shape:
                 tgt_output = (tgt_output - tgt_output.mean()) * (tgt_std / (tgt_output.std() + 1e-7)) + tgt_mean
             tgt_output = self.shape_multiplier * (tgt_output.view(tgt_batch_size, tgt_num_of_points, -1))
