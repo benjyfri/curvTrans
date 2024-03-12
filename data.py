@@ -18,9 +18,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         point_cloud_name = f"point_cloud_{self.indices[idx]}"
         point_cloud = self.point_clouds_group[point_cloud_name]
+        point_cloud = np.array(point_cloud, dtype=np.float32)
         point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
+        # point_cloud1 = point_cloud.detach().cpu().numpy()
         if self.rotate_data:
             point_cloud = random_rotation(point_cloud)
+            # point_cloud2 = point_cloud.detach().cpu().numpy()
         #Add noise to point cloud
         if self.std_dev != 0:
             noise = torch.normal(0, self.std_dev, size=point_cloud.shape, dtype=torch.float32)
@@ -31,6 +34,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
+        label = info['class']
+        # plot_point_clouds(point_cloud1, point_cloud2, title=f'label is: {label}')
 
         return {"point_cloud": point_cloud, "info": info}
 class PointCloudDataset(torch.utils.data.Dataset):
@@ -200,3 +205,47 @@ def random_rotation(point_cloud):
     # Apply rotation to point cloud
     rotated_point_cloud = torch.matmul(point_cloud, R.T)
     return rotated_point_cloud
+import plotly.graph_objects as go
+
+def plot_point_clouds(point_cloud1, point_cloud2, title):
+    """
+    Plot two point clouds in an interactive 3D plot with Plotly.
+
+    Args:
+        point_cloud1 (np.ndarray): First point cloud of shape (41, 3)
+        point_cloud2 (np.ndarray): Second point cloud of shape (41, 3)
+        title (str): Title of the plot
+    """
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter3d(
+        x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
+        mode='markers', marker=dict(color='red'),opacity=0.8, name='Point Cloud 1'
+    ))
+
+    fig.add_trace(go.Scatter3d(
+        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
+        mode='markers', marker=dict(color='blue'),opacity=0.8, name='Point Cloud 2'
+    ))
+    # Add a separate trace for the point (0, 0, 0) in bright pink
+    fig.add_trace(go.Scatter3d(
+        x=[0], y=[0], z=[0],
+        mode='markers', marker=dict(color='rgb(255, 105, 180)'), name='Origin (0, 0, 0)'
+    ))
+
+    fig.update_layout(
+        title=title,  # Set the title
+        title_y=0.9,  # Adjust the y position of the title
+        scene=dict(
+            xaxis=dict(title='X', range=[min(point_cloud1[:,0].min(), point_cloud2[:,0].min()),
+                                         max(point_cloud1[:,0].max(), point_cloud2[:,0].max())]),
+            yaxis=dict(title='Y', range=[min(point_cloud1[:,1].min(), point_cloud2[:,1].min()),
+                                         max(point_cloud1[:,1].max(), point_cloud2[:,1].max())]),
+            zaxis=dict(title='Z', range=[min(point_cloud1[:,2].min(), point_cloud2[:,2].min()),
+                                         max(point_cloud1[:,2].max(), point_cloud2[:,2].max())]),
+            aspectmode='cube'  # Enforce same scale for all axes
+        ),
+        margin=dict(r=20, l=10, b=10, t=10)
+    )
+
+    fig.show()
