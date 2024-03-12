@@ -139,16 +139,19 @@ def get_k_nearest_neighbors(point_cloud, k):
     neigh.fit(point_cloud)
     distances, indices = neigh.kneighbors(point_cloud)
 
-    neighbors = np.empty((1, 3, pcl_size, k), dtype=point_cloud.dtype)
+    neighbors_centered = np.empty((1, 3, pcl_size, k), dtype=point_cloud.dtype)
+    neighbors_non_centered = np.empty((1, 3, pcl_size, k), dtype=point_cloud.dtype)
 
     for i in range(pcl_size):
+        # orig = point_cloud[indices[i, 1:]] - point_cloud[indices[i, 1:]][0,:]
         orig = point_cloud[indices[i, 1:]] - point_cloud[indices[i, 1:]][0,:]
         # rotated1 = rotate_pointcloud_z_normal(orig)
-        rotated = rotate_to_z_axis(orig)
+        # rotated = rotate_to_z_axis(orig)
         # plot_point_clouds(rotated1, rotated)
-        neighbors[0, :, i, :] = orig.T
+        neighbors_centered[0, :, i, :] = orig.T
+        neighbors_non_centered[0, :, i, :] = (point_cloud[indices[i, 1:]]).T
 
-    return neighbors
+    return neighbors_centered, neighbors_non_centered
 
 
 def knn(x, k):
@@ -194,19 +197,18 @@ def checkOnShapes(model_name='MLP5layers64Nlpe10xyz2deg40points', input_data=Non
     args_shape.batch_size = 1024
     args_shape.exp = model_name
     args_shape.use_mlp = 1
-    args_shape.lpe_dim = 10
-    args_shape.num_mlp_layers = 5
+    args_shape.lpe_dim = 6
+    args_shape.num_mlp_layers = 3
     args_shape.num_neurons_per_layer = 64
     args_shape.sampled_points = 40
-    args_shape.use_second_deg = 1
+    args_shape.use_second_deg = 0
     args_shape.lpe_normalize = 1
     model = shapeClassifier(args_shape)
     model.load_state_dict(torch.load(f'{model_name}.pt'))
     model.eval()
-
-    model.eval()
-    a = get_k_nearest_neighbors(input_data, 41)
-    src_knn_pcl = torch.tensor(a)
+    neighbors_centered, neighbors_non_centered = get_k_nearest_neighbors(input_data, 41)
+    src_knn_pcl = torch.tensor(neighbors_centered)
+    src_knn_pcl_non_centered = torch.tensor(neighbors_non_centered)
     # src_knn_pcl = src_knn_pcl - src_knn_pcl[:,:,:,0].unsqueeze(3)
     # input_data = torch.tensor(input_data)
     # input_data = input_data.view(input_data.shape[1], input_data.shape[0])
@@ -216,14 +218,16 @@ def checkOnShapes(model_name='MLP5layers64Nlpe10xyz2deg40points', input_data=Non
     # src_knn_pcl = src_knn[:, :3, :, :]
     # src_knn_pcl = src_knn[:, :3, :, :] - src_knn[:, 3:, :, :]
     x_scale_src = torch.max(abs(src_knn_pcl[:, 0, :, :]))
-    y_scale_src = torch.max(abs(src_knn_pcl[:, 1, :, :]))
-    z_scale_src = x_scale_src / 2 + y_scale_src / 2
+    # y_scale_src = torch.max(abs(src_knn_pcl[:, 1, :, :]))
+    # z_scale_src = torch.max(abs(src_knn_pcl[:, 2, :, :]))
+    # z_scale_src = x_scale_src / 2 + y_scale_src / 2
     src_knn_pcl[:, 0, :, :] = src_knn_pcl[:, 0, :, :] / x_scale_src
-    src_knn_pcl[:, 1, :, :] = src_knn_pcl[:, 1, :] / y_scale_src
-    src_knn_pcl[:, 2, :, :] = src_knn_pcl[:, 2, :, :] / z_scale_src
+    src_knn_pcl[:, 1, :, :] = src_knn_pcl[:, 1, :] / x_scale_src
+    src_knn_pcl[:, 2, :, :] = src_knn_pcl[:, 2, :, :] / x_scale_src
+    src_knn_pcl = 20 * src_knn_pcl
     output = model(src_knn_pcl)
     preds = output.max(dim=1)[1]
-    return output, src_knn_pcl
+    return output, src_knn_pcl_non_centered[0,:,0,:]
 def load_data(partition='test', divide_data=1):
     BASE_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes'
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
@@ -242,18 +246,79 @@ def load_data(partition='test', divide_data=1):
     size = len(all_label)
     return all_data[:(int)(size/divide_data),:,:], all_label[:(int)(size/divide_data),:]
 
-if __name__ == '__main__':
+def checkData():
     args = configArgsPCT()
-    data, label = load_data()
-    for k in range(160,190):
-        pointcloud = data[300][:]
+    args.std_dev = 0.05
+    args.rotate_data = 1
+    # args.batch_size = 40000
+    max_list_x = []
+    min_list_x = []
+    max_list_y = []
+    min_list_y = []
+    max_list_z = []
+    min_list_z = []
+    train_dataset = BasicPointCloudDataset(file_path="train_surfaces_40_stronger_boundaries.h5", args=args)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    with tqdm(train_dataloader) as tqdm_bar:
+        for batch in tqdm_bar:
+            pcl = batch['point_cloud']
+            pcl = pcl.reshape(pcl.shape[0]*pcl.shape[1], -1)
+            max_list_x.append(torch.max(pcl[:,0]).item())
+            min_list_x.append(torch.min(pcl[:,0]).item())
+            max_list_y.append(torch.max(pcl[:,1]).item())
+            min_list_y.append(torch.min(pcl[:,1]).item())
+            max_list_z.append(torch.max(pcl[:,2]).item())
+            min_list_z.append(torch.min(pcl[:,2]).item())
+            print('yay')
+    print(f'-----------X--------------')
+    print(f'MIN mean: {np.mean(min_list_x)}')
+    print(f'MIN median: {np.median(min_list_x)}')
+    print(f'MIN MIN: {np.min(min_list_x)}')
+    print(f'MAX mean: {np.mean(max_list_x)}')
+    print(f'MAX median: {np.median(max_list_x)}')
+    print(f'MAX MAX: {np.max(max_list_x)}')
+    print(f'-----------Y--------------')
+    print(f'MIN mean: {np.mean(min_list_y)}')
+    print(f'MIN median: {np.median(min_list_y)}')
+    print(f'MIN MIN: {np.min(min_list_y)}')
+    print(f'MAX mean: {np.mean(max_list_y)}')
+    print(f'MAX median: {np.median(max_list_y)}')
+    print(f'MAX MAX: {np.max(max_list_y)}')
+    print(f'-----------Z--------------')
+    print(f'MIN mean: {np.mean(min_list_z)}')
+    print(f'MIN median: {np.median(min_list_z)}')
+    print(f'MIN MIN: {np.min(min_list_z)}')
+    print(f'MAX mean: {np.mean(max_list_z)}')
+    print(f'MAX median: {np.median(max_list_z)}')
+    print(f'MAX MAX: {np.max(max_list_z)}')
+if __name__ == '__main__':
+    # checkData()
+    args = configArgsPCT()
+    pcls, label = load_data()
+    # for k in range(160,190):
+    # for k in range(160,161):
+    # for k in range(179,180): #human
+    # for k in range(176,177): #hat
+    # for k in range(174,175): #toilet
+    # for k in range(162,163): #vase
+    names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
+    shapes = [160, 162, 174,176,179]
+    # shapes = [179]
+    for k in shapes:
+        pointcloud = pcls[k][:]
 
-        colors, src_knn_pcl = checkOnShapes(model_name='MLP5layers64Nlpe10xyz2deg40points', input_data=pointcloud)
+        colors, src_knn_pcl = checkOnShapes(model_name='MLP3layers64Nlpe6xyzRotStd005', input_data=pointcloud)
         colors = colors.detach().cpu().numpy()
         src_knn_pcl = src_knn_pcl.detach().cpu().numpy()
 
+        colors_normalized = colors.copy()
+        colors_normalized[:,0] = ((colors[:,0] - colors[:,0].min()) / (colors[:,0].max() - colors[:,0].min())) * 255
+        colors_normalized[:,1] = ((colors[:,1] - colors[:,1].min()) / (colors[:,1].max() - colors[:,1].min())) * 255
+        colors_normalized[:,2] = ((colors[:,2] - colors[:,2].min()) / (colors[:,2].max() - colors[:,2].min())) * 255
+        colors_normalized[:,3] = ((colors[:,3] - colors[:,3].min()) / (colors[:,3].max() - colors[:,3].min())) * 255
+
         layout = go.Layout(
-            title="Point Cloud with Embedding-based Colors",
+            title=f"Point Cloud with Embedding-based Colors {k}",
             scene=dict(
                 xaxis_title='X',
                 yaxis_title='Y',
@@ -262,8 +327,60 @@ if __name__ == '__main__':
         )
 
         # Create and display 4 subplots with different colors and colorbars
+        # for i in range(4):
         for i in range(4):
-            data = [go.Scatter3d(
+            data = [
+                go.Scatter3d(
+                    x=pointcloud[:, 0],
+                    y=pointcloud[:, 1],
+                    z=pointcloud[:, 2],
+                    mode='markers',
+                    marker=dict(
+                        size=2,
+                        opacity=0.8,
+                        color=colors[:, i],
+                        colorbar=dict(
+                            title=f'{names[i]} Embedding',
+                            y=1.1,
+                            x = 51
+                        )
+                    ),
+                    name=f'Embedding Channel {i + 1}'
+                ),
+            #     go.Scatter3d(
+            #         x=pointcloud[:, 0],
+            #         y=pointcloud[:, 1],
+            #         z=pointcloud[:, 2],
+            #         mode='markers',
+            #         marker=dict(
+            #             size=2,
+            #             opacity=0.8,
+            #             color=['rgb(' + ', '.join(map(str, rgb)) + ')' for rgb in colors_normalized],  # Set RGB values
+            # colorbar = dict(
+            #     title='RGB Embeddings',
+            #     y=1.1,
+            #     x=0.95  # Adjust position of colorbar
+            # )
+            # ),
+            # name = 'RGB Embeddings'
+            # ),
+                go.Scatter3d(
+                    x=src_knn_pcl[0, :],
+                    y=src_knn_pcl[1, :],
+                    z=src_knn_pcl[2, :],
+                    mode='markers',
+                    marker=dict(
+                        size=2,
+                        opacity=0.8,
+                        color='red'  # Set the color to red
+                    ),
+                    name='src_knn_pcl'
+                )
+            ]
+            fig = go.Figure(data=data, layout=layout)
+            fig.show()
+        data_rgb = [
+            go.Scatter3d(
                 x=pointcloud[:, 0],
                 y=pointcloud[:, 1],
                 z=pointcloud[:, 2],
@@ -271,11 +388,40 @@ if __name__ == '__main__':
                 marker=dict(
                     size=2,
                     opacity=0.8,
-                    color=colors[:, i],
-                    colorbar=dict(title=f'Channel {i + 1} Embedding')
+                    color=['rgb(' + ', '.join(map(str, rgb)) + ')' for rgb in colors_normalized],  # Set RGB values
                 ),
-                name=f'Embedding Channel {i + 1}'
-            )]
-            fig = go.Figure(data=data, layout=layout)
-            fig.show()
+                name='RGB Embeddings'
+            )
+        ]
 
+        # Your existing code
+
+        # Plotting the RGB embeddings separately
+        fig_rgb = go.Figure(data=data_rgb, layout=layout)
+        fig_rgb.show()
+
+        # Plot the maximum value embedding with specified colors
+        max_embedding_index = np.argmax(colors, axis=1)
+        max_embedding_colors = np.array(['red', 'blue', 'green', 'pink'])[max_embedding_index]
+
+        data_max_embedding = []
+        colors_shape = ['red', 'blue', 'green', 'pink']
+        names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
+        for color, name in zip(colors_shape, names):
+            indices = np.where(max_embedding_colors == color)[0]
+            data_max_embedding.append(
+                go.Scatter3d(
+                    x=pointcloud[indices, 0],
+                    y=pointcloud[indices, 1],
+                    z=pointcloud[indices, 2],
+                    mode='markers',
+                    marker=dict(
+                        size=2,
+                        opacity=0.8,
+                        color=color
+                    ),
+                    name=f'Max Value Embedding - {name}'
+                )
+            )
+        fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
+        fig_max_embedding.show()
