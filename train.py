@@ -69,7 +69,8 @@ def train_and_test(args):
     print(f'Num of parameters in NN: {num_params}')
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
-    milestones = np.linspace(args.lr_jumps,num_epochs,num_epochs//args.lr_jumps)
+    # milestones = np.linspace(args.lr_jumps,num_epochs,num_epochs//args.lr_jumps)
+    milestones = [args.lr_jumps * (i) for i in range(1,num_epochs//args.lr_jumps + 1)]
     scheduler = MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
 
     criterion = nn.CrossEntropyLoss(reduction='mean')
@@ -248,7 +249,7 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def input_visualized_importance(model_name='MLP5layers64Nlpe10xyz2deg40points'):
+def input_visualized_importance(model_name='MLP3layers64Nlpe6xyzRotStd005'):
     input_data = torch.randn(1, 3, 1, 41)  # Assuming input_size is the size of input to the model
     # input_data = input_data*0 + 5*torch.randn(1, 3, 1, 41)  # Assuming input_size is the size of input to the model
     # input_data = torch.ones(1, 3, 1, 41)  # Assuming input_size is the size of input to the model
@@ -264,11 +265,11 @@ def input_visualized_importance(model_name='MLP5layers64Nlpe10xyz2deg40points'):
     args_shape.batch_size = 1024
     args_shape.exp = model_name
     args_shape.use_mlp = 1
-    args_shape.lpe_dim = 10
-    args_shape.num_mlp_layers = 5
+    args_shape.lpe_dim = 6
+    args_shape.num_mlp_layers = 3
     args_shape.num_neurons_per_layer = 64
     args_shape.sampled_points = 40
-    args_shape.use_second_deg = 1
+    args_shape.use_second_deg = 0
     args_shape.lpe_normalize = 1
     model = shapeClassifier(args_shape)
     model.load_state_dict(torch.load(f'{model_name}.pt'))
@@ -309,7 +310,7 @@ if __name__ == '__main__':
     model = train_and_test(args)
     # model = input_visualized_importance()
     testPretrainedModel(args, model=model.to('cuda'))
-    # torch.save(model.state_dict(), f'{args.exp_name}.pt')
+    torch.save(model.state_dict(), f'{args.exp_name}.pt')
     # Compute input saliency
     # input_visualized_importance()
 
