@@ -11,6 +11,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.hdf5_file = h5py.File(file_path, 'r')
         self.point_clouds_group = self.hdf5_file['point_clouds']
         self.num_point_clouds = len(self.point_clouds_group)
+        self.pcls_per_class = self.num_point_clouds // 4
         self.indices = list(range(self.num_point_clouds))
         self.std_dev = args.std_dev
         self.rotate_data = args.rotate_data
@@ -33,11 +34,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud1 = point_cloud1 + noise
             point_cloud1 = point_cloud1 - point_cloud1[0,:]
         if self.contrastive:
-            contrastive_options = [n for n in [0,1,2,3] if n != self.point_clouds_group[point_cloud_name].attrs['class']]
-            contrastive_label = random.choice(contrastive_options)
-            pcls_per_class = len(self.point_clouds_group) // 4
-            random_number = random.randint(0, pcls_per_class-1)
-            contrastive_idx = (pcls_per_class * contrastive_label) + random_number
+            contrastive_label = self.point_clouds_group[point_cloud_name].attrs['class']
+            random_number = random.randint(0, self.pcls_per_class-1)
+            contrastive_idx = (self.pcls_per_class * contrastive_label) + random_number
+            while contrastive_idx==idx:
+                random_number = random.randint(0, self.pcls_per_class - 1)
+                contrastive_idx = (self.pcls_per_class * contrastive_label) + random_number
             contrastive_point_cloud_name = f"point_cloud_{self.indices[contrastive_idx]}"
             contrastive_point_cloud = self.point_clouds_group[contrastive_point_cloud_name]
             contrastive_point_cloud = np.array(contrastive_point_cloud, dtype=np.float32)
