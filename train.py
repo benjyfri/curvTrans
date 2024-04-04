@@ -73,6 +73,7 @@ def train_and_test(args):
     milestones = [args.lr_jumps * (i) for i in range(1,num_epochs//args.lr_jumps + 1)]
     scheduler = MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
 
+    tripletMarginLoss = nn.TripletMarginLoss(margin=2.0)
     criterion = nn.CrossEntropyLoss(reduction='mean')
     # Training loop
     for epoch in range(num_epochs):
@@ -84,13 +85,24 @@ def train_and_test(args):
         with tqdm(train_dataloader, desc=f'Epoch {epoch + 1}/{num_epochs}', leave=False) as tqdm_bar:
             for batch in tqdm_bar:
                 pcl, info = batch['point_cloud'].to(device), batch['info']
+
                 label = info['class'].to(device).long()
                 output = model((pcl.permute(0,2,1)).unsqueeze(2))
-                loss = criterion(output, label)
 
+                loss = criterion(output, label)
+                if args.contrastive:
+                    pcl2 = batch['point_cloud2'].to(device)
+                    contrastive_point_cloud = batch['contrastive_point_cloud'].to(device)
+                    output_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
+                    output_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
+                    loss2 = tripletMarginLoss(output, output_pcl2, output_contrastive_pcl)
+                else:
+                    loss2 = torch.tensor((0))
+                new_awesome_loss = loss + loss2
                 # Backward pass and optimization
                 optimizer.zero_grad()
-                loss.backward()
+                # loss.backward()
+                new_awesome_loss.backward()
                 optimizer.step()
 
                 current_lr = optimizer.param_groups[0]['lr']
@@ -150,6 +162,8 @@ def configArgsPCT():
                         help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--use_xyz', type=int, default=1, metavar='N',
                         help='use xyz coordinates as part of input')
+    parser.add_argument('--contrastive', type=int, default=0, metavar='N',
+                        help='use rotated data')
     parser.add_argument('--rotate_data', type=int, default=0, metavar='N',
                         help='use rotated data')
     parser.add_argument('--num_of_heads', type=int, default=1, metavar='N',

@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import h5py
 from utils import createLPEembedding, positional_encoding_nerf
+import random
+
 class BasicPointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
@@ -12,6 +14,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.indices = list(range(self.num_point_clouds))
         self.std_dev = args.std_dev
         self.rotate_data = args.rotate_data
+        self.contrastive = args.contrastive
     def __len__(self):
         return self.num_point_clouds
 
@@ -20,24 +23,51 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         point_cloud = self.point_clouds_group[point_cloud_name]
         point_cloud = np.array(point_cloud, dtype=np.float32)
         point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
-        # point_cloud1 = point_cloud.detach().cpu().numpy()
         if self.rotate_data:
-            point_cloud = random_rotation(point_cloud)
-            # point_cloud2 = point_cloud.detach().cpu().numpy()
+            point_cloud1 = random_rotation(point_cloud)
+        else:
+            point_cloud1 = point_cloud
         #Add noise to point cloud
         if self.std_dev != 0:
-            noise = torch.normal(0, self.std_dev, size=point_cloud.shape, dtype=torch.float32)
-            point_cloud = point_cloud + noise
-            point_cloud = point_cloud - point_cloud[0,:]
+            noise = torch.normal(0, self.std_dev, size=point_cloud1.shape, dtype=torch.float32)
+            point_cloud1 = point_cloud1 + noise
+            point_cloud1 = point_cloud1 - point_cloud1[0,:]
+        if self.contrastive:
+            contrastive_options = [n for n in [0,1,2,3] if n != self.point_clouds_group[point_cloud_name].attrs['class']]
+            contrastive_label = random.choice(contrastive_options)
+            pcls_per_class = len(self.point_clouds_group) // 4
+            random_number = random.randint(0, pcls_per_class-1)
+            contrastive_idx = (pcls_per_class * contrastive_label) + random_number
+            contrastive_point_cloud_name = f"point_cloud_{self.indices[contrastive_idx]}"
+            contrastive_point_cloud = self.point_clouds_group[contrastive_point_cloud_name]
+            contrastive_point_cloud = np.array(contrastive_point_cloud, dtype=np.float32)
+            contrastive_point_cloud = torch.tensor(contrastive_point_cloud, dtype=torch.float32)
+            contrastive_point_cloud = random_rotation(contrastive_point_cloud)
+
+            point_cloud2 = random_rotation(point_cloud)
+            # Shuffle the indices randomly
+            shuffled_indices = torch.randperm(40) + 1  # Add 1 to start from index 1
+            # Apply the permutation to the indices
+            permuted_indices = torch.cat((torch.tensor([0]), shuffled_indices), dim=0)
+            # Permute the point cloud tensor based on the permuted indices
+            point_cloud2 = point_cloud2[permuted_indices]
+            if self.std_dev != 0:
+                noise = torch.normal(0, self.std_dev, size=point_cloud2.shape, dtype=torch.float32)
+                point_cloud2 = point_cloud2 + noise
+                point_cloud2 = point_cloud2 - point_cloud2[0, :]
+                noise = torch.normal(0, self.std_dev, size=contrastive_point_cloud.shape, dtype=torch.float32)
+                contrastive_point_cloud = contrastive_point_cloud + noise
+                contrastive_point_cloud = contrastive_point_cloud - point_cloud2[0, :]
+        else:
+            point_cloud2 = torch.tensor((0))
+            contrastive_point_cloud = torch.tensor((0))
 
 
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
-        label = info['class']
-        # plot_point_clouds(point_cloud1, point_cloud2, title=f'label is: {label}')
 
-        return {"point_cloud": point_cloud, "info": info}
+        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
