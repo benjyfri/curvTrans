@@ -18,7 +18,10 @@ class shapeClassifier(nn.Module):
         if self.lpe_dim != 0:
             input_dim = input_dim + (self.lpe_dim)
         input_size = input_dim * (args.sampled_points + 1)
-        self.classifier =  MLP(input_size= input_size, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim)
+        if args.contrastive_mid_layer:
+            self.classifier =  MLP_Returns_Mid_Layer(input_size= input_size, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim)
+        else:
+            self.classifier =  MLP(input_size= input_size, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim)
 
 
     def forward(self, x):
@@ -92,6 +95,40 @@ class MLP(nn.Module):
     def forward(self, x):
         x = x.reshape(x.size(0), -1)
         return self.model(x)
+
+class MLP_Returns_Mid_Layer(nn.Module):
+    def __init__(self, input_size, num_layers, num_neurons_per_layer, output_size):
+        super(MLP_Returns_Mid_Layer, self).__init__()
+        layers = []
+        layers.append(nn.Linear(input_size, num_neurons_per_layer))  # input layer
+
+        for _ in range(num_layers - 1):
+            layers.append(nn.BatchNorm1d(num_neurons_per_layer))  # Batch normalization
+            layers.append(nn.ReLU())  # ReLU activation
+            layers.append(nn.Linear(num_neurons_per_layer, num_neurons_per_layer))
+
+        layers.append(nn.BatchNorm1d(num_neurons_per_layer))  # Batch normalization
+        layers.append(nn.ReLU())  # ReLU activation
+        layers.append(nn.Linear(num_neurons_per_layer, output_size))  # output layer
+
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = x.reshape(x.size(0), -1)
+        activations = []
+        layer_32_32 = False
+        for layer in self.model:
+            x = layer(x)
+            #choose only the last 32*32 layer
+            if isinstance(layer, nn.Linear) and layer.in_features == 32 and layer.out_features == 32:
+                if layer_32_32 == False:
+                    layer_32_32 = True
+                if layer_32_32 == True:
+                    activations.append(x)
+        output_layer = x
+        layer_before_last = activations[0]
+        return output_layer , layer_before_last
+
 class TransformerNetwork(nn.Module):
     def __init__(self, input_dim=3, output_dim=5, num_heads=1, num_layers=1, emb_dim=512):
         super(TransformerNetwork, self).__init__()

@@ -23,7 +23,10 @@ def test(model, dataloader, loss_function, device, args):
         for batch in dataloader:
             pcl, info = batch['point_cloud'].to(device), batch['info']
             label = info['class'].to(device).long()
-            output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+            if args.contrastive_mid_layer:
+                output,_ = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+            else:
+                output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
             loss = loss_function(output, label)
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
@@ -75,10 +78,14 @@ def train_and_test(args):
 
     tripletMarginLoss = nn.TripletMarginLoss(margin=2.0)
     criterion = nn.CrossEntropyLoss(reduction='mean')
+    mseLoss = nn.MSELoss()
     # Training loop
     for epoch in range(num_epochs):
         model.train()  # Set the model to training mode
         total_train_loss = 0.0
+        total_train_contrastive_loss = 0.0
+        total_train_contrastive_positive_loss = 0.0
+        total_train_contrastive_negative_loss = 0.0
         total_train_acc_loss = 0.0
         count = 0
         # Use tqdm to create a progress bar for the training loop
@@ -87,16 +94,27 @@ def train_and_test(args):
                 pcl, info = batch['point_cloud'].to(device), batch['info']
 
                 label = info['class'].to(device).long()
-                output = model((pcl.permute(0,2,1)).unsqueeze(2))
-
-                loss = criterion(output, label)
                 if args.contrastive:
                     pcl2 = batch['point_cloud2'].to(device)
                     contrastive_point_cloud = batch['contrastive_point_cloud'].to(device)
-                    output_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
-                    output_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
-                    loss2 = tripletMarginLoss(output, output_pcl2, output_contrastive_pcl)
+                    if args.contrastive_mid_layer:
+                        output, layer_before_last = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+                        loss = criterion(output, label)
+                        output_pcl2, layer_before_last_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
+                        output_contrastive_pcl, layer_before_last_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
+                        loss2 = tripletMarginLoss(layer_before_last, layer_before_last_pcl2, layer_before_last_contrastive_pcl)
+                    else:
+                        output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+                        loss = criterion(output, label)
+                        output_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
+                        output_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
+                        loss2 = tripletMarginLoss(output, output_pcl2, output_contrastive_pcl)
+                    total_train_contrastive_loss += loss2
+                    total_train_contrastive_positive_loss += mseLoss(output, output_pcl2)
+                    total_train_contrastive_negative_loss += mseLoss(output, output_contrastive_pcl)
                 else:
+                    output  = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+                    loss = criterion(output, label)
                     loss2 = torch.tensor((0))
                 new_awesome_loss = loss + loss2
                 # Backward pass and optimization
@@ -116,7 +134,12 @@ def train_and_test(args):
                 tqdm_bar.set_postfix(train_loss=f'{(loss.item() / args.batch_size):.4f}')
 
         train_loss = (total_train_loss / (args.batch_size * count))
-
+        contrastive_train_loss = (total_train_contrastive_loss / (count))
+        contrastive_positive_train_loss = (total_train_contrastive_positive_loss / (count))
+        contrastive_negative_train_loss = (total_train_contrastive_negative_loss / (count))
+        print(f'contrastive_train_loss: {contrastive_train_loss}')
+        print(f'contrastive_positive_train_loss: {contrastive_positive_train_loss}')
+        print(f'contrastive_negative_train_loss: {contrastive_negative_train_loss}')
         acc_train = (total_train_acc_loss / (count))
 
 
@@ -163,7 +186,9 @@ def configArgsPCT():
     parser.add_argument('--use_xyz', type=int, default=1, metavar='N',
                         help='use xyz coordinates as part of input')
     parser.add_argument('--contrastive', type=int, default=0, metavar='N',
-                        help='use rotated data')
+                        help='use contrastive loss')
+    parser.add_argument('--contrastive_mid_layer', type=int, default=0, metavar='N',
+                        help='use contrastive loss with middle layer (one before last)')
     parser.add_argument('--rotate_data', type=int, default=0, metavar='N',
                         help='use rotated data')
     parser.add_argument('--num_of_heads', type=int, default=1, metavar='N',
@@ -218,7 +243,10 @@ def testPretrainedModel(args, model=None):
             pcl, info = batch['point_cloud'].to(device), batch['info']
             label = info['class'].to(device).long()
             # torch.save(pcl[0].permute(1,0).unsqueeze(1).unsqueeze(0), 'pcl.pt')
-            output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+            if args.contrastive_mid_layer:
+                output, _ = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+            else:
+                output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
             preds = output.max(dim=1)[1]
 
             if args.output_dim == 4:
@@ -291,7 +319,11 @@ def input_visualized_importance(model_name='MLP3layers64Nlpe6xyzRotStd005'):
 
     model.eval()  # Set the model to evaluation mode
     input_data = Variable(input_data, requires_grad=True)  # Wrap input data in a Variable with gradient tracking
-    output = model(input_data)  # Forward pass
+    # output = model(input_data)  # Forward pass
+    if args.contrastive_mid_layer:
+        output, _ = model((input_data.permute(0, 2, 1)).unsqueeze(2))
+    else:
+        output = model((input_data.permute(0, 2, 1)).unsqueeze(2))
 
     # Initialize a list to store saliency maps for each output
     saliency_maps = []
