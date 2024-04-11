@@ -103,15 +103,18 @@ def train_and_test(args):
                         output_pcl2, layer_before_last_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
                         output_contrastive_pcl, layer_before_last_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
                         loss2 = tripletMarginLoss(layer_before_last, layer_before_last_pcl2, layer_before_last_contrastive_pcl)
+                        total_train_contrastive_positive_loss += mseLoss(layer_before_last, layer_before_last_pcl2)
+                        total_train_contrastive_negative_loss += mseLoss(layer_before_last, layer_before_last_contrastive_pcl)
                     else:
                         output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
                         loss = criterion(output, label)
                         output_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
                         output_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
                         loss2 = tripletMarginLoss(output, output_pcl2, output_contrastive_pcl)
+                        total_train_contrastive_positive_loss += mseLoss(output, output_pcl2)
+                        total_train_contrastive_negative_loss += mseLoss(output, output_contrastive_pcl)
                     total_train_contrastive_loss += loss2
-                    total_train_contrastive_positive_loss += mseLoss(output, output_pcl2)
-                    total_train_contrastive_negative_loss += mseLoss(output, output_contrastive_pcl)
+
                 else:
                     output  = model((pcl.permute(0, 2, 1)).unsqueeze(2))
                     loss = criterion(output, label)
