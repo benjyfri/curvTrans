@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import h5py
 from utils import createLPEembedding, positional_encoding_nerf
+import plotly.express as px
 import random
 
 class BasicPointCloudDataset(torch.utils.data.Dataset):
@@ -16,14 +17,22 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.std_dev = args.std_dev
         self.rotate_data = args.rotate_data
         self.contrastive = args.contrastive
+        self.sampled_points = args.sampled_points
     def __len__(self):
         return self.num_point_clouds
 
     def __getitem__(self, idx):
         point_cloud_name = f"point_cloud_{self.indices[idx]}"
+        # Load metadata from attributes
+        info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
+                    self.point_clouds_group[point_cloud_name].attrs}
         point_cloud = self.point_clouds_group[point_cloud_name]
         point_cloud = np.array(point_cloud, dtype=np.float32)
         point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
+        # permute points
+        shuffled_indices = torch.randperm(self.sampled_points) + 1
+        permuted_indices = torch.cat((torch.tensor([0]), shuffled_indices), dim=0)
+        point_cloud = point_cloud[permuted_indices]
         if self.rotate_data:
             point_cloud1 = random_rotation(point_cloud)
         else:
@@ -34,41 +43,28 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud1 = point_cloud1 + noise
             point_cloud1 = point_cloud1 - point_cloud1[0,:]
         if self.contrastive:
-            contrastive_label = self.point_clouds_group[point_cloud_name].attrs['class']
-            random_number = random.randint(0, self.pcls_per_class-1)
-            contrastive_idx = (self.pcls_per_class * contrastive_label) + random_number
-            while contrastive_idx==idx:
-                random_number = random.randint(0, self.pcls_per_class - 1)
-                contrastive_idx = (self.pcls_per_class * contrastive_label) + random_number
-            contrastive_point_cloud_name = f"point_cloud_{self.indices[contrastive_idx]}"
-            contrastive_point_cloud = self.point_clouds_group[contrastive_point_cloud_name]
-            contrastive_point_cloud = np.array(contrastive_point_cloud, dtype=np.float32)
+            a = info['a'] + np.random.normal(0, 2)
+            b = info['b'] + np.random.normal(0, 2)
+            c = info['c'] + np.random.normal(0, 2)
+            d = info['d'] + np.random.normal(0, 2)
+            e = info['e'] + np.random.normal(0, 2)
+            contrastive_point_cloud = samplePoints(a, b, c, d, e, count=self.sampled_points)
             contrastive_point_cloud = torch.tensor(contrastive_point_cloud, dtype=torch.float32)
             contrastive_point_cloud = random_rotation(contrastive_point_cloud)
 
-            point_cloud2 = random_rotation(point_cloud)
-            # Shuffle the indices randomly
-            shuffled_indices = torch.randperm(40) + 1  # Add 1 to start from index 1
-            # Apply the permutation to the indices
-            permuted_indices = torch.cat((torch.tensor([0]), shuffled_indices), dim=0)
-            # Permute the point cloud tensor based on the permuted indices
-            point_cloud2 = point_cloud2[permuted_indices]
+            positive_point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'], count=self.sampled_points)
+            point_cloud2 = torch.tensor(positive_point_cloud, dtype=torch.float32)
+            point_cloud2 = random_rotation(point_cloud2)
             if self.std_dev != 0:
                 noise = torch.normal(0, self.std_dev, size=point_cloud2.shape, dtype=torch.float32)
                 point_cloud2 = point_cloud2 + noise
                 point_cloud2 = point_cloud2 - point_cloud2[0, :]
-                noise = torch.normal(0, self.std_dev, size=contrastive_point_cloud.shape, dtype=torch.float32)
-                contrastive_point_cloud = contrastive_point_cloud + noise
-                contrastive_point_cloud = contrastive_point_cloud - point_cloud2[0, :]
+                contrastive_noise = torch.normal(0, self.std_dev, size=contrastive_point_cloud.shape, dtype=torch.float32)
+                contrastive_point_cloud = contrastive_point_cloud + contrastive_noise
+                contrastive_point_cloud = contrastive_point_cloud - contrastive_point_cloud[0, :]
         else:
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
-
-
-        # Load metadata from attributes
-        info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
-                    self.point_clouds_group[point_cloud_name].attrs}
-
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
@@ -280,4 +276,52 @@ def plot_point_clouds(point_cloud1, point_cloud2, title):
         margin=dict(r=20, l=10, b=10, t=10)
     )
 
+    fig.show()
+
+def samplePoints(a, b, c, d, e, count):
+    def surface_function(x, y):
+        return a * x**2 + b * y**2 + c * x * y + d * x + e * y
+
+    # Generate random points within the range [-1, 1] for both x and y
+    x_samples = np.random.uniform(-1, 1, count)
+    y_samples = np.random.uniform(-1, 1, count)
+
+    # Evaluate the surface function at the random points
+    z_samples = surface_function(x_samples, y_samples)
+
+    # Create an array with the sampled points
+    sampled_points = np.column_stack((x_samples, y_samples, z_samples))
+
+    # Concatenate the centroid [0, 0, 0] to the beginning of the array
+    centroid = np.array([[0, 0, 0]])
+    sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
+
+    return sampled_points_with_centroid
+
+def plotFunc(a, b, c, d, e,sampled_points):
+    # Create a grid of points for the surface
+    x = np.linspace(-1, 1, 100)
+    y = np.linspace(-1, 1, 100)
+    x, y = np.meshgrid(x, y)
+
+    # Compute the surface using the generated coefficients
+    z = a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y
+
+    # Compute the distance from each point to the origin
+    distance_to_origin = np.sqrt(x**2 + y**2)
+
+    # Create a mask for points within a radius of 0.25 from the origin
+    mask = distance_to_origin <= 0.25
+
+    # Create 3D surface plot using Plotly Express
+    fig = px.scatter_3d(x=x.flatten(), y=y.flatten(), z=z.flatten(), color=mask.flatten(),
+                        color_continuous_scale=['blue', 'red'], title="Generated Surface",
+                        labels={'x': 'X', 'y': 'Y', 'z': 'Z'}, range_color=[0, 1])
+
+    for i, point in enumerate(sampled_points):
+        fig.add_trace(go.Scatter3d(x=[point[0]], y=[point[1]], z=[point[2]],
+                                   mode='markers+text', text=[f'{i + 1}'],
+                                   marker=dict(size=25, color='yellow'), name='Point Cloud'),)
+
+    # Show the plot
     fig.show()
