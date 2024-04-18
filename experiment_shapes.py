@@ -323,26 +323,13 @@ def checkOnShapes(model_name='MLP5layers64Nlpe10xyz2deg40points', input_data=Non
     model.eval()
     neighbors_centered, neighbors_non_centered = get_k_nearest_neighbors(input_data, 41)
     src_knn_pcl = torch.tensor(neighbors_centered)
-    src_knn_pcl_non_centered = torch.tensor(neighbors_non_centered)
-    # src_knn_pcl = src_knn_pcl - src_knn_pcl[:,:,:,0].unsqueeze(3)
-    # input_data = torch.tensor(input_data)
-    # input_data = input_data.view(input_data.shape[1], input_data.shape[0])
-    #
-    #
-    # src_knn = get_graph_feature(input_data.unsqueeze(0))
-    # src_knn_pcl = src_knn[:, :3, :, :]
-    # src_knn_pcl = src_knn[:, :3, :, :] - src_knn[:, 3:, :, :]
     x_scale_src = torch.max(abs(src_knn_pcl[:, 0, :, :]))
-    # y_scale_src = torch.max(abs(src_knn_pcl[:, 1, :, :]))
-    # z_scale_src = torch.max(abs(src_knn_pcl[:, 2, :, :]))
-    # z_scale_src = x_scale_src / 2 + y_scale_src / 2
     src_knn_pcl[:, 0, :, :] = src_knn_pcl[:, 0, :, :] / x_scale_src
     src_knn_pcl[:, 1, :, :] = src_knn_pcl[:, 1, :] / x_scale_src
     src_knn_pcl[:, 2, :, :] = src_knn_pcl[:, 2, :, :] / x_scale_src
     src_knn_pcl = 23 * src_knn_pcl
     output = model(src_knn_pcl)
-    # preds = output.max(dim=1)[1]
-    return output, src_knn_pcl_non_centered[0,:,0,:]
+    return output
 def load_data(partition='test', divide_data=1):
     BASE_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes'
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
@@ -419,7 +406,7 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None):
         pointcloud = pcls[k][:]
         noisy_pointcloud = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
         pointcloud = noisy_pointcloud.astype(np.float32)
-        colors, src_knn_pcl = checkOnShapes(model_name=model_name,
+        colors = checkOnShapes(model_name=model_name,
                                     input_data=pointcloud, args_shape=args_shape)
         colors = colors.detach().cpu().numpy()
         src_knn_pcl = src_knn_pcl.detach().cpu().numpy()
@@ -590,10 +577,10 @@ def checkEmbeddingStability():
         noisy_pointcloud_2 = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
         noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
         # plot_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2)
-        colors_1, _ = checkOnShapes(model_name='MLP3layers32Nxyz2degRotStd005',
+        colors_1 = checkOnShapes(model_name='MLP3layers32Nxyz2degRotStd005',
                                             input_data=noisy_pointcloud_1)
         colors_1 = colors_1.detach().cpu().numpy()
-        colors_2, _ = checkOnShapes(model_name='MLP3layers32Nxyz2degRotStd005',
+        colors_2 = checkOnShapes(model_name='MLP3layers32Nxyz2degRotStd005',
                                             input_data=noisy_pointcloud_2)
         colors_2 = colors_2.detach().cpu().numpy()
 
@@ -725,9 +712,9 @@ def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondence
         noisy_pointcloud_2 = rotated_pcl #+ np.random.normal(0, 0.01, rotated_pcl.shape)
         noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
-        colors_1, _ = checkOnShapes(model_name=model_name,
+        colors_1 = checkOnShapes(model_name=model_name,
                                     input_data=noisy_pointcloud_1, args_shape=args_shape)
-        colors_2, _ = checkOnShapes(model_name=model_name,
+        colors_2 = checkOnShapes(model_name=model_name,
                                     input_data=noisy_pointcloud_2,args_shape=args_shape)
         #use only 32 embedding used for contrastive loss
         if args_shape.contrastive_mid_layer:
@@ -1022,8 +1009,22 @@ if __name__ == '__main__':
     # checkData()
     # visualizeShapesWithEmbeddings()
     # visualizeShapesWithEmbeddings()
-    for i in range(1,5):
-        model_name = 'MLP3layers32Nxyz2degRotStd005'
+    args_shape = configArgsPCT()
+    args_shape.batch_size = 1024
+    args_shape.use_mlp = 1
+    args_shape.num_mlp_layers = 3
+    args_shape.num_neurons_per_layer = 32
+    args_shape.sampled_points = 40
+    args_shape.use_second_deg = 1
+    args_shape.lpe_normalize = 1
+    args_shape.lpe_dim = 0
+    args_shape.num_mlp_layers = 3
+    args_shape.contrastive = 1
+    visualizeShapesWithEmbeddings(model_name='MLP3layers32Nxyz2degRotStd005ContrFromOrig10', args_shape=args_shape)
+    # for i in range(1,5):
+    for i in range(1,2):
+        # model_name = 'MLP3layers32Nxyz2degRotStd005'
+        model_name = 'MLP3layers32Nxyz2degRotStd005Contr32FromOrig10'
         args_shape = configArgsPCT()
         args_shape.batch_size = 1024
         args_shape.exp = model_name
@@ -1035,24 +1036,27 @@ if __name__ == '__main__':
         args_shape.use_second_deg = 1
         args_shape.lpe_normalize = 1
         args_shape.contrastive_mid_layer = 1
-        worst_losses, losses, num_of_inliers = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=i)
-        plot_losses(losses, num_of_inliers, filename=f'{i}_'+"orig")
-        plotWorst(worst_losses, model_name=f'{i}_'+"orig")
-        model_name = 'MLP3layers32Nlpe3xyz2degRotStd005ContrFromOrig10'
+        # worst_losses, losses, num_of_inliers = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=i)
+        # plot_losses(losses, num_of_inliers, filename=f'{i}_'+"orig")
+        # plotWorst(worst_losses, model_name=f'{i}_'+"orig")
+        # model_name = 'MLP3layers32Nlpe3xyz2degRotStd005ContrFromOrig10'
+        model_name = 'MLP3layers32Nlpe3xyz2degRotStd005Contr32FromOrig10'
         args_shape.exp = model_name
         args_shape.lpe_dim = 3
         args_shape.contrastive = 1
-        worst_losses, losses, num_of_inliers = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=i)
-        plot_losses(losses, num_of_inliers, filename=f'{i}_'+"contrast_lpe3")
-        plotWorst(worst_losses, model_name=f'{i}_'+"contrast_lpe3")
+        # worst_losses, losses, num_of_inliers = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=i)
+        # plot_losses(losses, num_of_inliers, filename=f'{i}_'+"contrast_lpe3")
+        # plotWorst(worst_losses, model_name=f'{i}_'+"contrast_lpe3")
         # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=args_shape)
-        model_name = 'MLP3layers32Nxyz2degRotStd005ContrFromOrig10'
+        # model_name = 'MLP3layers32Nxyz2degRotStd005ContrFromOrig10'
+        model_name = 'MLP3layers32Nlpe6xyz2degRotStd005Contr4New'
+        model_name = 'MLP3layers32Nlpe6xyz2degRotStd005Contr32NEWstdfun2'
         args_shape.exp = model_name
-        args_shape.lpe_dim = 0
+        args_shape.lpe_dim = 6
         args_shape.num_mlp_layers = 3
         args_shape.contrastive = 1
         worst_losses, losses, num_of_inliers  = findRotTrans(model_name = model_name, args_shape=args_shape,max_non_unique_correspondences=i)
-        plot_losses(losses, num_of_inliers, filename=f'{i}_'+"contrast")
-        plotWorst(worst_losses, model_name=f'{i}_'+"contrast")
+        plot_losses(losses, num_of_inliers, filename=f'{i}_32_'+"contrast_lpe6")
+        plotWorst(worst_losses, model_name=f'{i}_'+"contrast_lpe6")
 
 
