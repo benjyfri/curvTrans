@@ -41,7 +41,7 @@ def test(model, dataloader, loss_function, device, args):
     test_acc = (total_acc_loss / (count))
     label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
                         for label in range(args.output_dim)}
-    average_loss = total_loss / (count * args.batch_size)
+    average_loss = total_loss / (count)
 
     return average_loss, test_acc, label_accuracies
 
@@ -107,12 +107,16 @@ def train_and_test(args):
                         total_train_contrastive_negative_loss += mseLoss(layer_before_last, layer_before_last_contrastive_pcl)
                     else:
                         output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-                        loss = criterion(output, label)
+                        orig_classification = output[:,:4]
+                        orig_emb = output[:,4:]
+                        loss = criterion(orig_classification, label)
                         output_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
+                        pos_emb = output_pcl2[:, 4:]
                         output_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
-                        loss2 = tripletMarginLoss(output, output_pcl2, output_contrastive_pcl)
-                        total_train_contrastive_positive_loss += mseLoss(output, output_pcl2)
-                        total_train_contrastive_negative_loss += mseLoss(output, output_contrastive_pcl)
+                        neg_emb = output_contrastive_pcl[:, 4:]
+                        loss2 = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
+                        total_train_contrastive_positive_loss += mseLoss(orig_emb, pos_emb)
+                        total_train_contrastive_negative_loss += mseLoss(orig_emb, neg_emb)
                     total_train_contrastive_loss += loss2
 
                 else:
@@ -136,7 +140,7 @@ def train_and_test(args):
 
                 tqdm_bar.set_postfix(train_loss=f'{(loss.item() / args.batch_size):.4f}')
 
-        train_loss = (total_train_loss / (args.batch_size * count))
+        train_loss = (total_train_loss / count)
         contrastive_train_loss = (total_train_contrastive_loss / (count))
         contrastive_positive_train_loss = (total_train_contrastive_positive_loss / (count))
         contrastive_negative_train_loss = (total_train_contrastive_negative_loss / (count))
