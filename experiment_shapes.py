@@ -1,9 +1,5 @@
 from torch.utils.data import DataLoader
-import torch.optim as optim
-from torch.optim.lr_scheduler import MultiStepLR
 from tqdm import tqdm
-import wandb
-import argparse
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,8 +8,6 @@ from data import BasicPointCloudDataset
 from scipy.spatial.transform import Rotation
 import glob
 import h5py
-import numpy as np
-from scipy.spatial.transform import Rotation
 from torch.utils.data import Dataset
 import os
 import urllib.request
@@ -22,41 +16,10 @@ import shutil
 import faiss
 import plotly.graph_objects as go
 from train import configArgsPCT
-import numpy as np
-from scipy.spatial import KDTree
-import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from scipy.linalg import eigh
 from scipy.linalg import eig
 import matplotlib.pyplot as plt
-def rotate_to_z_axis(arr):
-    # Compute covariance matrix
-    covariance_matrix = np.cov(arr, rowvar=False)
-
-    # Compute eigenvalues and eigenvectors
-    eigenvalues, eigenvectors = np.linalg.eigh(covariance_matrix)
-
-    # Find the index of the smallest eigenvalue
-    min_eigenvalue_index = np.argmin(eigenvalues)
-
-    # Extract the eigenvector corresponding to the smallest eigenvalue
-    min_eigenvector = eigenvectors[:, min_eigenvalue_index]
-
-    # Normalize the eigenvector
-    min_eigenvector /= np.linalg.norm(min_eigenvector)
-
-    # Compute rotation matrix
-    z_axis = np.array([0, 0, 1])
-    rotation_matrix = np.cross(min_eigenvector, z_axis)
-    angle = np.arccos(np.dot(min_eigenvector, z_axis))
-    rotation_matrix = np.array([[0, -rotation_matrix[2], rotation_matrix[1]],
-                                 [rotation_matrix[2], 0, -rotation_matrix[0]],
-                                 [-rotation_matrix[1], rotation_matrix[0], 0]])
-
-    # Rotate the array
-    rotated_arr = np.dot(arr, np.eye(3) + np.sin(angle) * rotation_matrix + (1 - np.cos(angle)) * np.dot(rotation_matrix, rotation_matrix))
-
-    return rotated_arr
 def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4):
   """
   Plot four point clouds in an interactive 3D plot with Plotly.
@@ -146,37 +109,7 @@ def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
 
   # Save the figure as a png image
   fig.write_html(filename)
-def plot_point_clouds(point_cloud1, point_cloud2, title=""):
-    """
-    Plot two point clouds in an interactive 3D plot with Plotly.
 
-    Args:
-        point_cloud1 (np.ndarray): First point cloud of shape (41, 3)
-        point_cloud2 (np.ndarray): Second point cloud of shape (41, 3)
-    """
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
-        mode='markers', marker=dict(size=2,color='red'), name='Point Cloud 1'
-    ))
-
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
-        mode='markers', marker=dict(size=2,color='blue'), name='Point Cloud 2'
-    ))
-
-    fig.update_layout(
-        scene=dict(
-            xaxis=dict(title='X'),
-            yaxis=dict(title='Y'),
-            zaxis=dict(title='Z'),
-        ),
-        margin=dict(r=20, l=10, b=10, t=10),
-        title=title
-    )
-
-    fig.show()
 def save_point_clouds(point_cloud1, point_cloud2, title="", filename="plot.html"):
     """
     Plot two point clouds in an interactive 3D plot with Plotly and save it.
@@ -212,42 +145,6 @@ def save_point_clouds(point_cloud1, point_cloud2, title="", filename="plot.html"
     # Save the figure as a png image
     fig.write_html(filename)
 
-def rotate_pointcloud_z_normal(point_cloud):
-  """
-  Rotates a point cloud such that the smallest eigenvalue (normal) of the covariance
-  points in the z-axis direction.
-
-  Args:
-      pointcloud (np.ndarray): Point cloud of shape (41, 3).
-
-  Returns:
-      np.ndarray: Rotated point cloud with the smallest eigenvalue aligned to the z-axis.
-  """
-
-  cov_matrix = np.cov(point_cloud.T)
-
-  # Compute eigenvectors and eigenvalues
-  eigvals, eigvecs = eig(cov_matrix)
-
-  # Find the index of the smallest eigenvalue
-  min_eigval_index = np.argmin(eigvals)
-
-  # Extract the corresponding eigenvector
-  normal_vector = eigvecs[:, min_eigval_index]
-
-  # Find rotation angles to align the normal vector with the z-axis
-  theta = np.arctan2(normal_vector[1], normal_vector[0])
-  phi = np.arccos(normal_vector[2] / np.linalg.norm(normal_vector))
-
-  # Create rotation matrix
-  rot_matrix = np.array([[np.cos(theta) * np.sin(phi), -np.sin(theta), np.cos(theta) * np.cos(phi)],
-                         [np.sin(theta) * np.sin(phi), np.cos(theta), np.sin(theta) * np.cos(phi)],
-                         [-np.cos(phi), 0, np.sin(phi)]])
-
-  # Apply rotation to the point cloud
-  rotated_point_cloud = np.dot(rot_matrix, point_cloud.T).T
-
-  return rotated_point_cloud
 def get_k_nearest_neighbors(point_cloud, k):
     """
     Returns the k nearest neighbors for each point in the point cloud.
@@ -266,57 +163,14 @@ def get_k_nearest_neighbors(point_cloud, k):
 
     neighbors_centered = np.empty((1, 3, pcl_size, k), dtype=point_cloud.dtype)
     neighbors_non_centered = np.empty((1, 3, pcl_size, k), dtype=point_cloud.dtype)
-
+    # Each point cloud should be centered around first point which is at the origin
     for i in range(pcl_size):
-        # orig = point_cloud[indices[i, 1:]] - point_cloud[indices[i, 1:]][0,:]
         orig = point_cloud[indices[i, 1:]] - point_cloud[indices[i, 1:]][0,:]
-        # rotated1 = rotate_pointcloud_z_normal(orig)
-        # rotated = rotate_to_z_axis(orig)
-        # plot_point_clouds(rotated1, rotated)
         neighbors_centered[0, :, i, :] = orig.T
         neighbors_non_centered[0, :, i, :] = (point_cloud[indices[i, 1:]]).T
 
     return neighbors_centered, neighbors_non_centered
 
-
-def knn(x, k):
-    inner = -2 * torch.matmul(x.transpose(2, 1).contiguous(), x)
-    xx = torch.sum(x ** 2, dim=1, keepdim=True)
-    pairwise_distance = -xx - inner - xx.transpose(2, 1).contiguous()
-
-    idx = pairwise_distance.topk(k=k, dim=-1)[1]  # (batch_size, num_points, k)
-    return idx
-
-
-
-
-def get_graph_feature(x, k=41, large_k=None):
-    # x = x.squeeze()
-    if large_k is None:
-        idx = knn(x, k=k)  # (batch_size, num_points, k)
-    else:
-        idx = knn(x, k=large_k)
-        idx = idx[:, :, torch.randperm(large_k)[:k]]
-    batch_size, num_points, _ = idx.size()
-    device = x.device
-
-    idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
-
-    idx = idx + idx_base
-
-    idx = idx.view(-1)
-
-    _, num_dims, _ = x.size()
-
-    x = x.transpose(2,
-                    1).contiguous()  # (batch_size, num_points, num_dims)  -> (batch_size*num_points, num_dims) #   batch_size * num_points * k + range(0, batch_size*num_points)
-    feature = x.view(batch_size * num_points, -1)[idx, :]
-    feature = feature.view(batch_size, num_points, k, num_dims)
-    x = x.view(batch_size, num_points, 1, num_dims).repeat(1, 1, k, 1)
-
-    feature = torch.cat((feature, x), dim=3).permute(0, 3, 1, 2)
-
-    return feature
 def checkOnShapes(model_name='MLP5layers64Nlpe10xyz2deg40points', input_data=None, args_shape=None):
     model = shapeClassifier(args_shape)
     model.load_state_dict(torch.load(f'{model_name}.pt'))
@@ -429,60 +283,6 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None):
                 zaxis_title='Z'
             )
         )
-
-        # Create and display 4 subplots with different colors and colorbars
-        # for i in range(4):
-        # for i in range(4):
-        #     data = [
-        #         go.Scatter3d(
-        #             x=pointcloud[:, 0],
-        #             y=pointcloud[:, 1],
-        #             z=pointcloud[:, 2],
-        #             mode='markers',
-        #             marker=dict(
-        #                 size=2,
-        #                 opacity=0.8,
-        #                 color=colors[:, i],
-        #                 colorbar=dict(
-        #                     title=f'{names[i]} Embedding',
-        #                     y=1.1,
-        #                     x=51
-        #                 )
-        #             ),
-        #             name=f'Embedding Channel {i + 1}'
-        #         ),
-        #         #     go.Scatter3d(
-        #         #         x=pointcloud[:, 0],
-        #         #         y=pointcloud[:, 1],
-        #         #         z=pointcloud[:, 2],
-        #         #         mode='markers',
-        #         #         marker=dict(
-        #         #             size=2,
-        #         #             opacity=0.8,
-        #         #             color=['rgb(' + ', '.join(map(str, rgb)) + ')' for rgb in colors_normalized],  # Set RGB values
-        #         # colorbar = dict(
-        #         #     title='RGB Embeddings',
-        #         #     y=1.1,
-        #         #     x=0.95  # Adjust position of colorbar
-        #         # )
-        #         # ),
-        #         # name = 'RGB Embeddings'
-        #         # ),
-        #         #     go.Scatter3d(
-        #         #         x=src_knn_pcl[0, :],
-        #         #         y=src_knn_pcl[1, :],
-        #         #         z=src_knn_pcl[2, :],
-        #         #         mode='markers',
-        #         #         marker=dict(
-        #         #             size=2,
-        #         #             opacity=0.8,
-        #         #             color='red'  # Set the color to red
-        #         #         ),
-        #         #         name='src_knn_pcl'
-        #         #     )
-        #     ]
-        #     fig = go.Figure(data=data, layout=layout)
-        #     fig.show()
         data_rgb = [
             go.Scatter3d(
                 x=pointcloud[:, 0],
@@ -538,9 +338,6 @@ def find_max_difference_indices(array, k=200):
     # Find the maximum values ignoring the maximum value itself along axis 1
     max_values_without_max = np.max(np.where(array == max_values[:, np.newaxis], -np.inf, array), axis=1)
     diff_from_max = (max_values - max_values_without_max)
-    # kth_val = np.partition(diff_from_max, -k)[-k]
-    # # Find the indices where the difference between the maximum value and the next maximum is at least 3
-    # good_class_indices = np.where(diff_from_max >= kth_val)[0]
     good_class_indices = np.argpartition(diff_from_max, -k)[-k:]
     if len(good_class_indices) != k:
         raise Exception(f'Wrong size! k = {k}, actual size = {len(good_class_indices)}')
@@ -548,20 +345,6 @@ def find_max_difference_indices(array, k=200):
 def checkEmbeddingStability():
     pcls, label = load_data()
     names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
-    # plane_min = []
-    # plane_max = []
-    # peak_min = []
-    # peak_max = []
-    # ridge_min = []
-    # ridge_max = []
-    # saddle_min = []
-    # saddle_max = []
-    #
-    # plane_diff_median_list = []
-    # peak_diff_median_list = []
-    # ridge_diff_median_list = []
-    # saddle_diff_median_list  = []
-
     max_val_class_same_list = []
     max_val_diff_list = []
     reg_val_class_same_list = []
@@ -584,8 +367,8 @@ def checkEmbeddingStability():
                                             input_data=noisy_pointcloud_2)
         colors_2 = colors_2.detach().cpu().numpy()
 
-        max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(colors_1, threshold=10)
-        max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(colors_2, threshold=10)
+        max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(colors_1[:,:4], threshold=10)
+        max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(colors_2[:,:4], threshold=10)
         reg_num_of_same_class = np.sum((max_indices_1 == max_indices_2))
         percentage = (reg_num_of_same_class / len(max_values_1))
         reg_val_diff_change_mean = np.mean((diff_from_max_1 - diff_from_max_2))
@@ -607,66 +390,6 @@ def checkEmbeddingStability():
         max_val_class_same_list.append(percentage)
         max_val_diff_list.append(max_val_diff_change_mean)
 
-        # plane_1, peak_1, ridge_1, saddle_1 = colors_1[:,0], colors_1[:,1], colors_1[:,2], colors_1[:,3]
-        # plane_2, peak_2, ridge_2, saddle_2 = colors_2[:,0], colors_2[:,1], colors_2[:,2], colors_2[:,3]
-        #
-        # plane_diff = abs(plane_1 - plane_2)
-        # plane_diff_median = np.median(plane_diff)
-        # peak_diff = abs(peak_1 - peak_2)
-        # peak_diff_median = np.median(peak_diff)
-        # ridge_diff = abs(ridge_1 - ridge_2)
-        # ridge_diff_median = np.median(ridge_diff)
-        # saddle_diff = abs(saddle_1 - saddle_2)
-        # saddle_diff_median = np.median(saddle_diff)
-        # planes_top_10_indices, planes_top_10_values_orig, planes_top_10_values_second, planes_bottom_10_indices, planes_bottom_10_values, planes_bottom_10_values_second = top_and_bottom_values(plane_1, plane_2)
-        # peaks_top_10_indices, peaks_top_10_values_orig, peaks_top_10_values_second, peaks_bottom_10_indices, peaks_bottom_10_values, peaks_bottom_10_values_second = top_and_bottom_values(
-        #     peak_1, peak_2)
-        # ridges_top_10_indices, ridges_top_10_values_orig, ridges_top_10_values_second, ridges_bottom_10_indices, ridges_bottom_10_values, ridges_bottom_10_values_second = top_and_bottom_values(
-        #     ridge_1, ridge_2)
-        # saddles_top_10_indices, saddles_top_10_values_orig, saddles_top_10_values_second, saddles_bottom_10_indices, saddles_bottom_10_values, saddles_bottom_10_values_second = top_and_bottom_values(
-        #     saddle_1, saddle_2)
-        #
-        # plane_min.append(np.mean(abs(planes_top_10_values_orig - planes_top_10_values_second)))
-        # plane_max.append(np.mean(abs(planes_bottom_10_values - planes_bottom_10_values_second)))
-        # peak_min.append(np.mean(abs(peaks_top_10_values_orig - peaks_top_10_values_second)))
-        # peak_max.append(np.mean(abs(peaks_bottom_10_values - peaks_bottom_10_values_second)))
-        # ridge_min.append(np.mean(abs(ridges_top_10_values_orig - ridges_top_10_values_second)))
-        # ridge_max.append(np.mean(abs(ridges_bottom_10_values - ridges_bottom_10_values_second)))
-        # saddle_min.append(np.mean(abs(saddles_top_10_values_orig - saddles_top_10_values_second)))
-        # saddle_max.append(np.mean(abs(saddles_bottom_10_values - saddles_bottom_10_values_second)))
-        #
-        # plane_diff_median_list.append(plane_diff_median)
-        # peak_diff_median_list.append(peak_diff_median)
-        # ridge_diff_median_list.append(ridge_diff_median)
-        # saddle_diff_median_list.append(saddle_diff_median)
-
-    # fig, axs = plt.subplots(2, 2, figsize=(12, 8))
-    # axs[0, 0].plot(plane_min, label='Min')
-    # axs[0, 0].plot(plane_max, label='Max')
-    # axs[0, 0].plot(plane_diff_median_list, label='diff-median')
-    # axs[0, 0].set_title('Plane')
-    # axs[0, 0].legend()
-    #
-    # axs[0, 1].plot(peak_min, label='Min')
-    # axs[0, 1].plot(peak_max, label='Max')
-    # axs[0, 1].plot(peak_diff_median_list, label='diff-median')
-    # axs[0, 1].set_title('Peak')
-    # axs[0, 1].legend()
-    #
-    # axs[1, 0].plot(ridge_min, label='Min')
-    # axs[1, 0].plot(ridge_max, label='Max')
-    # axs[1, 0].plot(ridge_diff_median_list, label='diff-median')
-    # axs[1, 0].set_title('Ridge')
-    # axs[1, 0].legend()
-    #
-    # axs[1, 1].plot(saddle_min, label='Min')
-    # axs[1, 1].plot(saddle_max, label='Max')
-    # axs[1, 1].plot(saddle_diff_median_list, label='diff-median')
-    # axs[1, 1].set_title('Saddle')
-    # axs[1, 1].legend()
-    #
-    # plt.tight_layout()
-    # plt.show()
     plt.figure(figsize=(10, 5))
 
     # Plot max_val_class_same_list
@@ -707,9 +430,9 @@ def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondence
         pointcloud = pcls[k][:]
         rotated_pcl, rotation_matrix = random_rotation_translation(pointcloud)
 
-        noisy_pointcloud_1 = pointcloud #+ np.random.normal(0, 0.01, pointcloud.shape)
+        noisy_pointcloud_1 = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
         noisy_pointcloud_1 = noisy_pointcloud_1.astype(np.float32)
-        noisy_pointcloud_2 = rotated_pcl #+ np.random.normal(0, 0.01, rotated_pcl.shape)
+        noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
         noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
         colors_1 = checkOnShapes(model_name=model_name,
@@ -752,10 +475,6 @@ def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondence
         transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
         loss = np.mean(((rotation_matrix @ best_rotation) - np.eye(3)) ** 2)
         losses.append(loss)
-        # print(f'rotations etc:')
-        # print(rotation_matrix @ best_rotation)
-        # print(loss)
-        # print(f'------------{k}------------')
 
         # Update the worst losses list
         for i, (worst_loss, _) in enumerate(worst_losses):
@@ -771,7 +490,6 @@ def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondence
                 break
 
     return worst_losses, losses, num_of_inliers
-from scipy.spatial.distance import cdist
 
 def find_closest_points(embeddings1, embeddings2, num_neighbors=40, max_non_unique_correspondences=1):
     # Initialize NearestNeighbors instance
@@ -784,14 +502,9 @@ def find_closest_points(embeddings1, embeddings2, num_neighbors=40, max_non_uniq
         if duplicates[index] >= max_non_unique_correspondences:
             distances[i]= np.inf
         duplicates[index] += 1
-    # count_unnique_dup = np.count_nonzero(duplicates)
-    # count_unnique =len(np.unique(indices))
-    # if count_unnique != count_unnique_dup:
-    #     print("FUCK!!!")
     smallest_distances_indices = np.argsort(distances.flatten())[:num_neighbors]
     emb1_indices = smallest_distances_indices.squeeze()
     emb2_indices = indices[smallest_distances_indices].squeeze()
-    # a_count_yay = len(np.unique(indices[smallest_distances_indices]))
     return emb1_indices, emb2_indices
 
 def random_rotation_translation(pointcloud):
@@ -818,10 +531,6 @@ def random_rotation_translation(pointcloud):
 
   return ( rotated_cloud + center) , rotation_matrix
 
-
-from scipy import spatial
-
-from scipy.spatial.transform import Rotation
 
 
 def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
@@ -880,48 +589,20 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
 
 
 def estimate_rigid_transform(src_points, dst_points):
-    """
-    Estimates the rotation and translation that aligns two sets of 3D points.
-
-    Args:
-        src_points (np.ndarray): Array of shape (3, 3) containing the source points.
-        dst_points (np.ndarray): Array of shape (3, 3) containing the destination points.
-
-    Returns:
-        rotation (np.ndarray): Array of shape (3, 3) representing the rotation matrix.
-        translation (np.ndarray): Array of shape (3,) representing the translation vector.
-    """
-
     H = np.matmul(src_points.T, dst_points)
     U, _, Vt = np.linalg.svd(H)
-    # R = np.matmul(Vt.T, U.T)
     R = np.matmul(Vt, U.T)
 
     # Handle reflection case
     if np.linalg.det(R) < 0:
         Vt[2, :] *= -1
-        # R = np.matmul(Vt.T, U.T)
         R = np.matmul(Vt, U.T)
-
-
-
     return R
 
 
 def find_inliers(data1, data2, rotation, threshold):
     """
     Finds the inliers in two sets of 3D points given a rotation and translation.
-
-    Args:
-        data1 (np.ndarray): Array of shape (N, 3) containing the first set of 3D points.
-        data2 (np.ndarray): Array of shape (N, 3) containing the second set of 3D points.
-        rotation (np.ndarray): Array of shape (3, 3) representing the rotation matrix.
-        translation (np.ndarray): Array of shape (3,) representing the translation vector.
-        threshold (float): Maximum distance for a point to be considered an inlier.
-
-    Returns:
-        inliers1 (list): List of indices of the inliers in data1.
-        inliers2 (list): List of indices of the inliers in data2.
     """
     inliers1 = []
     inliers2 = []
@@ -974,12 +655,7 @@ def plotWorst(worst_losses, model_name=""):
 def plot_losses(losses, inliers, filename="loss_plot.png"):
     """
     Plots the given list of losses and corresponding number of inliers,
-    and saves the plot as an image.
-
-    Args:
-        losses (list): List of losses to plot.
-        inliers (list): List of corresponding number of inliers.
-        filename (str, optional): Filename to save the plot image. Defaults to "loss_plot.png".
+    and saves the plot as an image
     """
     mean_loss = np.mean(losses)
     median_loss = np.median(losses)
@@ -1006,56 +682,22 @@ def plot_losses(losses, inliers, filename="loss_plot.png"):
 
 
 if __name__ == '__main__':
-    # checkData()
-    # visualizeShapesWithEmbeddings()
-    # visualizeShapesWithEmbeddings()
-    args_shape = configArgsPCT()
-    args_shape.batch_size = 1024
-    args_shape.use_mlp = 1
-    args_shape.num_mlp_layers = 3
-    args_shape.num_neurons_per_layer = 32
-    args_shape.sampled_points = 40
-    args_shape.use_second_deg = 1
-    args_shape.lpe_normalize = 1
-    args_shape.lpe_dim = 0
-    args_shape.num_mlp_layers = 3
-    args_shape.contrastive = 1
-    visualizeShapesWithEmbeddings(model_name='MLP3layers32Nxyz2degRotStd005ContrFromOrig10', args_shape=args_shape)
-    # for i in range(1,5):
     for i in range(1,2):
-        # model_name = 'MLP3layers32Nxyz2degRotStd005'
-        model_name = 'MLP3layers32Nxyz2degRotStd005Contr32FromOrig10'
         args_shape = configArgsPCT()
         args_shape.batch_size = 1024
-        args_shape.exp = model_name
         args_shape.use_mlp = 1
-        args_shape.lpe_dim = 0
         args_shape.num_mlp_layers = 3
         args_shape.num_neurons_per_layer = 32
         args_shape.sampled_points = 40
         args_shape.use_second_deg = 1
         args_shape.lpe_normalize = 1
-        args_shape.contrastive_mid_layer = 1
-        # worst_losses, losses, num_of_inliers = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=i)
-        # plot_losses(losses, num_of_inliers, filename=f'{i}_'+"orig")
-        # plotWorst(worst_losses, model_name=f'{i}_'+"orig")
-        # model_name = 'MLP3layers32Nlpe3xyz2degRotStd005ContrFromOrig10'
-        model_name = 'MLP3layers32Nlpe3xyz2degRotStd005Contr32FromOrig10'
-        args_shape.exp = model_name
-        args_shape.lpe_dim = 3
-        args_shape.contrastive = 1
-        # worst_losses, losses, num_of_inliers = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=i)
-        # plot_losses(losses, num_of_inliers, filename=f'{i}_'+"contrast_lpe3")
-        # plotWorst(worst_losses, model_name=f'{i}_'+"contrast_lpe3")
-        # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=args_shape)
-        # model_name = 'MLP3layers32Nxyz2degRotStd005ContrFromOrig10'
-        model_name = 'MLP3layers32Nlpe6xyz2degRotStd005Contr4New'
-        model_name = 'MLP3layers32Nlpe6xyz2degRotStd005Contr32NEWstdfun2'
+        model_name = 'MLP3layers32Nlpe6xyz2degContrNEWstdfun2'
         args_shape.exp = model_name
         args_shape.lpe_dim = 6
         args_shape.num_mlp_layers = 3
         args_shape.contrastive = 1
-        worst_losses, losses, num_of_inliers  = findRotTrans(model_name = model_name, args_shape=args_shape,max_non_unique_correspondences=i)
+        args_shape.output_dim = 12
+        worst_losses, losses, num_of_inliers  = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=i)
         plot_losses(losses, num_of_inliers, filename=f'{i}_32_'+"contrast_lpe6")
         plotWorst(worst_losses, model_name=f'{i}_'+"contrast_lpe6")
 
