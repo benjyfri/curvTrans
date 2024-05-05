@@ -19,23 +19,20 @@ def test(model, dataloader, loss_function, device, args):
     total_loss = 0.0
     total_acc_loss = 0.0
     count = 0
-    label_correct = {label: 0 for label in range(args.output_dim)}
-    label_total = {label: 0 for label in range(args.output_dim)}
+    label_correct = {label: 0 for label in range(4)}
+    label_total = {label: 0 for label in range(4)}
 
     with torch.no_grad():
         for batch in dataloader:
             pcl, info = batch['point_cloud'].to(device), batch['info']
             label = info['class'].to(device).long()
-            if args.contrastive_mid_layer:
-                output,_ = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-            else:
-                output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+            output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
             loss = loss_function(output, label)
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
             total_loss += loss.item()
             count += 1
-            for label_name in range(args.output_dim):
+            for label_name in range(4):
                 correct_mask = (preds == label_name) & (label == label_name)
                 label_correct[label_name] += correct_mask.sum().item()
                 label_total[label_name] += (label == label_name).sum().item()
@@ -43,7 +40,7 @@ def test(model, dataloader, loss_function, device, args):
     # Overall accuracy
     test_acc = (total_acc_loss / (count))
     label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
-                        for label in range(args.output_dim)}
+                        for label in range(4)}
     average_loss = total_loss / (count)
 
     return average_loss, test_acc, label_accuracies
@@ -54,7 +51,7 @@ def train_and_test(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if args.use_wandb:
         wandb.login(key="ed8e8f26d1ee503cda463f300a605cb35e75ad23")
-        wandb.init(project="Curvature-transformer-POC-fixedHK", name=args.exp_name)
+        wandb.init(project="MLP-Contrastive", name=args.exp_name)
 
     print(device)
     print(args)
@@ -101,71 +98,59 @@ def train_and_test(args):
                 if args.contrastive:
                     pcl2 = batch['point_cloud2'].to(device)
                     contrastive_point_cloud = batch['contrastive_point_cloud'].to(device)
-                    if args.contrastive_mid_layer:
-                        output, layer_before_last = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-                        loss = criterion(output, label)
-                        output_pcl2, layer_before_last_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
-                        output_contrastive_pcl, layer_before_last_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
-                        loss2 = tripletMarginLoss(layer_before_last, layer_before_last_pcl2, layer_before_last_contrastive_pcl)
-                        total_train_contrastive_positive_loss += mseLoss(layer_before_last, layer_before_last_pcl2)
-                        total_train_contrastive_negative_loss += mseLoss(layer_before_last, layer_before_last_contrastive_pcl)
-                    else:
-                        output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-                        orig_classification = output[:,:4]
-                        orig_emb = output[:,4:]
-                        loss = criterion(orig_classification, label)
-                        output_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
-                        pos_emb = output_pcl2[:, 4:]
-                        output_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
-                        neg_emb = output_contrastive_pcl[:, 4:]
-                        loss2 = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
-                        total_train_contrastive_positive_loss += mseLoss(orig_emb, pos_emb)
-                        total_train_contrastive_negative_loss += mseLoss(orig_emb, neg_emb)
-                    total_train_contrastive_loss += loss2
-                    loss2 = (contr_loss_weight) * loss2
+                    output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+                    orig_classification = output[:,:4]
+                    orig_emb = output[:,4:]
+                    classification_loss = criterion(orig_classification, label)
+                    output_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
+                    pos_emb = output_pcl2[:, 4:]
+                    output_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
+                    neg_emb = output_contrastive_pcl[:, 4:]
+                    contrstive_loss = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
+                    total_train_contrastive_positive_loss += mseLoss(orig_emb, pos_emb)
+                    total_train_contrastive_negative_loss += mseLoss(orig_emb, neg_emb)
+                    total_train_contrastive_loss += contrstive_loss
                 else:
                     output  = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-                    loss = criterion(output, label)
-                    loss2 = torch.tensor((0))
-                new_awesome_loss = loss + loss2
-                # Backward pass and optimization
+                    classification_loss = criterion(output, label)
+                    contrstive_loss = torch.tensor((0))
+                new_awesome_loss = classification_loss + (contr_loss_weight * contrstive_loss)
                 optimizer.zero_grad()
-                # loss.backward()
                 new_awesome_loss.backward()
                 optimizer.step()
 
                 current_lr = optimizer.param_groups[0]['lr']
 
-                total_train_loss += loss.item()
+                total_train_loss += classification_loss.item()
                 preds = output.max(dim=1)[1]
                 total_train_acc_loss += torch.mean((preds == label).float()).item()
 
                 count = count + 1
 
-                tqdm_bar.set_postfix(train_loss=f'{(loss.item() / args.batch_size):.4f}')
+                tqdm_bar.set_postfix(train_loss=f'{(classification_loss.item()):.4f}')
 
-        train_loss = (total_train_loss / count)
+        classification_train_loss = (total_train_loss / count)
+        classification_acc_train = (total_train_acc_loss / (count))
         contrastive_train_loss = (total_train_contrastive_loss / (count))
         contrastive_positive_train_loss = (total_train_contrastive_positive_loss / (count))
         contrastive_negative_train_loss = (total_train_contrastive_negative_loss / (count))
-        print(f'contrastive_train_loss: {contrastive_train_loss}')
-        print(f'contrastive_positive_train_loss: {contrastive_positive_train_loss}')
-        print(f'contrastive_negative_train_loss: {contrastive_negative_train_loss}')
-        acc_train = (total_train_acc_loss / (count))
-
+        print(f'contrastive_loss: {contrastive_train_loss}')
+        print(f'contrastive_positive_MSEloss: {contrastive_positive_train_loss}')
+        print(f'contrastive_negative_MSEloss: {contrastive_negative_train_loss}')
 
         test_loss, acc_test, label_accuracies = test(model, test_dataloader, criterion, device, args)
         scheduler.step()
         print(f'LR: {current_lr}')
 
-        print({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test})
+        print({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
         for key in label_accuracies:
             print("label_" + str(key), ":", label_accuracies[key])
         if args.use_wandb:
-            wandb.log({"epoch": epoch, "train_loss": train_loss ,"test_loss": test_loss, "acc_train": acc_train, "acc_test": acc_test})
+            wandb.log({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
             for key in label_accuracies:
                 wandb.log({"epoch": epoch, "label_"+str(key) : label_accuracies[key]})
-
+            if args.contrastive:
+                wandb.log({"epoch": epoch, "contrastive_loss":contrastive_train_loss})
     return model
 
 def configArgsPCT():
@@ -241,11 +226,7 @@ def testPretrainedModel(args, model=None):
         for batch in test_dataloader:
             pcl, info = batch['point_cloud'].to(device), batch['info']
             label = info['class'].to(device).long()
-            # torch.save(pcl[0].permute(1,0).unsqueeze(1).unsqueeze(0), 'pcl.pt')
-            if args.contrastive_mid_layer:
-                output, _ = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-            else:
-                output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+            output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
             preds = output.max(dim=1)[1]
 
             if args.output_dim == 4:
