@@ -13,7 +13,6 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-
 def test(model, dataloader, loss_function, device, args):
     model.eval()  # Set the model to evaluation mode
     total_loss = 0.0
@@ -215,11 +214,11 @@ def testPretrainedModel(args, model=None):
     model.eval()
     count =0
     total_acc_loss = 0.0
-    label_correct = {label: 0 for label in range(args.output_dim)}
-    label_total = {label: 0 for label in range(args.output_dim)}
-    wrong_preds = {label: [] for label in range(args.output_dim)}
-    wrong_H_values = {label: [] for label in range(args.output_dim)}
-    wrong_K_values = {label: [] for label in range(args.output_dim)}
+    label_correct = {label: 0 for label in range(4)}
+    label_total = {label: 0 for label in range(4)}
+    wrong_preds = {label: [] for label in range(4)}
+    wrong_H_values = {label: [] for label in range(4)}
+    wrong_K_values = {label: [] for label in range(4)}
     wrong_predictions_stats = {}  # Store statistics for wrong predictions
 
     with torch.no_grad():
@@ -229,35 +228,33 @@ def testPretrainedModel(args, model=None):
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
             preds = output.max(dim=1)[1]
 
-            if args.output_dim == 4:
-                preds = output.max(dim=1)[1]
-                total_acc_loss += torch.mean((preds == label).float()).item()
+            preds = output.max(dim=1)[1]
+            total_acc_loss += torch.mean((preds == label).float()).item()
 
-                # Collect data for wrong predictions
-                for i, (pred, actual_label) in enumerate(zip(preds, label.cpu().numpy())):
-                    if pred != actual_label:
-                        wrong_preds[actual_label].append(pred.item())
-                        wrong_H_values[actual_label].append(info['H'][i].item())
-                        wrong_K_values[actual_label].append(info['K'][i].item())
+            # Collect data for wrong predictions
+            for i, (pred, actual_label) in enumerate(zip(preds, label.cpu().numpy())):
+                if pred != actual_label:
+                    wrong_preds[actual_label].append(pred.item())
+                    wrong_H_values[actual_label].append(info['H'][i].item())
+                    wrong_K_values[actual_label].append(info['K'][i].item())
 
             count += 1
 
-            if args.output_dim == 4:
-                # Update per-label statistics
-                for label_name in range(args.output_dim):
-                    correct_mask = (preds == label_name) & (label == label_name)
-                    label_correct[label_name] += correct_mask.sum().item()
-                    label_total[label_name] += (label == label_name).sum().item()
+            # Update per-label statistics
+            for label_name in range(args.output_dim):
+                correct_mask = (preds == label_name) & (label == label_name)
+                label_correct[label_name] += correct_mask.sum().item()
+                label_total[label_name] += (label == label_name).sum().item()
 
-    if args.output_dim == 4:
-        label_accuracies = {
-            label: label_correct[label] / label_total[label]
-            for label in range(args.output_dim)
-            if label_total[label] != 0
-        }
-        for label, accuracy in label_accuracies.items():
-            print(f"Accuracy for label {label}: {accuracy:.4f}")
-    for label in range(args.output_dim):
+    label_accuracies = {
+        label: label_correct[label] / label_total[label]
+        for label in range(args.output_dim)
+        if label_total[label] != 0
+    }
+    for label, accuracy in label_accuracies.items():
+        print(f"Accuracy for label {label}: {accuracy:.4f}")
+
+    for label in range(4):
         if len(wrong_preds[label]) > 0:
             print(f"Label {label}:")
             print(f"  - Most frequent wrong prediction: {max(wrong_preds[label], key=wrong_preds[label].count)}")
@@ -274,6 +271,4 @@ if __name__ == '__main__':
     # model = input_visualized_importance()
     testPretrainedModel(args, model=model.to('cuda'))
     torch.save(model.state_dict(), f'{args.exp_name}.pt')
-    # Compute input saliency
-    # input_visualized_importance()
 
