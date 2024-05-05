@@ -226,8 +226,7 @@ def testPretrainedModel(args, model=None):
             pcl, info = batch['point_cloud'].to(device), batch['info']
             label = info['class'].to(device).long()
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-            preds = output.max(dim=1)[1]
-
+            output = output[:,:4]
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
 
