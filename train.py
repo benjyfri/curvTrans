@@ -241,14 +241,14 @@ def testPretrainedModel(args, model=None):
             count += 1
 
             # Update per-label statistics
-            for label_name in range(args.output_dim):
+            for label_name in range(4):
                 correct_mask = (preds == label_name) & (label == label_name)
                 label_correct[label_name] += correct_mask.sum().item()
                 label_total[label_name] += (label == label_name).sum().item()
 
     label_accuracies = {
         label: label_correct[label] / label_total[label]
-        for label in range(args.output_dim)
+        for label in range(4)
         if label_total[label] != 0
     }
     for label, accuracy in label_accuracies.items():
