@@ -111,6 +111,8 @@ def train_and_test(args):
                     total_train_contrastive_loss += contrstive_loss
                 else:
                     output  = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+                    orig_classification = output[:, :4]
+                    orig_emb = output[:, 4:]
                     classification_loss = criterion(output, label)
                     contrstive_loss = torch.tensor((0))
                 new_awesome_loss = classification_loss + (contr_loss_weight * contrstive_loss)
@@ -121,7 +123,7 @@ def train_and_test(args):
                 current_lr = optimizer.param_groups[0]['lr']
 
                 total_train_loss += classification_loss.item()
-                preds = output.max(dim=1)[1]
+                preds = orig_classification.max(dim=1)[1]
                 total_train_acc_loss += torch.mean((preds == label).float()).item()
 
                 count = count + 1
