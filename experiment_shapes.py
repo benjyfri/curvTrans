@@ -20,6 +20,7 @@ from sklearn.neighbors import NearestNeighbors
 from scipy.linalg import eigh
 from scipy.linalg import eig
 import matplotlib.pyplot as plt
+from scipy.spatial.distance import cdist
 def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4):
   """
   Plot four point clouds in an interactive 3D plot with Plotly.
@@ -33,7 +34,7 @@ def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4):
   fig = go.Figure()
 
   # Define a color list for four point clouds
-  colors = ['grey', 'yellow', 'red', 'blue']
+  colors = ['blue', 'orange', 'brown', 'red']
 
   # Add traces for each point cloud with corresponding color
   for i, point_cloud in enumerate(
@@ -145,6 +146,30 @@ def save_point_clouds(point_cloud1, point_cloud2, title="", filename="plot.html"
     # Save the figure as a png image
     fig.write_html(filename)
 
+def plot_point_clouds(point_cloud1, point_cloud2, title=""):
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter3d(
+        x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
+        mode='markers', marker=dict(size=2,color='red'), name='Point Cloud 1'
+    ))
+
+    fig.add_trace(go.Scatter3d(
+        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
+        mode='markers', marker=dict(size=2,color='blue'), name='Point Cloud 2'
+    ))
+
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(title='X'),
+            yaxis=dict(title='Y'),
+            zaxis=dict(title='Z'),
+        ),
+        margin=dict(r=20, l=10, b=10, t=10),
+        title=title
+    )
+    fig.show()
+
 def get_k_nearest_neighbors(point_cloud, k):
     """
     Returns the k nearest neighbors for each point in the point cloud.
@@ -181,7 +206,7 @@ def checkOnShapes(model_name='MLP5layers64Nlpe10xyz2deg40points', input_data=Non
     src_knn_pcl[:, 0, :, :] = src_knn_pcl[:, 0, :, :] / x_scale_src
     src_knn_pcl[:, 1, :, :] = src_knn_pcl[:, 1, :] / x_scale_src
     src_knn_pcl[:, 2, :, :] = src_knn_pcl[:, 2, :, :] / x_scale_src
-    src_knn_pcl = 23 * src_knn_pcl
+    src_knn_pcl = 10 * src_knn_pcl
     output = model(src_knn_pcl)
     return output
 def load_data(partition='test', divide_data=1):
@@ -255,7 +280,7 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None):
     # for k in range(162,163): #vase
     names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
     shapes = [162, 174, 176, 179]
-    # shapes = [179]
+    # shapes = [176]
     for k in shapes:
         pointcloud = pcls[k][:]
         noisy_pointcloud = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
@@ -263,7 +288,7 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None):
         colors = checkOnShapes(model_name=model_name,
                                     input_data=pointcloud, args_shape=args_shape)
         colors = colors.detach().cpu().numpy()
-        src_knn_pcl = src_knn_pcl.detach().cpu().numpy()
+        colors = colors[:,:4]
 
         colors_normalized = colors.copy()
         colors_normalized[:, 0] = ((colors[:, 0] - colors[:, 0].min()) / (
@@ -342,88 +367,19 @@ def find_max_difference_indices(array, k=200):
     if len(good_class_indices) != k:
         raise Exception(f'Wrong size! k = {k}, actual size = {len(good_class_indices)}')
     return max_values, max_indices, diff_from_max, good_class_indices
-def checkEmbeddingStability():
-    pcls, label = load_data()
-    names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
-    max_val_class_same_list = []
-    max_val_diff_list = []
-    reg_val_class_same_list = []
-    reg_val_diff_list = []
-    shapes = np.arange(pcls.shape[0])
-    # shapes = np.arange(100) + 30
-    for k in shapes:
-        if k % 10 ==0:
-            print(f'--------{k}--------')
-        pointcloud = pcls[k][:]
-        noisy_pointcloud_1 = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
-        noisy_pointcloud_1 = noisy_pointcloud_1.astype(np.float32)
-        noisy_pointcloud_2 = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
-        noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
-        # plot_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2)
-        colors_1 = checkOnShapes(model_name='MLP3layers32Nxyz2degRotStd005',
-                                            input_data=noisy_pointcloud_1)
-        colors_1 = colors_1.detach().cpu().numpy()
-        colors_2 = checkOnShapes(model_name='MLP3layers32Nxyz2degRotStd005',
-                                            input_data=noisy_pointcloud_2)
-        colors_2 = colors_2.detach().cpu().numpy()
 
-        max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(colors_1[:,:4], threshold=10)
-        max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(colors_2[:,:4], threshold=10)
-        reg_num_of_same_class = np.sum((max_indices_1 == max_indices_2))
-        percentage = (reg_num_of_same_class / len(max_values_1))
-        reg_val_diff_change_mean = np.mean((diff_from_max_1 - diff_from_max_2))
-        reg_val_class_same_list.append(percentage)
-        reg_val_diff_list.append(reg_val_diff_change_mean)
-
-
-        union_indices = np.union1d(good_class_indices_1, good_class_indices_2)
-        max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(colors_1[union_indices],
-                                                                                                         threshold=10)
-        max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(colors_2[union_indices],
-                                                                                                         threshold=10)
-        # plot_point_clouds(noisy_pointcloud_1, noisy_pointcloud_1[good_class_indices_1])
-        # plot_point_clouds(noisy_pointcloud_2, noisy_pointcloud_2[good_class_indices_2])
-
-        num_of_same_class = np.sum((max_indices_1==max_indices_2))
-        percentage = (num_of_same_class / len(union_indices) )
-        max_val_diff_change_mean =np.mean( (diff_from_max_1-diff_from_max_2) )
-        max_val_class_same_list.append(percentage)
-        max_val_diff_list.append(max_val_diff_change_mean)
-
-    plt.figure(figsize=(10, 5))
-
-    # Plot max_val_class_same_list
-    plt.subplot(1, 2, 1)
-    plt.plot(max_val_class_same_list, label='Percentage of Same Class Max Values')
-    plt.plot(reg_val_class_same_list, label='Percentage of Same Class reg Values')
-    plt.xlabel('Iterations')
-    plt.ylabel('Percentage')
-    plt.title('Percentage of Same Class Max Values vs. Iterations')
-    plt.legend()
-
-    # Plot max_val_diff_list
-    plt.subplot(1, 2, 2)
-    plt.plot(max_val_diff_list, label='Mean Difference in Max Values')
-    plt.plot(reg_val_diff_list, label='Mean Difference in reg Values')
-    plt.xlabel('Iterations')
-    plt.ylabel('Mean Difference')
-    plt.title('Mean Difference in Max Values vs. Iterations')
-    plt.legend()
-
-    plt.tight_layout()
-    plt.show()
-
-
-def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondences=1):
+def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondences=3, num_worst_losses = 3):
     pcls, label = load_data()
     names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
     shapes = np.arange(pcls.shape[0])
-    # shapes = [162, 174, 176, 179]  # or any other range or selection of indices
     shapes = np.arange(1000) # or any other range or selection of indices
-    num_worst_losses = 3  # Number of worst losses to track
     worst_losses = [(0, None)] * num_worst_losses  # Initialize with (loss, variables)
     losses = []
+    iter_2_ransac_convergence = []
     num_of_inliers = []
+    shape_size_list = []
+    dist_from_orig = []
+    shapes = [162, 174, 176, 179]
     for k in shapes:
         if k%10 ==0:
             print(f'------------{k}------------')
@@ -435,39 +391,50 @@ def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondence
         noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
         noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
-        colors_1 = checkOnShapes(model_name=model_name,
+        emb_1 = checkOnShapes(model_name=model_name,
                                     input_data=noisy_pointcloud_1, args_shape=args_shape)
-        colors_2 = checkOnShapes(model_name=model_name,
+        emb_2 = checkOnShapes(model_name=model_name,
                                     input_data=noisy_pointcloud_2,args_shape=args_shape)
         #use only 32 embedding used for contrastive loss
         if args_shape.contrastive_mid_layer:
-            colors_1 = colors_1[1]
-            colors_2 = colors_2[1]
-        colors_1 = colors_1.detach().cpu().numpy()
-        colors_2 = colors_2.detach().cpu().numpy()
+            emb_1 = emb_1[1]
+            emb_2 = emb_2[1]
+        emb_1 = emb_1.detach().cpu().numpy()
+        emb_2 = emb_2.detach().cpu().numpy()
 
 
-        if np.isnan(np.sum(colors_1)) or np.isnan(np.sum(colors_2)):
+        if np.isnan(np.sum(emb_1)) or np.isnan(np.sum(emb_2)):
             print(f'oish')
             continue
 
-        max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(colors_1,
+        max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(emb_1[:,:4],
                                                                                                          k=200)
-        max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(colors_2,
+        max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(emb_2[:,:4],
                                                                                                          k=200)
 
-        best_point_desc_pcl1 = colors_1[good_class_indices_1, :]
-        best_point_desc_pcl2 = colors_1[good_class_indices_2, :]
+        best_point_desc_pcl1 = emb_1[good_class_indices_1, :]
+        best_point_desc_pcl2 = emb_2[good_class_indices_2, :]
 
         source_indices, target_indices = find_closest_points(best_point_desc_pcl1, best_point_desc_pcl2,
                                                              num_neighbors=40, max_non_unique_correspondences=max_non_unique_correspondences)
-        # source_indices, target_indices = find_unique_closest_points(best_point_desc_pcl1, best_point_desc_pcl2,
-        #                                                      num_neighbors=40)
-        chosen_points_1 = noisy_pointcloud_1[good_class_indices_1[source_indices], :]
-        chosen_points_2 = noisy_pointcloud_2[good_class_indices_2[target_indices], :]
+
+
+        chosen_indices_pcl1 = good_class_indices_1[source_indices]
+        chosen_indices_pcl2 = good_class_indices_2[target_indices]
+        chosen_points_1 = noisy_pointcloud_1[chosen_indices_pcl1, :]
+        chosen_points_2 = noisy_pointcloud_2[chosen_indices_pcl2, :]
+
+        amount_same_index = np.sum(chosen_indices_pcl1 == chosen_indices_pcl2)
+        original_points_chosen = pointcloud[chosen_indices_pcl1, :]
+        original_corresponding_points = pointcloud[chosen_indices_pcl2, :]
+        pairwise_distances = cdist(pointcloud, pointcloud)
+        shape_size = np.max(pairwise_distances)
+        shape_size_list.append(shape_size)
+        correspondences_dist = (pairwise_distances[chosen_indices_pcl1,chosen_indices_pcl2])
+        dist_from_orig.append(np.mean(correspondences_dist))
         centered_points_1 = noisy_pointcloud_1[good_class_indices_1[source_indices], :] - np.mean(noisy_pointcloud_1)
         centered_points_2 = noisy_pointcloud_2[good_class_indices_2[target_indices], :] - np.mean(noisy_pointcloud_2)
-        best_rotation, inliers = ransac(centered_points_1, centered_points_2, max_iterations=1000, threshold=0.1,
+        best_rotation, inliers, best_iter = ransac(centered_points_1, centered_points_2, max_iterations=1000, threshold=0.1,
                                   min_inliers=10)
         num_of_inliers.append(len(inliers))
         center = np.mean(noisy_pointcloud_1, axis=0)
@@ -475,33 +442,40 @@ def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondence
         transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
         loss = np.mean(((rotation_matrix @ best_rotation) - np.eye(3)) ** 2)
         losses.append(loss)
+        iter_2_ransac_convergence.append(best_iter)
 
         # Update the worst losses list
-        for i, (worst_loss, _) in enumerate(worst_losses):
-            if loss > worst_loss:
-                worst_losses[i] = (loss, {
-                    'noisy_pointcloud_1': noisy_pointcloud_1,
-                    'noisy_pointcloud_2': noisy_pointcloud_2,
-                    'chosen_points_1': chosen_points_1,
-                    'chosen_points_2': chosen_points_2,
-                    'rotation_matrix': rotation_matrix,
-                    'best_rotation': best_rotation
-                })
-                break
+        index_of_smallest_loss = np.argmin([worst_losses[i][0] for i in range(len(worst_losses))])
+        smallest_loss = worst_losses[index_of_smallest_loss][0]
+        if loss > smallest_loss:
+            worst_losses[index_of_smallest_loss] = (loss, {
+                'noisy_pointcloud_1': noisy_pointcloud_1,
+                'noisy_pointcloud_2': noisy_pointcloud_2,
+                'chosen_points_1': chosen_points_1,
+                'chosen_points_2': chosen_points_2,
+                'rotation_matrix': rotation_matrix,
+                'best_rotation': best_rotation
+            })
 
-    return worst_losses, losses, num_of_inliers
+    return worst_losses, losses, num_of_inliers, iter_2_ransac_convergence, shape_size_list, dist_from_orig
 
-def find_closest_points(embeddings1, embeddings2, num_neighbors=40, max_non_unique_correspondences=1):
+def find_closest_points(embeddings1, embeddings2, num_neighbors=40, max_non_unique_correspondences=3):
+    classification_1 = np.argmax(embeddings1[:,:4], axis=1)
+    classification_2 = np.argmax(embeddings2[:,:4], axis=1)
+
     # Initialize NearestNeighbors instance
-    nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
+    nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:,4:])
 
     # Find the indices and distances of the closest points in embeddings2 for each point in embeddings1
-    distances, indices = nbrs.kneighbors(embeddings1)
+    distances, indices = nbrs.kneighbors(embeddings1[:,4:])
     duplicates = np.zeros(len(embeddings1))
     for i,index in enumerate(indices):
         if duplicates[index] >= max_non_unique_correspondences:
             distances[i]= np.inf
         duplicates[index] += 1
+    same_class = (classification_1==(classification_2[indices].squeeze()))
+    distances[~same_class] = np.inf
+
     smallest_distances_indices = np.argsort(distances.flatten())[:num_neighbors]
     emb1_indices = smallest_distances_indices.squeeze()
     emb2_indices = indices[smallest_distances_indices].squeeze()
@@ -560,7 +534,7 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
 
     src_centered = data1 #- src_mean
     dst_centered = data2 #- dst_mean
-
+    best_iter = 0
     for iteration in range(max_iterations):
         # Randomly sample 3 corresponding points
         indices = np.random.choice(N, size=4, replace=False)
@@ -578,6 +552,7 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
             best_inliers = inliers1
             best_rotation = rotation
             # best_translation = translation
+            best_iter = iteration
     if best_inliers == None:
         return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold + 0.1, min_inliers=min_inliers)
     transformed_1 = np.matmul(src_centered, best_rotation)
@@ -585,7 +560,7 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
     # plot_point_clouds(transformed_1,dst_centered, "fixed vs target" )
     # print(len(best_inliers))
     # print(f'threshold is: {threshold}')
-    return best_rotation, best_inliers
+    return best_rotation, best_inliers, best_iter
 
 
 def estimate_rigid_transform(src_points, dst_points):
@@ -652,6 +627,22 @@ def plotWorst(worst_losses, model_name=""):
         save_point_clouds(transformed_points1, noisy_pointcloud_2 - center2, title="", filename=model_name+f"_{loss:.3f}_fixed.html")
 
 
+def plot_and_save_with_stats(numbers, name):
+    # Calculate mean and median
+    mean_value = np.mean(numbers)
+    median_value = np.median(numbers)
+
+    # Create the plot
+    plt.figure()
+    plt.plot(numbers)
+    plt.grid(True)
+    plt.title(f'Mean: {mean_value:.2f}, Median: {median_value:.2f}')
+    plt.xlabel('Index')
+    plt.ylabel('Value')
+
+    # Save the plot
+    plt.savefig(f'{name}_plot.png')
+    plt.show()
 def plot_losses(losses, inliers, filename="loss_plot.png"):
     """
     Plots the given list of losses and corresponding number of inliers,
@@ -682,23 +673,29 @@ def plot_losses(losses, inliers, filename="loss_plot.png"):
 
 
 if __name__ == '__main__':
+    # for i in range(5,6):
+    # checkData()
     for i in range(1,2):
         args_shape = configArgsPCT()
         args_shape.batch_size = 1024
-        args_shape.use_mlp = 1
-        args_shape.num_mlp_layers = 3
+        args_shape.num_mlp_layers = 4
         args_shape.num_neurons_per_layer = 32
         args_shape.sampled_points = 40
         args_shape.use_second_deg = 1
         args_shape.lpe_normalize = 1
-        model_name = 'MLP3layers32Nlpe6xyz2degContrNEWstdfun2'
+        # model_name = 'MLP3layers32Nlpe6xyz2degContrNEWstdfun2'
+        # model_name = '3MLP32Nlpe6ContrNEWstdfun2Weight01LR01'#best?
+        model_name = '4MLP32Nlpe6ContrNEWstdfun2Weight02LR001'
         args_shape.exp = model_name
         args_shape.lpe_dim = 6
-        args_shape.num_mlp_layers = 3
         args_shape.contrastive = 1
         args_shape.output_dim = 12
-        worst_losses, losses, num_of_inliers  = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=i)
-        plot_losses(losses, num_of_inliers, filename=f'{i}_32_'+"contrast_lpe6")
-        plotWorst(worst_losses, model_name=f'{i}_'+"contrast_lpe6")
+        visualizeShapesWithEmbeddings(model_name=model_name, args_shape=args_shape)
+        # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig  = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=i)
+        # plot_losses(losses, num_of_inliers, filename=f'{i}_'+"contrast_lpe6")
+        # plot_and_save_with_stats(iter_2_ransac_convergence, name=f'{i}_'+"ransac_iter")
+        # plot_and_save_with_stats(shape_size_list, name=f'{i}_'+"shape_size")
+        # plot_and_save_with_stats(dist_from_orig, name=f'{i}_'+"dist_from_orig")
+        # plotWorst(worst_losses, model_name=f'{i}_'+"contrast_lpe6")
 
 
