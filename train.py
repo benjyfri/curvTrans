@@ -27,6 +27,7 @@ def test(model, dataloader, loss_function, device, args):
             label = info['class'].to(device).long()
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
             loss = loss_function(output, label)
+            output = output[:,:4]
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
             total_loss += loss.item()
@@ -67,6 +68,10 @@ def train_and_test(args):
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     model = shapeClassifier(args).to(device)
+    # model = shapeClassifier(args)
+    # state_dict = torch.load('base86.pt')
+    # model.load_state_dict(state_dict)
+    # model = model.to(device)
     num_params = sum(p.numel() for p in model.parameters())
     print(f'Num of parameters in NN: {num_params}')
 
