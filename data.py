@@ -18,6 +18,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.rotate_data = args.rotate_data
         self.contrastive = args.contrastive
         self.sampled_points = args.sampled_points
+        self.smoothness_loss = args.smoothness_loss
     def __len__(self):
         return self.num_point_clouds
 
@@ -42,6 +43,20 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             noise = torch.normal(0, self.std_dev, size=point_cloud1.shape, dtype=torch.float32)
             point_cloud1 = point_cloud1 + noise
             point_cloud1 = point_cloud1 - point_cloud1[0,:]
+        if self.smoothness_loss != 0:
+            min_value, min_index = torch.min(torch.norm(point_cloud1, dim=1)[1:], dim=0)
+            closest_point = point_cloud[1 + min_index,:].clone()
+            positive_smooth_pcl = point_cloud.clone()
+            positive_smooth_pcl[1 + min_index , :] =  positive_smooth_pcl[0 , :]
+            positive_smooth_pcl[0 , :] = closest_point
+            positive_smooth_pcl = positive_smooth_pcl - closest_point
+            positive_smooth_pcl = random_rotation(positive_smooth_pcl)
+            if self.std_dev != 0:
+                noise = torch.normal(0, self.std_dev, size=positive_smooth_pcl.shape, dtype=torch.float32)
+                positive_smooth_pcl = positive_smooth_pcl + noise
+                positive_smooth_pcl = positive_smooth_pcl - positive_smooth_pcl[0, :]
+        else:
+            positive_smooth_pcl = torch.tensor((0))
         if self.contrastive:
             a = info['a'] + np.random.normal(0, 2)
             b = info['b'] + np.random.normal(0, 2)
@@ -65,7 +80,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         else:
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
-        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
+        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_pcl":positive_smooth_pcl, "info": info}
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
