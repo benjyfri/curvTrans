@@ -50,7 +50,7 @@ class shapeClassifier(nn.Module):
 
     def createLap(self, point_cloud, normalized):
         distances = torch.cdist(point_cloud, point_cloud)
-        weights = torch.exp(distances)
+        weights = torch.exp(-distances)
         column_sums = weights.sum(dim=1)
         diag_matrix = torch.diag_embed(column_sums)
         laplacian = diag_matrix - weights
