@@ -84,11 +84,13 @@ def train_and_test(args):
     criterion = nn.CrossEntropyLoss(reduction='mean')
     mseLoss = nn.MSELoss()
     contr_loss_weight = args.contr_loss_weight
+    smooth_loss_weight = args.smoothness_loss
     # Training loop
     for epoch in range(num_epochs):
         model.train()  # Set the model to training mode
         total_train_loss = 0.0
         total_train_contrastive_loss = 0.0
+        total_train_smoothness_loss = 0.0
         total_train_contrastive_positive_loss = 0.0
         total_train_contrastive_negative_loss = 0.0
         total_train_acc_loss = 0.0
@@ -120,7 +122,15 @@ def train_and_test(args):
                     orig_emb = output[:, 4:]
                     classification_loss = criterion(output, label)
                     contrstive_loss = torch.tensor((0))
-                new_awesome_loss = classification_loss + (contr_loss_weight * contrstive_loss)
+
+                if smooth_loss_weight != 0:
+                    positive_smooth_pcl = batch['positive_smooth_pcl'].to(device)
+                    output_smooth_pcl = model((positive_smooth_pcl.permute(0, 2, 1)).unsqueeze(2))
+                    smoothness_loss = mseLoss(output, output_smooth_pcl)
+                    total_train_smoothness_loss += smoothness_loss
+                else:
+                    smoothness_loss = torch.tensor((0))
+                new_awesome_loss = classification_loss + (contr_loss_weight * contrstive_loss) + (smooth_loss_weight * smoothness_loss)
                 optimizer.zero_grad()
                 new_awesome_loss.backward()
                 optimizer.step()
@@ -138,11 +148,13 @@ def train_and_test(args):
         classification_train_loss = (total_train_loss / count)
         classification_acc_train = (total_train_acc_loss / (count))
         contrastive_train_loss = (total_train_contrastive_loss / (count))
+        smoothness_train_loss = (total_train_smoothness_loss / (count))
         contrastive_positive_train_loss = (total_train_contrastive_positive_loss / (count))
         contrastive_negative_train_loss = (total_train_contrastive_negative_loss / (count))
         print(f'contrastive_loss: {contrastive_train_loss}')
         print(f'contrastive_positive_MSEloss: {contrastive_positive_train_loss}')
         print(f'contrastive_negative_MSEloss: {contrastive_negative_train_loss}')
+        print(f'smoothness_train__MSEloss: {smoothness_train_loss}')
 
         test_loss, acc_test, label_accuracies = test(model, test_dataloader, criterion, device, args)
         scheduler.step()
@@ -157,6 +169,8 @@ def train_and_test(args):
                 wandb.log({"epoch": epoch, "label_"+str(key) : label_accuracies[key]})
             if args.contrastive:
                 wandb.log({"epoch": epoch, "contrastive_loss":contrastive_train_loss})
+            if args.smoothness_loss:
+                wandb.log({"epoch": epoch, "smoothness_loss":smoothness_train_loss})
     return model
 
 def configArgsPCT():
@@ -179,6 +193,8 @@ def configArgsPCT():
                         help='amount of noise to add to data')
     parser.add_argument('--contr_loss_weight', type=float, default=1.0, metavar='N',
                         help='weight of contrastive loss')
+    parser.add_argument('--smoothness_loss', type=float, default=0.0, metavar='N',
+                        help='weight of smoothness contrastive loss')
     parser.add_argument('--lpe_dim', type=int, default=3, metavar='N',
                         help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--use_xyz', type=int, default=1, metavar='N',
