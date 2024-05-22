@@ -215,6 +215,8 @@ def configArgsPCT():
                         help='Lower lr *0.1 every amount of jumps')
     parser.add_argument('--sampled_points', type=int, default=40, metavar='N',
                         help='How many points where sampled around centroid')
+    parser.add_argument('--smooth_num_of_neighbors', type=int, default=1, metavar='N',
+                        help='How many neighbors should we choose from for smoothing')
     args = parser.parse_args()
     return args
 def testPretrainedModel(args, model=None):

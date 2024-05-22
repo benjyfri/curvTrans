@@ -19,6 +19,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.contrastive = args.contrastive
         self.sampled_points = args.sampled_points
         self.smoothness_loss = args.smoothness_loss
+        self.smooth_num_of_neighbors = args.smooth_num_of_neighbors
     def __len__(self):
         return self.num_point_clouds
 
@@ -45,16 +46,20 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud1 = point_cloud1 - point_cloud1[0,:]
         if self.smoothness_loss != 0:
             min_value, min_index = torch.min(torch.norm(point_cloud1, dim=1)[1:], dim=0)
-            closest_point = point_cloud[1 + min_index,:].clone()
+
+            _, indices =torch.sort(torch.norm(point_cloud1, dim=1)[1:], dim=0)
+            random_neighbor = random.randrange(self.smooth_num_of_neighbors)
+            chosen_neighbor_index = indices[random_neighbor]
+            closest_point = point_cloud[1 + chosen_neighbor_index,:].clone()
             positive_smooth_pcl = point_cloud.clone()
             positive_smooth_pcl[1 + min_index , :] =  positive_smooth_pcl[0 , :]
             positive_smooth_pcl[0 , :] = closest_point
             positive_smooth_pcl = positive_smooth_pcl - closest_point
-            positive_smooth_pcl = random_rotation(positive_smooth_pcl)
-            if self.std_dev != 0:
-                noise = torch.normal(0, self.std_dev, size=positive_smooth_pcl.shape, dtype=torch.float32)
-                positive_smooth_pcl = positive_smooth_pcl + noise
-                positive_smooth_pcl = positive_smooth_pcl - positive_smooth_pcl[0, :]
+            # positive_smooth_pcl = random_rotation(positive_smooth_pcl)
+            # if self.std_dev != 0:
+            #     noise = torch.normal(0, self.std_dev, size=positive_smooth_pcl.shape, dtype=torch.float32)
+            #     positive_smooth_pcl = positive_smooth_pcl + noise
+            #     positive_smooth_pcl = positive_smooth_pcl - positive_smooth_pcl[0, :]
         else:
             positive_smooth_pcl = torch.tensor((0))
         if self.contrastive:
