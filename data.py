@@ -45,23 +45,34 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud1 = point_cloud1 + noise
             point_cloud1 = point_cloud1 - point_cloud1[0,:]
         if self.smoothness_loss != 0:
-            min_value, min_index = torch.min(torch.norm(point_cloud1, dim=1)[1:], dim=0)
+            _, indices = torch.sort(torch.norm(point_cloud, dim=1)[1:], dim=0)
+            positive_random_neighbor = random.randrange(self.smooth_num_of_neighbors)
+            positive_chosen_neighbor_index = indices[positive_random_neighbor]
+            positive_point = point_cloud[1 + positive_chosen_neighbor_index,:].clone()
+            positive_smooth_point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
+                                                       count=self.sampled_points, center_point=positive_point.numpy())
+            positive_smooth_point_cloud = torch.tensor(positive_smooth_point_cloud, dtype=torch.float32)
+            positive_smooth_point_cloud = random_rotation(positive_smooth_point_cloud)
 
-            _, indices =torch.sort(torch.norm(point_cloud1, dim=1)[1:], dim=0)
-            random_neighbor = random.randrange(self.smooth_num_of_neighbors)
-            chosen_neighbor_index = indices[random_neighbor]
-            closest_point = point_cloud[1 + chosen_neighbor_index,:].clone()
-            positive_smooth_pcl = point_cloud.clone()
-            positive_smooth_pcl[1 + min_index , :] =  positive_smooth_pcl[0 , :]
-            positive_smooth_pcl[0 , :] = closest_point
-            positive_smooth_pcl = positive_smooth_pcl - closest_point
-            # positive_smooth_pcl = random_rotation(positive_smooth_pcl)
-            # if self.std_dev != 0:
-            #     noise = torch.normal(0, self.std_dev, size=positive_smooth_pcl.shape, dtype=torch.float32)
-            #     positive_smooth_pcl = positive_smooth_pcl + noise
-            #     positive_smooth_pcl = positive_smooth_pcl - positive_smooth_pcl[0, :]
+            negative_random_neighbor = random.randrange((self.sampled_points - self.smooth_num_of_neighbors), self.sampled_points)
+            negative_chosen_neighbor_index = indices[negative_random_neighbor]
+            negative_point = point_cloud[1 + negative_chosen_neighbor_index,:].clone()
+            negative_smooth_point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
+                                                count=self.sampled_points, center_point=negative_point.numpy())
+            negative_smooth_point_cloud = torch.tensor(negative_smooth_point_cloud, dtype=torch.float32)
+            negative_smooth_point_cloud = random_rotation(negative_smooth_point_cloud)
+
+            if self.std_dev != 0:
+                positive_smooth_noise = torch.normal(0, self.std_dev, size=positive_smooth_point_cloud.shape, dtype=torch.float32)
+                positive_smooth_point_cloud = positive_smooth_point_cloud + positive_smooth_noise
+                positive_smooth_point_cloud = positive_smooth_point_cloud - positive_smooth_point_cloud[0, :]
+                negative_smooth_noise = torch.normal(0, self.std_dev, size=negative_smooth_point_cloud.shape, dtype=torch.float32)
+                negative_smooth_point_cloud = negative_smooth_point_cloud + negative_smooth_noise
+                negative_smooth_point_cloud = negative_smooth_point_cloud - negative_smooth_point_cloud[0, :]
+
         else:
-            positive_smooth_pcl = torch.tensor((0))
+            positive_smooth_point_cloud = torch.tensor((0))
+            negative_smooth_point_cloud = torch.tensor((0))
         if self.contrastive:
             a = info['a'] + np.random.normal(0, 2)
             b = info['b'] + np.random.normal(0, 2)
@@ -85,7 +96,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         else:
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
-        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_pcl":positive_smooth_pcl, "info": info}
+
+        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_point_cloud":positive_smooth_point_cloud, "negative_smooth_point_cloud":negative_smooth_point_cloud, "info": info}
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
@@ -298,13 +310,13 @@ def plot_point_clouds(point_cloud1, point_cloud2, title):
 
     fig.show()
 
-def samplePoints(a, b, c, d, e, count):
+def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0])):
     def surface_function(x, y):
         return a * x**2 + b * y**2 + c * x * y + d * x + e * y
 
     # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-1, 1, count)
-    y_samples = np.random.uniform(-1, 1, count)
+    x_samples = np.random.uniform(-1, 1, count) + center_point[0]
+    y_samples = np.random.uniform(-1, 1, count) + center_point[1]
 
     # Evaluate the surface function at the random points
     z_samples = surface_function(x_samples, y_samples)
@@ -313,10 +325,10 @@ def samplePoints(a, b, c, d, e, count):
     sampled_points = np.column_stack((x_samples, y_samples, z_samples))
 
     # Concatenate the centroid [0, 0, 0] to the beginning of the array
-    centroid = np.array([[0, 0, 0]])
+    centroid = np.expand_dims(center_point, axis=0)
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
 
-    return sampled_points_with_centroid
+    return sampled_points_with_centroid - centroid
 
 def plotFunc(a, b, c, d, e,sampled_points):
     # Create a grid of points for the surface

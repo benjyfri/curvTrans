@@ -124,13 +124,15 @@ def train_and_test(args):
                     contrstive_loss = torch.tensor((0))
 
                 if smooth_loss_weight != 0:
-                    positive_smooth_pcl = batch['positive_smooth_pcl'].to(device)
-                    output_smooth_pcl = model((positive_smooth_pcl.permute(0, 2, 1)).unsqueeze(2))
-                    smoothness_loss = mseLoss(output, output_smooth_pcl)
-                    total_train_smoothness_loss += smoothness_loss
+                    positive_smooth_point_cloud = batch['positive_smooth_point_cloud'].to(device)
+                    negative_smooth_point_cloud = batch['negative_smooth_point_cloud'].to(device)
+                    positive_output_smooth_pcl = model((positive_smooth_point_cloud.permute(0, 2, 1)).unsqueeze(2))
+                    negative_output_smooth_pcl = model((negative_smooth_point_cloud.permute(0, 2, 1)).unsqueeze(2))
+                    smoothness_contrastive_loss = tripletMarginLoss(orig_emb, positive_output_smooth_pcl[:,4:], negative_output_smooth_pcl[:,4:])
+                    total_train_smoothness_loss += smoothness_contrastive_loss
                 else:
-                    smoothness_loss = torch.tensor((0))
-                new_awesome_loss = classification_loss + (contr_loss_weight * contrstive_loss) + (smooth_loss_weight * smoothness_loss)
+                    smoothness_contrastive_loss = torch.tensor((0))
+                new_awesome_loss = classification_loss + (contr_loss_weight * contrstive_loss) + (smooth_loss_weight * smoothness_contrastive_loss)
                 optimizer.zero_grad()
                 new_awesome_loss.backward()
                 optimizer.step()
