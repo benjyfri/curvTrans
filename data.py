@@ -16,7 +16,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.indices = list(range(self.num_point_clouds))
         self.std_dev = args.std_dev
         self.rotate_data = args.rotate_data
-        self.contrastive = args.contrastive
+        self.contr_loss_weight = args.contr_loss_weight
         self.sampled_points = args.sampled_points
         self.smoothness_loss = args.smoothness_loss
         self.smooth_num_of_neighbors = args.smooth_num_of_neighbors
@@ -73,7 +73,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         else:
             positive_smooth_point_cloud = torch.tensor((0))
             negative_smooth_point_cloud = torch.tensor((0))
-        if self.contrastive:
+        if self.contr_loss_weight  != 0:
             a = info['a'] + np.random.normal(0, 2)
             b = info['b'] + np.random.normal(0, 2)
             c = info['c'] + np.random.normal(0, 2)
