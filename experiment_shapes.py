@@ -2,25 +2,18 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
 import torch
-import torch.nn as nn
-from models import MLP, TransformerNetwork, TransformerNetworkPCT, shapeClassifier
+from models import shapeClassifier
 from data import BasicPointCloudDataset
 from scipy.spatial.transform import Rotation
 import glob
 import h5py
-from torch.utils.data import Dataset
 import os
-import urllib.request
-import zipfile
-import shutil
-import faiss
 import plotly.graph_objects as go
 from train import configArgsPCT
 from sklearn.neighbors import NearestNeighbors
-from scipy.linalg import eigh
-from scipy.linalg import eig
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import cdist
+import open3d as o3d
 def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, rotation=None, title=""):
   """
   Plot four point clouds in an interactive 3D plot with Plotly.
@@ -189,6 +182,31 @@ def plot_point_clouds(point_cloud1, point_cloud2, title=""):
     )
     fig.show()
 
+
+def farthest_point_sampling(point_cloud, k):
+    N, _ = point_cloud.shape
+
+    # Array to hold indices of sampled points
+    sampled_indices = np.zeros(k, dtype=int)
+
+    # Initialize distances to a large value
+    distances = np.full(N, np.inf)
+
+    # Randomly select the first point
+    current_index = np.random.randint(N)
+    sampled_indices[0] = current_index
+
+    for i in range(1, k):
+        # Update distances to the farthest point selected so far
+        current_point = point_cloud[current_index]
+        new_distances = np.linalg.norm(point_cloud - current_point, axis=1)
+        distances = np.minimum(distances, new_distances)
+
+        # Select the point that has the maximum distance to the sampled points
+        current_index = np.argmax(distances)
+        sampled_indices[i] = current_index
+
+    return sampled_indices
 def get_k_nearest_neighbors(point_cloud, k):
     """
     Returns the k nearest neighbors for each point in the point cloud.
@@ -214,41 +232,37 @@ def get_k_nearest_neighbors(point_cloud, k):
         neighbors_non_centered[0, :, i, :] = (point_cloud[indices[i, 1:]]).T
 
     return neighbors_centered, neighbors_non_centered
-def find_max_distance_for_specific_coordinate(specific_coordinates):
+def find_mean_diameter_for_specific_coordinate(specific_coordinates):
     pairwise_distances = torch.cdist(specific_coordinates.unsqueeze(2), specific_coordinates.unsqueeze(2))
     largest_dist = pairwise_distances.view(specific_coordinates.shape[0], -1).max(dim=1).values
-    max_distance = torch.max(largest_dist)
-    # mean_distance = torch.mean(largest_dist)
-    # return mean_distance
-    return max_distance
-
+    mean_distance = torch.mean(largest_dist)
+    return mean_distance
 
 def checkOnShapes(model_name=None, input_data=None, args_shape=None, scaling_factor=None):
     model = shapeClassifier(args_shape)
     model.load_state_dict(torch.load(f'{model_name}.pt'))
     model.eval()
     neighbors_centered, neighbors_non_centered = get_k_nearest_neighbors(input_data, 41)
-    neighbors_centered_demo, _ = get_k_nearest_neighbors(input_data, 21)
-    # diameters = []
-    # for i in range(neighbors_centered_demo.shape[2]):
-    #     point_cloud = (neighbors_centered_demo[0,:,i,:])
-    #     distances = cdist(point_cloud.T,point_cloud.T)
-    #     # Exclude the diagonal (distances between the same point)
-    #     distances = distances[distances != 0]
-    #     diameter = distances.max()
-    #     diameters.append(diameter)
-    # diameter_20_nn = np.mean(diameters)
     src_knn_pcl = torch.tensor(neighbors_centered)
-    x_scale_src = find_max_distance_for_specific_coordinate(src_knn_pcl[0,0,:,:])
-    y_scale_src = find_max_distance_for_specific_coordinate(src_knn_pcl[0,1,:,:])
-    z_scale_src = find_max_distance_for_specific_coordinate(src_knn_pcl[0,2,:,:])
+    x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
+    y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
+    z_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,2,:,:])
     scale = torch.mean(torch.stack((x_scale_src, y_scale_src, z_scale_src), dim=0))
     #scale KNN point clouds to be of size 1
     src_knn_pcl = src_knn_pcl / scale
-    #use 46 as it is around the size of the synthetic point clouds
+    #use 23 as it is around the size of the synthetic point clouds
     src_knn_pcl = scaling_factor * src_knn_pcl
     output = model(src_knn_pcl.permute(2,1,0,3))
-    return output
+    surface_labels = []
+    list_of_points = farthest_point_sampling(input_data,20)
+    list_of_points = range(src_knn_pcl.shape[2])
+    for i in list_of_points:
+        point_cloud_np = src_knn_pcl[0, :, i, :].numpy()
+        point_cloud_np = (point_cloud_np.T)+ input_data[i,:]
+        fixed = fix_orientation(point_cloud_np)
+        label = fit_surface_quadratic_constrained(fixed)
+        surface_labels.append(label)
+    return surface_labels, output
 def load_data(partition='test', divide_data=1):
     BASE_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes'
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
@@ -314,19 +328,16 @@ def checkData():
     print(f'MAX MAX: {np.max(max_list_z)}')
 def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_factor=None):
     pcls, label = load_data()
-    # for k in range(179,180): #human
-    # for k in range(176,177): #hat
-    # for k in range(174,175): #toilet
-    # for k in range(162,163): #vase
-    names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
-    shapes = [162, 174, 176, 179]
-    shapes = [174, 179]
+    shapes = [86, 174, 179]
+    shapes = [86]
     for k in shapes:
         pointcloud = pcls[k][:]
-        noisy_pointcloud = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
+        bin_file = "000098.bin"
+        pointcloud = read_bin_file(bin_file)
+        noisy_pointcloud = pointcloud #+ np.random.normal(0, 0.01, pointcloud.shape)
         pointcloud = noisy_pointcloud.astype(np.float32)
-        colors = checkOnShapes(model_name=model_name,
-                                    input_data=pointcloud, args_shape=args_shape, scaling_factor=scaling_factor)
+        surface_labels , colors = checkOnShapes(model_name=model_name,
+                                    input_data=pointcloud, args_shape=args_shape, scaling_factor=1)
         colors = colors.detach().cpu().numpy()
         colors = colors[:,:4]
 
@@ -339,7 +350,7 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_fact
                     colors[:, 2].max() - colors[:, 2].min())) * 255
         colors_normalized[:, 3] = ((colors[:, 3] - colors[:, 3].min()) / (
                     colors[:, 3].max() - colors[:, 3].min())) * 255
-
+        colors_normalized = np.clip(colors_normalized, 0, 255).astype(np.uint8)
         layout = go.Layout(
             title=f"Point Cloud with Embedding-based Colors {k}",
             scene=dict(
@@ -395,6 +406,32 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_fact
         fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
         fig_max_embedding.show()
 
+        # Plot the maximum value embedding with specified colors
+        max_embedding_index = surface_labels
+        max_embedding_colors = np.array(['red', 'blue', 'green', 'pink'])[max_embedding_index]
+
+        data_max_embedding = []
+        colors_shape = ['red', 'blue', 'green', 'pink']
+        names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
+        for color, name in zip(colors_shape, names):
+            indices = np.where(max_embedding_colors == color)[0]
+            data_max_embedding.append(
+                go.Scatter3d(
+                    x=pointcloud[indices, 0],
+                    y=pointcloud[indices, 1],
+                    z=pointcloud[indices, 2],
+                    mode='markers',
+                    marker=dict(
+                        size=2,
+                        opacity=0.8,
+                        color=color
+                    ),
+                    name=f'Max Value Embedding - {name}'
+                )
+            )
+        fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
+        fig_max_embedding.show()
+
 
 def find_max_difference_indices(array, k=200):
     # Find the maximum values along axis 1
@@ -406,6 +443,9 @@ def find_max_difference_indices(array, k=200):
     good_class_indices = np.argpartition(diff_from_max, -k)[-k:]
     if len(good_class_indices) != k:
         raise Exception(f'Wrong size! k = {k}, actual size = {len(good_class_indices)}')
+    # sorted_indices = np.argsort(max_values)
+    # k_largest_indices = sorted_indices[-k:]
+    # good_class_indices = k_largest_indices
     return max_values, max_indices, diff_from_max, good_class_indices
 
 def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondences=3, num_worst_losses = 3, scaling_factor=None):
@@ -421,7 +461,8 @@ def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondence
     shortest_dist_list = []
     avg_dist_list = []
     dist_from_orig = []
-    shapes = [162, 174, 176, 179]
+    # shapes = [86, 162, 174, 176, 179]
+    shapes = np.arange(1000)
     for k in shapes:
         if k%10 ==0:
             print(f'------------{k}------------')
@@ -445,11 +486,14 @@ def findRotTrans(model_name=None, args_shape=None, max_non_unique_correspondence
         if np.isnan(np.sum(emb_1)) or np.isnan(np.sum(emb_2)):
             print(f'oish')
             continue
+        #
+        # max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(emb_1[:,:4],
+        #                                                                                                  k=200)
+        # max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(emb_2[:,:4],
+        #                                                                                                  k=200)
 
-        max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(emb_1[:,:4],
-                                                                                                         k=200)
-        max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(emb_2[:,:4],
-                                                                                                         k=200)
+        good_class_indices_1 = farthest_point_sampling(emb_1[:,:4],k=200)
+        good_class_indices_2 = farthest_point_sampling(emb_2[:,:4],k=200)
 
         best_point_desc_pcl1 = emb_1[good_class_indices_1, :]
         best_point_desc_pcl2 = emb_2[good_class_indices_2, :]
@@ -507,12 +551,14 @@ def find_closest_points(embeddings1, embeddings2, num_neighbors=40, max_non_uniq
     classification_2 = np.argmax(embeddings2[:,:4], axis=1)
 
     # Initialize NearestNeighbors instance
-    nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:,4:])
     # nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:,4:])
+    # nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
+    nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:,:4])
 
     # Find the indices and distances of the closest points in embeddings2 for each point in embeddings1
-    distances, indices = nbrs.kneighbors(embeddings1[:,4:])
     # distances, indices = nbrs.kneighbors(embeddings1[:,4:])
+    # distances, indices = nbrs.kneighbors(embeddings1)
+    distances, indices = nbrs.kneighbors(embeddings1[:,:4])
     duplicates = np.zeros(len(embeddings1))
     for i,index in enumerate(indices):
         if duplicates[index] >= max_non_unique_correspondences:
@@ -633,6 +679,7 @@ def find_inliers(data1, data2, rotation, threshold):
 
     return inliers1, inliers2
 def plotWorst(worst_losses, model_name=""):
+    count = 0
     for (loss,worst_loss_variables) in worst_losses:
         noisy_pointcloud_1 = worst_loss_variables['noisy_pointcloud_1']
         noisy_pointcloud_2 = worst_loss_variables['noisy_pointcloud_2']
@@ -640,16 +687,14 @@ def plotWorst(worst_losses, model_name=""):
         chosen_points_2 = worst_loss_variables['chosen_points_2']
         rotation_matrix = worst_loss_variables['rotation_matrix']
         best_rotation = worst_loss_variables['best_rotation']
-
-        # plot_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2)
-        save_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, title="", filename=model_name+f"_{loss:.3f}_orig.html")
-        # plot_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2)
-        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=model_name+f"_{loss:.3f}_correspondence.html", rotation=rotation_matrix)
+        save_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, title="", filename=model_name+f"_{loss:.3f}_orig_{count}_loss.html")
+        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=model_name+f"_{loss:.3f}_correspondence_{count}_loss.html", rotation=rotation_matrix)
 
         center = np.mean(noisy_pointcloud_1, axis=0)
         center2 = np.mean(noisy_pointcloud_2, axis=0)
         transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
-        save_point_clouds(transformed_points1, noisy_pointcloud_2 - center2, title="", filename=model_name+f"_{loss:.3f}_fixed.html")
+        save_point_clouds(transformed_points1, noisy_pointcloud_2 - center2, title="", filename=model_name+f"_{loss:.3f}_{count}_loss.html")
+        count = count + 1
 
 
 def plot_and_save_with_stats(numbers, name):
@@ -732,19 +777,12 @@ def plot_distances(Max_dist, min_dist, avg_dist_list, dist_from_orig, filename="
 
 def test_coress_dis(model_name=None, args_shape=None, max_non_unique_correspondences=3, num_worst_losses = 3, scaling_factor=None):
     pcls, label = load_data()
-    names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
-    shapes = np.arange(pcls.shape[0])
-    shapes = np.arange(1000) # or any other range or selection of indices
-    worst_losses = [(0, None)] * num_worst_losses  # Initialize with (loss, variables)
-    losses = []
-    iter_2_ransac_convergence = []
-    num_of_inliers = []
     shape_size_list = []
     shortest_dist_list = []
     avg_dist_list = []
     dist_from_orig = []
-    diameter_20_nn_list = []
-    shapes = [162, 174, 176, 179]
+    # diameter_20_nn_list = []
+    shapes = [86, 162, 174, 176, 179]
     # shapes = np.arange(100)
     for k in shapes:
         if k%10 ==0:
@@ -757,11 +795,11 @@ def test_coress_dis(model_name=None, args_shape=None, max_non_unique_corresponde
         noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
         noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
-        emb_1,diameter_20_nn = checkOnShapes(model_name=model_name,
-                                    input_data=noisy_pointcloud_1, args_shape=args_shape, scaling_factor=23)
-        emb_2, _ = checkOnShapes(model_name=model_name,
-                                    input_data=noisy_pointcloud_2,args_shape=args_shape, scaling_factor=23)
-        diameter_20_nn_list.append(diameter_20_nn)
+        emb_1 = checkOnShapes(model_name=model_name,
+                                    input_data=noisy_pointcloud_1, args_shape=args_shape, scaling_factor=10)
+        emb_2 = checkOnShapes(model_name=model_name,
+                                    input_data=noisy_pointcloud_2,args_shape=args_shape, scaling_factor=10)
+        # diameter_20_nn_list.append(diameter_20_nn)
         emb_1 = emb_1.detach().cpu().numpy()
         emb_2 = emb_2.detach().cpu().numpy()
 
@@ -770,16 +808,19 @@ def test_coress_dis(model_name=None, args_shape=None, max_non_unique_corresponde
             print(f'oish')
             continue
 
-        max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(emb_1[:,:4],
-                                                                                                         k=200)
-        max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(emb_2[:,:4],
-                                                                                                         k=200)
+        # max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(emb_1[:,:4],
+        #                                                                                                  k=200)
+        # max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(emb_2[:,:4],
+        #                                                                                                  k=200)
+
+        good_class_indices_1 = farthest_point_sampling(emb_1[:, :4], k=200)
+        good_class_indices_2 = farthest_point_sampling(emb_2[:, :4], k=200)
 
         best_point_desc_pcl1 = emb_1[good_class_indices_1, :]
         best_point_desc_pcl2 = emb_2[good_class_indices_2, :]
 
         source_indices, target_indices = find_closest_points(best_point_desc_pcl1, best_point_desc_pcl2,
-                                                             num_neighbors=40, max_non_unique_correspondences=max_non_unique_correspondences)
+                                                             num_neighbors=40, max_non_unique_correspondences=1)
 
 
         chosen_indices_pcl1 = good_class_indices_1[source_indices]
@@ -798,7 +839,7 @@ def test_coress_dis(model_name=None, args_shape=None, max_non_unique_corresponde
         sorted_values = np.sort(flat_array)
         best_30 = sorted_values[:(len(correspondences_dist)//10) *3]
         best_30 = np.append(best_30, shape_size)
-        best_30 = np.append(best_30, diameter_20_nn)
+        # best_30 = np.append(best_30, diameter_20_nn)
         # Step 5: Create a bar chart
         plt.figure(figsize=(10, 6))
         plt.bar(range(len(best_30)), best_30)
@@ -815,7 +856,7 @@ def test_coress_dis(model_name=None, args_shape=None, max_non_unique_corresponde
         centered_points_1 = noisy_pointcloud_1[good_class_indices_1[source_indices], :] - np.mean(noisy_pointcloud_1)
         centered_points_2 = noisy_pointcloud_2[good_class_indices_2[target_indices], :] - np.mean(noisy_pointcloud_2)
         best_rotation, inliers, best_iter = ransac(centered_points_1, centered_points_2, max_iterations=1000,
-                                                   threshold=0.005,
+                                                   threshold=0.05,
                                                    min_inliers=5)
         center = np.mean(noisy_pointcloud_1, axis=0)
         center2 = np.mean(noisy_pointcloud_2, axis=0)
@@ -826,48 +867,72 @@ def test_coress_dis(model_name=None, args_shape=None, max_non_unique_corresponde
 
     return 1, 1, 1, 1, shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list
 
-def view_stabiity(model_name=None, args_shape=None):
+def view_stabiity(model_name=None, args_shape=None, scaling_factor=None):
     pcls, label = load_data()
-    # shapes = [162, 174, 176, 179]
-    shapes = np.arange(10)
-    shapes = shapes+80
-    shapes = [82, 83, 86]
+    shapes = [82, 83, 86, 174]
     for k in shapes:
         pointcloud = pcls[k][:]
         rotated_pcl, rotation_matrix = random_rotation_translation(pointcloud)
 
         noisy_pointcloud_1 = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
         noisy_pointcloud_1 = noisy_pointcloud_1.astype(np.float32)
+        noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
+        noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
         emb_1 = checkOnShapes(model_name=model_name,
-                                    input_data=noisy_pointcloud_1, args_shape=args_shape, scaling_factor=46)
-
+                              input_data=noisy_pointcloud_1, args_shape=args_shape, scaling_factor=scaling_factor)
+        emb_2 = checkOnShapes(model_name=model_name,
+                              input_data=noisy_pointcloud_2, args_shape=args_shape, scaling_factor=scaling_factor)
         emb_1 = emb_1.detach().cpu().numpy()
-
-
+        emb_2 = emb_2.detach().cpu().numpy()
+        # embeddings_1 = []
+        # embeddings_2 = []
+        # for i in range(2,5):
+        #     scaling_factor = i * 10
+        #
+        #     emb_1 = checkOnShapes(model_name=model_name,
+        #                                 input_data=noisy_pointcloud_1, args_shape=args_shape, scaling_factor=scaling_factor)
+        #
+        #     emb_2 = checkOnShapes(model_name=model_name,
+        #                                 input_data=noisy_pointcloud_2, args_shape=args_shape, scaling_factor=scaling_factor)
+        #
+        #     emb_1 = emb_1.detach().cpu().numpy()
+        #     emb_2 = emb_2.detach().cpu().numpy()
+        #     embeddings_1.append(emb_1[:,4:])
+        #     embeddings_2.append(emb_2[:,4:])
+        # emb_1 = np.hstack((embeddings_1))
+        # emb_2 = np.hstack((embeddings_2))
         if np.isnan(np.sum(emb_1)):
             print(f'oish')
             continue
         # plot_point_cloud_with_colors_by_dist(noisy_pointcloud_1, emb_1)
-        plot_point_cloud_with_colors_by_dist(noisy_pointcloud_1, emb_1[:,:4])
+        # plot_point_cloud_with_colors_by_dist(noisy_pointcloud_1, emb_1[:,:4])
         # plot_point_cloud_with_colors_by_dist(noisy_pointcloud_1, emb_1[:,4:])
 
+        # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2)
+        plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1[:,:4], emb_2[:,:4])
+        # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1[:,4:], emb_2[:,4:])
 
 def plot_point_cloud_with_colors_by_dist(point_cloud, embedding):
     # Generate random index to choose a point
     random_index = np.random.randint(len(point_cloud))
+    random_index = 10
     random_point = point_cloud[random_index]
     random_embedding = embedding[random_index]
 
     # Calculate distances from the random embedding to all other embeddings
     distances = np.linalg.norm(embedding - random_embedding, axis=1)
 
+    # Find indices of the 10 closest points
+    closest_indices = np.argsort(distances)[:10]
+
     # Define color scale based on distances
     max_distance = distances.max()
     min_distance = distances.min()
     colors = [(d - min_distance) / (max_distance - min_distance) for d in distances]
-    colors = 1/ np.array(colors)
+    colors = 1 / np.array(colors)
     colors = np.log(colors)
+
     # Plot point cloud with colors based on distances
     fig = go.Figure(data=[go.Scatter3d(
         x=point_cloud[:, 0],
@@ -883,6 +948,20 @@ def plot_point_cloud_with_colors_by_dist(point_cloud, embedding):
         )
     )])
 
+    # Add the 10 closest points as a separate trace for better visibility
+    closest_points = point_cloud[closest_indices]
+    fig.add_trace(go.Scatter3d(
+        x=closest_points[:, 0],
+        y=closest_points[:, 1],
+        z=closest_points[:, 2],
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='green',  # 10 closest points are red
+            opacity=1
+        )
+    ))
+
     # Add the randomly chosen point as a separate trace for better visibility
     fig.add_trace(go.Scatter3d(
         x=[random_point[0]],
@@ -895,18 +974,264 @@ def plot_point_cloud_with_colors_by_dist(point_cloud, embedding):
             opacity=1
         )
     ))
-
-    # Set layout and show plot
-    # fig.update_layout(scene=dict(aspectmode='cube'))
     fig.show()
 
+def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embedding1, embedding2):
+    # Generate random index to choose a point from point_cloud1
+    random_index = np.random.randint(len(point_cloud1))
+    random_index = 10
+    random_point = point_cloud2[random_index]
+    random_embedding = embedding1[random_index]
+
+    # Calculate distances from the random embedding to all embeddings in embedding2
+    distances = np.linalg.norm(embedding2 - random_embedding, axis=1)
+
+    # Find indices of the 20 closest points
+    closest_indices = np.argsort(distances)[:20]
+
+    # Define color scale based on distances
+    max_distance = distances.max()
+    min_distance = distances.min()
+    colors = [(d - min_distance) / (max_distance - min_distance) for d in distances]
+    colors = 1 / np.array(colors)
+    colors = np.log(colors)
+
+    # Plot point cloud 2 with colors based on distances
+    fig = go.Figure(data=[go.Scatter3d(
+        x=point_cloud2[:, 0],
+        y=point_cloud2[:, 1],
+        z=point_cloud2[:, 2],
+        mode='markers',
+        marker=dict(
+            size=4,
+            color=colors,
+            colorscale='plasma',
+            opacity=0.8,
+            colorbar=dict(title='Distance')
+        )
+    )])
+
+    # Add the 20 closest points as a separate trace for better visibility
+    closest_points = point_cloud2[closest_indices]
+    fig.add_trace(go.Scatter3d(
+        x=closest_points[:, 0],
+        y=closest_points[:, 1],
+        z=closest_points[:, 2],
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='green',  # 20 closest points are green
+            opacity=1
+        )
+    ))
+
+    # Add the randomly chosen point from point_cloud1 as a separate trace for better visibility
+    fig.add_trace(go.Scatter3d(
+        x=[random_point[0]],
+        y=[random_point[1]],
+        z=[random_point[2]],
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='red',  # Chosen point is red
+            opacity=1
+        )
+    ))
+
+    fig.show()
+def fit_surface_quadratic_constrained(points):
+    """
+    Fits a quadratic surface constrained to f = 0 to a centered point cloud.
+
+    Args:
+      points: numpy array of shape (N, 3) representing the point cloud.
+
+    Returns:
+      numpy array of shape (5,) representing the surface coefficients
+        [a, b, c, d, e], where:
+          z = a * x**2 + b * y**2 + c * x * y + d * x + e * y
+    """
+
+    # Center the points around the mean
+    centroid = points[0,:]
+    centered_points = points - centroid
+
+    # Design matrix without f term
+    X = np.c_[centered_points[:, 0] ** 2, centered_points[:, 1] ** 2,
+              centered_points[:, 0] * centered_points[:, 1],
+    centered_points[:, 0], centered_points[:, 1]]
+
+    # Extract z-coordinates as target vector
+    z = centered_points[:, 2]
+
+    # Solve the linear system with f coefficient constrained to 0
+    coeffs = np.linalg.lstsq(X, z, rcond=None)[0]
+
+    a, b, c, d, e = coeffs
+
+    K = (4 * (a * b) - ((c ** 2))) / ((1 + d ** 2 + e ** 2) ** 2)
+    H = (a * (1 + e ** 2) - d * e * c + b * (1 + d ** 2)) / (((d ** 2) + (e ** 2) + 1) ** 1.5)
+
+
+    gaussian = 0
+    if K > 0.05:
+        gaussian = 1
+    if K < -0.05:
+        gaussian = -1
+
+    mean = 0
+    if H > 0.05:
+        gaussian = 1
+    if H < -0.05:
+        gaussian = -1
+
+    if gaussian == 0 and mean == 0:
+        return 0
+    if gaussian == 1:
+        return 1
+    if gaussian == 0:
+        return 2
+    return 3
+def fix_orientation(point_cloud):
+    centroid = np.mean(point_cloud, axis=0)
+    point_cloud = point_cloud - centroid
+    # Calculate the covariance matrix
+    cov_matrix = np.cov(point_cloud, rowvar=False)
+
+    # Calculate eigenvalues and eigenvectors
+    eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
+
+    # Find the smallest eigenvector corresponding to the smallest eigenvalue
+    normal_at_centroid = eigenvectors[:, np.argmin(eigenvalues)]
+    normal_at_centroid /= np.linalg.norm(normal_at_centroid)
+
+    rotation_axis = np.cross(np.array([0, 0, 1]), normal_at_centroid)
+
+    # Calculate the rotation angle
+    rotation_angle = np.arccos(np.dot(np.array([0, 0, 1]), normal_at_centroid))
+    cosine_angle = np.arccos(np.dot(np.array([0, 0, 1]), normal_at_centroid))
+
+    rotation_matrix = np.array([
+        [1 + (1 - cosine_angle) * (rotation_axis[0] ** 2),
+         (1 - cosine_angle) * rotation_axis[0] * rotation_axis[1] - rotation_angle * rotation_axis[2],
+         (1 - cosine_angle) * rotation_axis[0] * rotation_axis[2] + rotation_angle * rotation_axis[1]],
+        [(1 - cosine_angle) * rotation_axis[1] * rotation_axis[0] + rotation_angle * rotation_axis[2],
+         1 + (1 - cosine_angle) * (rotation_axis[1] ** 2),
+         (1 - cosine_angle) * rotation_axis[1] * rotation_axis[2] - rotation_angle * rotation_axis[0]],
+        [(1 - cosine_angle) * rotation_axis[2] * rotation_axis[0] - rotation_angle * rotation_axis[1],
+         (1 - cosine_angle) * rotation_axis[2] * rotation_axis[1] + rotation_angle * rotation_axis[0],
+         1 + (1 - cosine_angle) * (rotation_axis[2] ** 2)]
+    ])
+
+    # Apply the rotation to the point cloud
+    rotated_point_cloud = np.dot(point_cloud, rotation_matrix)
+
+    return rotated_point_cloud + centroid
+def plot_point_clouds(point_cloud1, point_cloud2, title):
+    """
+    Plot two point clouds in an interactive 3D plot with Plotly.
+
+    Args:
+        point_cloud1 (np.ndarray): First point cloud of shape (41, 3)
+        point_cloud2 (np.ndarray): Second point cloud of shape (41, 3)
+        title (str): Title of the plot
+    """
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter3d(
+        x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
+        mode='markers', marker=dict(color='red'),opacity=0.8, name='Point Cloud 1'
+    ))
+
+    fig.add_trace(go.Scatter3d(
+        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
+        mode='markers', marker=dict(color='blue'),opacity=0.8, name='Point Cloud 2'
+    ))
+    # Add a separate trace for the point (0, 0, 0) in bright pink
+    fig.add_trace(go.Scatter3d(
+        x=[0], y=[0], z=[0],
+        mode='markers', marker=dict(color='rgb(255, 105, 180)'), name='Origin (0, 0, 0)'
+    ))
+
+    fig.update_layout(
+        title=title,  # Set the title
+        title_y=0.9,  # Adjust the y position of the title
+        scene=dict(
+            xaxis=dict(title='X', range=[min(point_cloud1[:,0].min(), point_cloud2[:,0].min()),
+                                         max(point_cloud1[:,0].max(), point_cloud2[:,0].max())]),
+            yaxis=dict(title='Y', range=[min(point_cloud1[:,1].min(), point_cloud2[:,1].min()),
+                                         max(point_cloud1[:,1].max(), point_cloud2[:,1].max())]),
+            zaxis=dict(title='Z', range=[min(point_cloud1[:,2].min(), point_cloud2[:,2].min()),
+                                         max(point_cloud1[:,2].max(), point_cloud2[:,2].max())])
+        ),
+        margin=dict(r=20, l=10, b=10, t=10)
+    )
+
+    fig.show()
+def random_rotation(point_cloud):
+    """
+    Applies a random rotation to a 3D point cloud.
+
+    Args:
+        point_cloud: A NumPy array of shape (N, 3) representing the point cloud.
+
+    Returns:
+        A NumPy array of shape (N, 3) representing the rotated point cloud.
+    """
+
+    is_rotation = False
+    while not is_rotation:
+        # Generate random rotation angles around x, y, and z axes
+        theta_x = np.random.uniform(0, 2 * np.pi)
+        theta_y = np.random.uniform(0, 2 * np.pi)
+        theta_z = np.random.uniform(0, 2 * np.pi)
+
+        # Rotation matrices around x, y, and z axes
+        Rx = np.array([[1, 0, 0],
+                       [0, np.cos(theta_x), -np.sin(theta_x)],
+                       [0, np.sin(theta_x), np.cos(theta_x)]])
+
+        Ry = np.array([[np.cos(theta_y), 0, np.sin(theta_y)],
+                       [0, 1, 0],
+                       [-np.sin(theta_y), 0, np.cos(theta_y)]])
+
+        Rz = np.array([[np.cos(theta_z), -np.sin(theta_z), 0],
+                       [np.sin(theta_z), np.cos(theta_z), 0],
+                       [0, 0, 1]])
+
+        # Combine rotation matrices
+        R = np.matmul(Rz, np.matmul(Ry, Rx))
+
+        # Check if rotation is valid (determinant close to 1)
+        is_rotation = np.isclose(np.linalg.det(R), 1.0, atol=1e-6)
+
+    # Apply rotation to point cloud
+    rotated_point_cloud = np.matmul(point_cloud, R.T)
+    return rotated_point_cloud
+
+
+def read_bin_file(bin_file):
+    """
+    Read a .bin file and return a numpy array of shape (N, 3) where N is the number of points.
+
+    Args:
+        bin_file (str): Path to the .bin file.
+
+    Returns:
+        np.ndarray: Numpy array containing the point cloud data.
+    """
+    # Load the binary file
+    points = np.fromfile(bin_file, dtype=np.float32).reshape(-1, 4)
+
+    # We only need the first three columns (x, y, z)
+    return points[:, :3]
 
 if __name__ == '__main__':
-    # for i in range(5,6):
+    for i in range(1,2):
     # checkData()
-    for i in range(5,6):
-    # for i in range(3,7):
-        scaling_factor = i * 10
+    # for i in range(6,12):
+    # for i in range(6,7):
+        scaling_factor = i + 11
         args_shape = configArgsPCT()
         args_shape.batch_size = 1024
         # args_shape.num_mlp_layers = 4
@@ -915,15 +1240,18 @@ if __name__ == '__main__':
         args_shape.sampled_points = 40
         args_shape.use_second_deg = 1
         args_shape.lpe_normalize = 1
-        model_name = '4MLP32Nlpe6ContrNEWstdfun2Weight02LR001'
-        model_name = 'base86'
+        # model_name = '4MLP32Nlpe6ContrNEWstdfun2Weight05_05LR001std01'
+        # model_name = '4MLP32Nlpe6ContrNEWstdfun2Weight05_02LR001std01NN5'
+        model_name = '3MLP32Ncls'
         args_shape.exp = model_name
         args_shape.lpe_dim = 6
-        args_shape.output_dim = 12
-        # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=args_shape, scaling_factor=scaling_factor)
-        # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  = test_coress_dis(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)
-        view_stabiity(model_name=model_name, args_shape=args_shape)
-        # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)
+        args_shape.output_dim = 4
+        visualizeShapesWithEmbeddings(model_name=model_name, args_shape=args_shape, scaling_factor=46)
+        # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
+        #     = test_coress_dis(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)
+        # view_stabiity(model_name=model_name, args_shape=args_shape, scaling_factor=scaling_factor)
+        # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
+        #     = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=3, scaling_factor=scaling_factor)
         # plot_losses(losses, num_of_inliers, filename=f'{scaling_factor}_'+"contrast_lpe6")
         # plot_distances(shape_size_list, shortest_dist_list, avg_dist_list, dist_from_orig, filename=f'{scaling_factor}_'+"dist_plot_lpe6")
         # plot_and_save_with_stats(iter_2_ransac_convergence, name=f'{scaling_factor}_'+"ransac_iter")
