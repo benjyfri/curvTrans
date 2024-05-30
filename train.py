@@ -172,11 +172,11 @@ def train_and_test(args):
             print(f'LR: {current_lr}')
 
             print({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
+            for key in label_accuracies:
+                print("label_" + str(key), ":", label_accuracies[key])
 
         scheduler.step()
 
-        for key in label_accuracies:
-            print("label_" + str(key), ":", label_accuracies[key])
         if args.use_wandb:
             if args.classification == 1:
                 wandb.log({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
