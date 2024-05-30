@@ -99,28 +99,32 @@ def train_and_test(args):
         with tqdm(train_dataloader, desc=f'Epoch {epoch + 1}/{num_epochs}', leave=False) as tqdm_bar:
             for batch in tqdm_bar:
                 pcl, info = batch['point_cloud'].to(device), batch['info']
-
                 label = info['class'].to(device).long()
+                output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+                orig_classification = output[:, :4]
+                orig_emb = output
+                classification_loss = torch.tensor((0))
+                if args.classification == 1:
+                    orig_emb = output[:, 4:]
+                    classification_loss = criterion(orig_classification, label)
+
                 if args.contr_loss_weight != 0:
                     pcl2 = batch['point_cloud2'].to(device)
                     contrastive_point_cloud = batch['contrastive_point_cloud'].to(device)
-                    output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-                    orig_classification = output[:,:4]
-                    orig_emb = output[:,4:]
-                    classification_loss = criterion(orig_classification, label)
+
                     output_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
-                    pos_emb = output_pcl2[:, 4:]
+                    pos_emb = output_pcl2
+                    if args.classification == 1:
+                        pos_emb = output_pcl2[:, 4:]
                     output_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
-                    neg_emb = output_contrastive_pcl[:, 4:]
+                    neg_emb = output_contrastive_pcl
+                    if args.classification == 1:
+                        neg_emb = output_contrastive_pcl[:, 4:]
                     contrstive_loss = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
                     total_train_contrastive_positive_loss += mseLoss(orig_emb, pos_emb)
                     total_train_contrastive_negative_loss += mseLoss(orig_emb, neg_emb)
                     total_train_contrastive_loss += contrstive_loss
                 else:
-                    output  = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-                    orig_classification = output[:, :4]
-                    orig_emb = output[:, 4:]
-                    classification_loss = criterion(output, label)
                     contrstive_loss = torch.tensor((0))
 
                 if smooth_loss_weight != 0:
@@ -128,7 +132,12 @@ def train_and_test(args):
                     negative_smooth_point_cloud = batch['negative_smooth_point_cloud'].to(device)
                     positive_output_smooth_pcl = model((positive_smooth_point_cloud.permute(0, 2, 1)).unsqueeze(2))
                     negative_output_smooth_pcl = model((negative_smooth_point_cloud.permute(0, 2, 1)).unsqueeze(2))
-                    smoothness_contrastive_loss = tripletMarginLoss(orig_emb, positive_output_smooth_pcl[:,4:], negative_output_smooth_pcl[:,4:])
+                    positive_smooth_emb = positive_output_smooth_pcl
+                    negative_smooth_emb = negative_output_smooth_pcl
+                    if args.classification == 1:
+                        positive_smooth_emb = positive_smooth_emb[:,4:]
+                        negative_smooth_emb = negative_smooth_emb[:,4:]
+                    smoothness_contrastive_loss = tripletMarginLoss(orig_emb, positive_smooth_emb, negative_smooth_emb)
                     total_train_smoothness_loss += smoothness_contrastive_loss
                 else:
                     smoothness_contrastive_loss = torch.tensor((0))
@@ -156,19 +165,23 @@ def train_and_test(args):
         print(f'contrastive_loss: {contrastive_train_loss}')
         print(f'contrastive_positive_MSEloss: {contrastive_positive_train_loss}')
         print(f'contrastive_negative_MSEloss: {contrastive_negative_train_loss}')
-        print(f'smoothness_train__MSEloss: {smoothness_train_loss}')
+        print(f'smoothness_train_loss: {smoothness_train_loss}')
 
-        test_loss, acc_test, label_accuracies = test(model, test_dataloader, criterion, device, args)
+        if args.classification == 1:
+            test_loss, acc_test, label_accuracies = test(model, test_dataloader, criterion, device, args)
+            print(f'LR: {current_lr}')
+
+            print({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
+
         scheduler.step()
-        print(f'LR: {current_lr}')
 
-        print({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
         for key in label_accuracies:
             print("label_" + str(key), ":", label_accuracies[key])
         if args.use_wandb:
-            wandb.log({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
-            for key in label_accuracies:
-                wandb.log({"epoch": epoch, "label_"+str(key) : label_accuracies[key]})
+            if args.classification == 1:
+                wandb.log({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
+                for key in label_accuracies:
+                    wandb.log({"epoch": epoch, "label_"+str(key) : label_accuracies[key]})
             if args.contrastive:
                 wandb.log({"epoch": epoch, "contrastive_loss":contrastive_train_loss})
             if args.smoothness_loss:
@@ -201,8 +214,8 @@ def configArgsPCT():
                         help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--use_xyz', type=int, default=1, metavar='N',
                         help='use xyz coordinates as part of input')
-    parser.add_argument('--contrastive', type=int, default=0, metavar='N',
-                        help='use contrastive loss')
+    parser.add_argument('--classification', type=int, default=1, metavar='N',
+                        help='use classification loss')
     parser.add_argument('--contrastive_mid_layer', type=int, default=0, metavar='N',
                         help='use contrastive loss with middle layer (one before last)')
     parser.add_argument('--rotate_data', type=int, default=0, metavar='N',
