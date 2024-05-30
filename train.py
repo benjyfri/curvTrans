@@ -182,9 +182,9 @@ def train_and_test(args):
                 wandb.log({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
                 for key in label_accuracies:
                     wandb.log({"epoch": epoch, "label_"+str(key) : label_accuracies[key]})
-            if args.contrastive:
+            if args.contr_loss_weight!=0:
                 wandb.log({"epoch": epoch, "contrastive_loss":contrastive_train_loss})
-            if args.smoothness_loss:
+            if args.smoothness_loss!=0:
                 wandb.log({"epoch": epoch, "smoothness_loss":smoothness_train_loss})
     return model
 
