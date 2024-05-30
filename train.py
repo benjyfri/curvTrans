@@ -12,7 +12,7 @@ from data import BasicPointCloudDataset
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+from torch.profiler import profile, record_function, ProfilerActivity
 def test(model, dataloader, loss_function, device, args):
     model.eval()  # Set the model to evaluation mode
     total_loss = 0.0
@@ -101,7 +101,7 @@ def train_and_test(args):
                 pcl, info = batch['point_cloud'].to(device), batch['info']
 
                 label = info['class'].to(device).long()
-                if args.contrastive:
+                if args.contr_loss_weight != 0:
                     pcl2 = batch['point_cloud2'].to(device)
                     contrastive_point_cloud = batch['contrastive_point_cloud'].to(device)
                     output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
