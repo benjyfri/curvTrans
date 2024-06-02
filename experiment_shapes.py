@@ -13,7 +13,67 @@ from train import configArgsPCT
 from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import cdist
+import random
+from sklearn.neighbors import NearestNeighbors
 import open3d as o3d
+
+
+def plot_8_point_clouds(cls1_1, cls1_2, cls1_3, cls1_4, cls2_1, cls2_2, cls2_3, cls2_4, rotation=None, title=""):
+    """
+    Plot four pairs of sub point clouds in an interactive 3D plot with Plotly.
+
+    Args:
+        cls1_1, cls1_2, cls1_3, cls1_4 (np.ndarray): Sub point clouds from pcl1.
+        cls2_1, cls2_2, cls2_3, cls2_4 (np.ndarray): Corresponding sub point clouds from pcl2.
+        rotation (np.ndarray): Rotation matrix to apply to the point clouds.
+        title (str): Title of the plot.
+    """
+    fig = go.Figure()
+
+    # Combine the inputs into lists for easier iteration
+    pcl1 = [cls1_1, cls1_2, cls1_3, cls1_4]
+    pcl1 = [x for x in pcl1 if len(x)>0]
+
+    pcl2 = [cls2_1, cls2_2, cls2_3, cls2_4]
+    pcl2 = [np.array(x) for x in pcl2 if len(x) > 0]
+
+    if rotation is not None:
+        center = np.mean(np.vstack(pcl1), axis=0)
+        pcl1 = [np.matmul((pcl - center), rotation) for pcl in pcl1]
+        axis = np.argmin(np.max(np.vstack(pcl1), axis=0))
+        for pcl in pcl1:
+            pcl[:, axis] += 1.5
+
+    # Define a color list for four point clouds
+    colors = ['blue', 'orange', 'brown', 'red']
+
+    # Plot each point cloud from pcl1 and pcl2 with corresponding color
+    # Plot each point cloud from pcl1 and pcl2 with corresponding color
+    for i, (point_cloud1) in enumerate(pcl1):
+        fig.add_trace(go.Scatter3d(
+            x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
+            mode='markers', marker=dict(size=2, color=colors[i], opacity=0.5),
+            name=f'PCL2 - Point Cloud {i + 1}'
+        ))
+    for i, (point_cloud2) in enumerate(pcl2):
+        fig.add_trace(go.Scatter3d(
+            x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
+            mode='markers', marker=dict(size=2, color=colors[i], opacity=0.5),
+            name=f'PCL2 - Point Cloud {i + 1}'
+        ))
+
+    fig.update_layout(
+        title=title,
+        scene=dict(
+            xaxis=dict(title='X'),
+            yaxis=dict(title='Y'),
+            zaxis=dict(title='Z'),
+        ),
+        margin=dict(r=20, l=10, b=10, t=100)
+    )
+
+    fig.show()
+
 def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, rotation=None, title=""):
   """
   Plot four point clouds in an interactive 3D plot with Plotly.
@@ -27,8 +87,8 @@ def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
   fig = go.Figure()
   if rotation is not None:
       center = np.mean(point_cloud1, axis=0)
-      point_cloud1 = np.matmul((point_cloud1 - center), rotation)
-      point_cloud3 = np.matmul((point_cloud3 - center), rotation)
+      point_cloud1 = np.matmul((point_cloud1 - center), rotation.T)
+      point_cloud3 = np.matmul((point_cloud3 - center), rotation.T)
       axis = np.argmin(np.max(point_cloud1, axis=0))
 
       point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
@@ -254,15 +314,16 @@ def checkOnShapes(model_name=None, input_data=None, args_shape=None, scaling_fac
     src_knn_pcl = scaling_factor * src_knn_pcl
     output = model(src_knn_pcl.permute(2,1,0,3))
     surface_labels = []
-    list_of_points = farthest_point_sampling(input_data,20)
-    list_of_points = range(src_knn_pcl.shape[2])
-    for i in list_of_points:
-        point_cloud_np = src_knn_pcl[0, :, i, :].numpy()
-        point_cloud_np = (point_cloud_np.T)+ input_data[i,:]
-        fixed = fix_orientation(point_cloud_np)
-        label = fit_surface_quadratic_constrained(fixed)
-        surface_labels.append(label)
-    return surface_labels, output
+    # list_of_points = farthest_point_sampling(input_data,20)
+    # list_of_points = range(src_knn_pcl.shape[2])
+    # for i in list_of_points:
+    #     point_cloud_np = src_knn_pcl[0, :, i, :].numpy()
+    #     point_cloud_np = (point_cloud_np.T)+ input_data[i,:]
+    #     fixed = fix_orientation(point_cloud_np)
+    #     label = fit_surface_quadratic_constrained(fixed)
+    #     surface_labels.append(label)
+    # return surface_labels, output
+    return output
 def load_data(partition='test', divide_data=1):
     BASE_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes'
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
@@ -329,15 +390,15 @@ def checkData():
 def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_factor=None):
     pcls, label = load_data()
     shapes = [86, 174, 179]
-    shapes = [86]
+    # shapes = [86]
     for k in shapes:
         pointcloud = pcls[k][:]
-        bin_file = "000098.bin"
-        pointcloud = read_bin_file(bin_file)
+        # bin_file = "000098.bin"
+        # pointcloud = read_bin_file(bin_file)
         noisy_pointcloud = pointcloud #+ np.random.normal(0, 0.01, pointcloud.shape)
         pointcloud = noisy_pointcloud.astype(np.float32)
         surface_labels , colors = checkOnShapes(model_name=model_name,
-                                    input_data=pointcloud, args_shape=args_shape, scaling_factor=1)
+                                    input_data=pointcloud, args_shape=args_shape, scaling_factor=scaling_factor)
         colors = colors.detach().cpu().numpy()
         colors = colors[:,:4]
 
@@ -648,11 +709,65 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
         return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold + 0.1, min_inliers=min_inliers)
     return best_rotation, best_inliers, best_iter
 
+def classification_only_ransac(cls1_1,cls1_2,cls1_3,cls1_4, cls2_1,cls2_2,cls2_3,cls2_4,
+                               max_iterations=1000, threshold=0.1, min_inliers=2):
+    # N = data1.shape[0]
+    best_num_of_inliers = 0
+    corres = None
+    best_rotation = None
+    best_translation = None
+
+    sizes = [len(cls1_1), len(cls1_2), len(cls1_3), len(cls1_4)]
+    total_size = sum(sizes)
+
+    # Calculate the probabilities
+    probabilities = [(1 - (size / total_size)) for size in sizes if size>0]
+    probabilities = [(prob / (len(probabilities) - 1)) for prob in probabilities]
+
+    # Choose one array based on the probabilities
+    pcl_1 = []
+    pcl_2 = []
+    for pcl1,pcl2 in zip([cls1_1, cls1_2, cls1_3, cls1_4], [cls2_1, cls2_2, cls2_3, cls2_4]):
+        if len(pcl1)>0 and len(pcl2)>0:
+            pcl_1.append(pcl1)
+            pcl_2.append(pcl2)
+
+    sizes = [len(cls) for cls in pcl_1]
+    total_size = sum(sizes)
+    probabilities = [(1 - (size / total_size)) for size in sizes if size > 0]
+    probabilities = [(prob / (len(probabilities) - 1)) for prob in probabilities]
+    best_iter = 0
+    for iteration in range(max_iterations):
+        if iteration%10==0:
+            print(f'Iteration {iteration}')
+        # Randomly sample 3 corresponding points
+        chosen_classes = random.choices(range(len(probabilities)), weights=probabilities, k=3)
+        src_points = np.array([random.choice(pcl_1[cls]) for cls in chosen_classes])
+        dst_points = np.array([random.choice(pcl_2[cls]) for cls in chosen_classes])
+        # Estimate rotation and translation
+        rotation = estimate_rigid_transform(src_points, dst_points)
+        # translation = dst_mean - np.matmul(src_mean, rotation)
+        # Find inliers
+        inliers_1, inliers_2 = find_inliers_classification(cls1_1, cls1_2, cls1_3, cls1_4, cls2_1, cls2_2, cls2_3, cls2_4, rotation=rotation, threshold=threshold)
+
+        # Update best model if we have enough inliers
+        if len(inliers_1) >= min_inliers and ( (best_num_of_inliers == 0 ) or (len(inliers_1) > best_num_of_inliers) ):
+            best_num_of_inliers = len(inliers_1)
+            corres = [inliers_1, inliers_2]
+            best_rotation = rotation
+            # best_translation = translation
+            best_iter = iteration
+    if best_num_of_inliers == 0:
+        return classification_only_ransac(cls1_1,cls1_2,cls1_3,cls1_4, cls2_1,cls2_2,cls2_3,cls2_4, max_iterations=max_iterations,
+                                                   threshold=threshold + 0.1,
+                                                   min_inliers=min_inliers)
+    return best_rotation, best_num_of_inliers, best_iter, corres, threshold
+
 
 def estimate_rigid_transform(src_points, dst_points):
     H = np.matmul(src_points.T, dst_points)
     U, _, Vt = np.linalg.svd(H)
-    R = np.matmul(Vt, U.T)
+    R = np.matmul(Vt.T, U.T)
 
     # Handle reflection case
     if np.linalg.det(R) < 0:
@@ -678,6 +793,52 @@ def find_inliers(data1, data2, rotation, threshold):
             inliers2.append(i)
 
     return inliers1, inliers2
+def find_inliers_classification(cls1_1, cls1_2, cls1_3, cls1_4, cls2_1, cls2_2, cls2_3, cls2_4, rotation, threshold=0.1):
+    """
+    Finds the inliers in two sets of labeled 3D points for each class using 1-nearest neighbor.
+    """
+    inliers_1 = []
+    inliers_2 = []
+
+    # Combine the inputs into lists for easier iteration
+    orig_cls1 = []
+    cls2 = []
+    for pcl1,pcl2 in zip([cls1_1, cls1_2, cls1_3, cls1_4], [cls2_1, cls2_2, cls2_3, cls2_4]):
+        if len(pcl1)>0 and len(pcl2)>0:
+            orig_cls1.append(pcl1)
+            cls2.append(pcl2)
+    cls1 = [np.dot(pcl, rotation.T) for pcl in orig_cls1]
+
+    # Iterate over each class
+    for i in range(len(orig_cls1)):
+        points_cls1 = np.array(cls1[i])
+        points_cls2 = np.array(cls2[i])
+        original_cls1 = np.array(orig_cls1[i])
+        # Use NearestNeighbors to find the nearest neighbor in cls2 for each point in cls1
+        nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(points_cls2)
+        distances, indices = nbrs.kneighbors(points_cls1)
+        counter_arr = np.zeros((len(points_cls2)))
+        for i in range(len(points_cls1)):
+            if counter_arr[indices[i]]>1:
+                distances[i] = np.inf
+            counter_arr[indices[i]] += 1
+        mask = distances<threshold
+        if (np.count_nonzero(mask) > 0):
+            in_1 = original_cls1[mask.squeeze()]
+            in_2 = (points_cls2[indices])[mask]
+            if len(in_1.shape)==3:
+                in_1 = in_1.squeeze(0)
+            if len(in_2.shape)==3:
+                in_2 = in_2.squeeze(0)
+            inliers_1.append(in_1)
+            inliers_2.append(in_2)
+    if len(inliers_1)==0 or len(inliers_2)==0:
+        return inliers_1, inliers_2
+    # print(f'inliers_1:')
+    # print([x.shape for x in inliers_1])
+    # print(f'inliers_2:')
+    # print([x.shape for x in inliers_2])
+    return np.vstack(inliers_1), np.vstack(inliers_2)
 def plotWorst(worst_losses, model_name=""):
     count = 0
     for (loss,worst_loss_variables) in worst_losses:
@@ -865,6 +1026,79 @@ def test_coress_dis(model_name=None, args_shape=None, max_non_unique_corresponde
         plot_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, rotation=rotation_matrix,
                             title=f'Loss is {loss:.3f}; <br>Shape size: {np.max(pairwise_distances)}; <br>best_30: {np.mean(best_30)};')
 
+    return 1, 1, 1, 1, shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list
+
+def test_classification(model_name=None, args_shape=None, max_non_unique_correspondences=3, num_worst_losses = 3, scaling_factor=None):
+    pcls, label = load_data()
+    shape_size_list = []
+    shortest_dist_list = []
+    avg_dist_list = []
+    dist_from_orig = []
+    # diameter_20_nn_list = []
+    shapes = [86, 162, 174, 176, 179]
+    # shapes = [86]
+    # shapes = np.arange(100)
+    num_of_points_to_sample = 50
+    for k in shapes:
+        if k%10 ==0:
+            print(f'------------{k}------------')
+        pointcloud = pcls[k][:]
+        rotated_pcl, rotation_matrix = random_rotation_translation(pointcloud)
+
+        noisy_pointcloud_1 = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
+        noisy_pointcloud_1 = noisy_pointcloud_1.astype(np.float32)
+        noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
+        noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
+
+        emb_1 = checkOnShapes(model_name=model_name,
+                                    input_data=noisy_pointcloud_1, args_shape=args_shape, scaling_factor=10)
+        emb_2 = checkOnShapes(model_name=model_name,
+                                    input_data=noisy_pointcloud_2,args_shape=args_shape, scaling_factor=10)
+        # diameter_20_nn_list.append(diameter_20_nn)
+        emb_1 = emb_1.detach().cpu().numpy()
+        emb_2 = emb_2.detach().cpu().numpy()
+
+
+        if np.isnan(np.sum(emb_1)) or np.isnan(np.sum(emb_2)):
+            print(f'oish')
+            continue
+
+        # max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(emb_1[:,:4],
+        #                                                                                                  k=num_of_points_to_sample)
+        # max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(emb_2[:,:4],
+        #                                                                                                  k=num_of_points_to_sample)
+
+        good_class_indices_1 = farthest_point_sampling(emb_1[:, :4], k=num_of_points_to_sample)
+        good_class_indices_2 = farthest_point_sampling(emb_2[:, :4], k=num_of_points_to_sample)
+
+        classification_pcl1 = np.argmax((emb_1[good_class_indices_1, :]), axis=1)
+        classification_pcl2 = np.argmax((emb_2[good_class_indices_2, :]), axis=1)
+
+
+        centered_points_1 = noisy_pointcloud_1[good_class_indices_1, :] - np.mean(noisy_pointcloud_1)
+        centered_points_2 = noisy_pointcloud_2[good_class_indices_2, :] - np.mean(noisy_pointcloud_2)
+
+        # Concatenate along the second axis (axis=1)
+        result_1 = np.concatenate((classification_pcl1.reshape(len(classification_pcl1), 1), centered_points_1), axis=1)
+        result_2 = np.concatenate((classification_pcl2.reshape(len(classification_pcl2), 1), centered_points_2), axis=1)
+        cls1_0 = [pcl[1:] for pcl in result_1 if pcl[0]==0]
+        cls1_1 = [pcl[1:] for pcl in result_1 if pcl[0]==1]
+        cls1_2 = [pcl[1:] for pcl in result_1 if pcl[0]==2]
+        cls1_3 = [pcl[1:] for pcl in result_1 if pcl[0]==3]
+        cls2_0 = [pcl[1:] for pcl in result_2 if pcl[0]==0]
+        cls2_1 = [pcl[1:] for pcl in result_2 if pcl[0]==1]
+        cls2_2 = [pcl[1:] for pcl in result_2 if pcl[0]==2]
+        cls2_3 = [pcl[1:] for pcl in result_2 if pcl[0]==3]
+        plot_8_point_clouds(cls1_1, cls1_2, cls1_3, cls1_0, cls2_1, cls2_2, cls2_3, cls2_0, rotation=rotation_matrix)
+        best_rotation, best_num_of_inliers, best_iter, corres, final_threshold = classification_only_ransac(
+            cls1_0, cls1_1, cls1_2, cls1_3, cls2_0, cls2_1, cls2_2, cls2_3, max_iterations=1000,
+                                                   threshold=0.005,
+                                                   min_inliers=num_of_points_to_sample/2)
+        center = np.mean(noisy_pointcloud_1, axis=0)
+        transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
+        loss = np.mean(((rotation_matrix @ best_rotation) - np.eye(3)) ** 2)
+        plot_point_clouds(transformed_points1, noisy_pointcloud_2, f'loss is: {loss}; inliers: {best_num_of_inliers}; threshold: {final_threshold}')
+        plot_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, corres[0], corres[1], rotation=rotation_matrix.T)
     return 1, 1, 1, 1, shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list
 
 def view_stabiity(model_name=None, args_shape=None, scaling_factor=None):
@@ -1246,9 +1480,11 @@ if __name__ == '__main__':
         args_shape.exp = model_name
         args_shape.lpe_dim = 6
         args_shape.output_dim = 4
-        visualizeShapesWithEmbeddings(model_name=model_name, args_shape=args_shape, scaling_factor=46)
+        # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=args_shape, scaling_factor=10)
         # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
         #     = test_coress_dis(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)
+        worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
+            = test_classification(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)
         # view_stabiity(model_name=model_name, args_shape=args_shape, scaling_factor=scaling_factor)
         # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
         #     = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=3, scaling_factor=scaling_factor)
