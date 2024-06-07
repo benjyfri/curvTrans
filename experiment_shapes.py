@@ -16,6 +16,9 @@ from scipy.spatial.distance import cdist
 import random
 from sklearn.neighbors import NearestNeighbors
 import open3d as o3d
+import cProfile
+import pstats
+from scipy.spatial import cKDTree
 
 
 def plot_8_point_clouds(cls1_1, cls1_2, cls1_3, cls1_4, cls2_1, cls2_2, cls2_3, cls2_4, rotation=None, title=""):
@@ -46,20 +49,20 @@ def plot_8_point_clouds(cls1_1, cls1_2, cls1_3, cls1_4, cls2_1, cls2_2, cls2_3, 
 
     # Define a color list for four point clouds
     colors = ['blue', 'orange', 'brown', 'red']
-
+    names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
     # Plot each point cloud from pcl1 and pcl2 with corresponding color
     # Plot each point cloud from pcl1 and pcl2 with corresponding color
     for i, (point_cloud1) in enumerate(pcl1):
         fig.add_trace(go.Scatter3d(
             x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
             mode='markers', marker=dict(size=2, color=colors[i], opacity=0.5),
-            name=f'PCL2 - Point Cloud {i + 1}'
+            name=f'PCL1 - {names[i]}'
         ))
     for i, (point_cloud2) in enumerate(pcl2):
         fig.add_trace(go.Scatter3d(
             x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
             mode='markers', marker=dict(size=2, color=colors[i], opacity=0.5),
-            name=f'PCL2 - Point Cloud {i + 1}'
+            name=f'PCL2 - {names[i]}'
         ))
 
     fig.update_layout(
@@ -717,13 +720,6 @@ def classification_only_ransac(cls1_1,cls1_2,cls1_3,cls1_4, cls2_1,cls2_2,cls2_3
     best_rotation = None
     best_translation = None
 
-    sizes = [len(cls1_1), len(cls1_2), len(cls1_3), len(cls1_4)]
-    total_size = sum(sizes)
-
-    # Calculate the probabilities
-    probabilities = [(1 - (size / total_size)) for size in sizes if size>0]
-    probabilities = [(prob / (len(probabilities) - 1)) for prob in probabilities]
-
     # Choose one array based on the probabilities
     pcl_1 = []
     pcl_2 = []
@@ -735,11 +731,14 @@ def classification_only_ransac(cls1_1,cls1_2,cls1_3,cls1_4, cls2_1,cls2_2,cls2_3
     sizes = [len(cls) for cls in pcl_1]
     total_size = sum(sizes)
     probabilities = [(1 - (size / total_size)) for size in sizes if size > 0]
-    probabilities = [(prob / (len(probabilities) - 1)) for prob in probabilities]
+    if len(probabilities) > 1:
+        probabilities = [(prob / (len(probabilities) - 1)) for prob in probabilities]
+    else:
+        probabilities = [1]
     best_iter = 0
     for iteration in range(max_iterations):
-        if iteration%10==0:
-            print(f'Iteration {iteration}')
+        # if iteration%10==0:
+        #     print(f'Iteration {iteration}')
         # Randomly sample 3 corresponding points
         chosen_classes = random.choices(range(len(probabilities)), weights=probabilities, k=3)
         src_points = np.array([random.choice(pcl_1[cls]) for cls in chosen_classes])
@@ -759,6 +758,47 @@ def classification_only_ransac(cls1_1,cls1_2,cls1_3,cls1_4, cls2_1,cls2_2,cls2_3
             best_iter = iteration
     if best_num_of_inliers == 0:
         return classification_only_ransac(cls1_1,cls1_2,cls1_3,cls1_4, cls2_1,cls2_2,cls2_3,cls2_4, max_iterations=max_iterations,
+                                                   threshold=threshold + 0.1,
+                                                   min_inliers=min_inliers)
+    return best_rotation, best_num_of_inliers, best_iter, corres, threshold
+
+def random_only_ransac(cls1_1,cls1_2,cls1_3,cls1_4, cls2_1,cls2_2,cls2_3,cls2_4,
+                               max_iterations=1000, threshold=0.1, min_inliers=2):
+    # N = data1.shape[0]
+    best_num_of_inliers = 0
+    corres = None
+    best_rotation = None
+    best_translation = None
+
+    # Choose one array based on the probabilities
+    yay1 = [pcl for pcl in [cls1_1, cls1_2, cls1_3, cls1_4] if len(pcl) > 0]
+    yay2 = [pcl for pcl in [cls2_1, cls2_2, cls2_3, cls2_4] if len(pcl) > 0]
+    pcl_1 = np.vstack(yay1)
+    # pcl_1 = np.random.permutation(pcl_1)
+    pcl_2 = np.vstack(yay2)
+    # pcl_2 = np.random.permutation(pcl_2)
+
+    best_iter = 0
+    for iteration in range(max_iterations):
+        src_points = np.array([random.choice(pcl_1) for i in range(3)])
+        dst_points = np.array([random.choice(pcl_2) for j in range(3)])
+        # Estimate rotation and translation
+        rotation = estimate_rigid_transform(src_points, dst_points)
+        # translation = dst_mean - np.matmul(src_mean, rotation)
+        # Find inliers
+        dummy_1 = pcl_1.tolist()
+        dummy_2 = pcl_2.tolist()
+        inliers_1, inliers_2 = find_inliers_classification(dummy_1, [], [], [], dummy_2, [], [], [], rotation=rotation, threshold=threshold)
+
+        # Update best model if we have enough inliers
+        if len(inliers_1) >= min_inliers and ( (best_num_of_inliers == 0 ) or (len(inliers_1) > best_num_of_inliers) ):
+            best_num_of_inliers = len(inliers_1)
+            corres = [inliers_1, inliers_2]
+            best_rotation = rotation
+            # best_translation = translation
+            best_iter = iteration
+    if best_num_of_inliers == 0:
+        return random_only_ransac(dummy_1, [], [], [], dummy_2, [], [], [], max_iterations=max_iterations,
                                                    threshold=threshold + 0.1,
                                                    min_inliers=min_inliers)
     return best_rotation, best_num_of_inliers, best_iter, corres, threshold
@@ -887,10 +927,10 @@ def plot_losses(losses, inliers, filename="loss_plot.png"):
     ax1 = plt.gca()
     ax2 = ax1.twinx()
 
-    ax1.plot((40-np.array(inliers)), marker='o', linestyle='-', color='blue', label='Non_Inliers')
+    ax1.plot((np.array(inliers)), marker='o', linestyle='-', color='blue', label='Inliers')
     ax2.plot(losses, marker='s', linestyle='-', color='red', label='Loss')
     ax1.set_xlabel('Iteration')
-    ax1.set_ylabel('#Non_Inliers', color='blue')
+    ax1.set_ylabel('#Inliers', color='blue')
     ax2.set_ylabel('Loss', color='red')
 
     ax1.grid(True)
@@ -1028,17 +1068,23 @@ def test_coress_dis(model_name=None, args_shape=None, max_non_unique_corresponde
 
     return 1, 1, 1, 1, shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list
 
-def test_classification(model_name=None, args_shape=None, max_non_unique_correspondences=3, num_worst_losses = 3, scaling_factor=None):
+def test_classification(model_name=None, args_shape=None, max_non_unique_correspondences=3, num_worst_losses = 3, scaling_factor=None, point_choice=0, num_of_ransac_iter=100, random_pairing=0):
     pcls, label = load_data()
+    worst_losses = [(0, None)] * num_worst_losses  # Initialize with (loss, variables)
+    worst_point_losses = [(0, None)] * num_worst_losses  # Initialize with (loss, variables)
+    losses = []
+    point_distance_list = []
+    final_thresh_list = []
+    final_inliers_list = []
+    iter_2_ransac_convergence = []
+    num_of_inliers = []
     shape_size_list = []
     shortest_dist_list = []
     avg_dist_list = []
     dist_from_orig = []
-    # diameter_20_nn_list = []
-    shapes = [86, 162, 174, 176, 179]
-    # shapes = [86]
-    # shapes = np.arange(100)
-    num_of_points_to_sample = 50
+    # shapes = [86, 162, 174, 176, 179]
+    shapes = np.arange(100)
+    num_of_points_to_sample = 100
     for k in shapes:
         if k%10 ==0:
             print(f'------------{k}------------')
@@ -1051,9 +1097,9 @@ def test_classification(model_name=None, args_shape=None, max_non_unique_corresp
         noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
         emb_1 = checkOnShapes(model_name=model_name,
-                                    input_data=noisy_pointcloud_1, args_shape=args_shape, scaling_factor=10)
+                                    input_data=noisy_pointcloud_1, args_shape=args_shape, scaling_factor=scaling_factor)
         emb_2 = checkOnShapes(model_name=model_name,
-                                    input_data=noisy_pointcloud_2,args_shape=args_shape, scaling_factor=10)
+                                    input_data=noisy_pointcloud_2,args_shape=args_shape, scaling_factor=scaling_factor)
         # diameter_20_nn_list.append(diameter_20_nn)
         emb_1 = emb_1.detach().cpu().numpy()
         emb_2 = emb_2.detach().cpu().numpy()
@@ -1062,14 +1108,19 @@ def test_classification(model_name=None, args_shape=None, max_non_unique_corresp
         if np.isnan(np.sum(emb_1)) or np.isnan(np.sum(emb_2)):
             print(f'oish')
             continue
-
-        # max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(emb_1[:,:4],
-        #                                                                                                  k=num_of_points_to_sample)
-        # max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(emb_2[:,:4],
-        #                                                                                                  k=num_of_points_to_sample)
-
-        good_class_indices_1 = farthest_point_sampling(emb_1[:, :4], k=num_of_points_to_sample)
-        good_class_indices_2 = farthest_point_sampling(emb_2[:, :4], k=num_of_points_to_sample)
+        if point_choice == 0:
+            max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(emb_1[:,:4],
+                                                                                                             k=num_of_points_to_sample)
+            max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(emb_2[:,:4],
+                                                                                                             k=num_of_points_to_sample)
+        if point_choice == 1:
+            max_values_1 = np.max(emb_1[:, :4], axis=1)
+            good_class_indices_1 = np.argsort(max_values_1)[-num_of_points_to_sample:][::-1]
+            max_values_2 = np.max(emb_2[:, :4], axis=1)
+            good_class_indices_2 = np.argsort(max_values_2)[-num_of_points_to_sample:][::-1]
+        if point_choice == 2:
+            good_class_indices_1 = farthest_point_sampling(emb_1[:, :4], k=num_of_points_to_sample)
+            good_class_indices_2 = farthest_point_sampling(emb_2[:, :4], k=num_of_points_to_sample)
 
         classification_pcl1 = np.argmax((emb_1[good_class_indices_1, :]), axis=1)
         classification_pcl2 = np.argmax((emb_2[good_class_indices_2, :]), axis=1)
@@ -1089,17 +1140,63 @@ def test_classification(model_name=None, args_shape=None, max_non_unique_corresp
         cls2_1 = [pcl[1:] for pcl in result_2 if pcl[0]==1]
         cls2_2 = [pcl[1:] for pcl in result_2 if pcl[0]==2]
         cls2_3 = [pcl[1:] for pcl in result_2 if pcl[0]==3]
-        plot_8_point_clouds(cls1_1, cls1_2, cls1_3, cls1_0, cls2_1, cls2_2, cls2_3, cls2_0, rotation=rotation_matrix)
-        best_rotation, best_num_of_inliers, best_iter, corres, final_threshold = classification_only_ransac(
-            cls1_0, cls1_1, cls1_2, cls1_3, cls2_0, cls2_1, cls2_2, cls2_3, max_iterations=1000,
-                                                   threshold=0.005,
-                                                   min_inliers=num_of_points_to_sample/2)
+        # plot_8_point_clouds( cls1_0, cls1_1, cls1_2, cls1_3, cls2_0, cls2_1, cls2_2, cls2_3,  rotation=rotation_matrix)
+        if random_pairing == 1:
+            best_rotation, best_num_of_inliers, best_iter, corres, final_threshold = random_only_ransac(
+                cls1_0, cls1_1, cls1_2, cls1_3, cls2_0, cls2_1, cls2_2, cls2_3, max_iterations=num_of_ransac_iter,
+                                                       threshold=0.1,
+                                                       min_inliers=num_of_points_to_sample/10)
+        else:
+            best_rotation, best_num_of_inliers, best_iter, corres, final_threshold = classification_only_ransac(
+                cls1_0, cls1_1, cls1_2, cls1_3, cls2_0, cls2_1, cls2_2, cls2_3, max_iterations=num_of_ransac_iter,
+                threshold=0.1,
+                min_inliers=num_of_points_to_sample / 10)
+        final_thresh_list.append(final_threshold)
+        final_inliers_list.append(best_num_of_inliers)
+        iter_2_ransac_convergence.append(best_iter)
+
         center = np.mean(noisy_pointcloud_1, axis=0)
         transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
         loss = np.mean(((rotation_matrix @ best_rotation) - np.eye(3)) ** 2)
-        plot_point_clouds(transformed_points1, noisy_pointcloud_2, f'loss is: {loss}; inliers: {best_num_of_inliers}; threshold: {final_threshold}')
-        plot_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, corres[0], corres[1], rotation=rotation_matrix.T)
-    return 1, 1, 1, 1, shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list
+        losses.append(loss)
+
+        kdtree = cKDTree(transformed_points1)
+
+        # Query the KDTree with points from pcl2
+        distances, indices = kdtree.query(noisy_pointcloud_2)
+
+        point_distance = np.mean(distances)
+        point_distance_list.append(point_distance)
+
+        # plot_point_clouds(transformed_points1, noisy_pointcloud_2, f'loss is: {loss}; inliers: {best_num_of_inliers}; threshold: {final_threshold}')
+        # plot_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, corres[0], corres[1], rotation=rotation_matrix.T)
+
+        # Update the worst losses list
+        index_of_smallest_loss = np.argmin([worst_losses[i][0] for i in range(len(worst_losses))])
+        smallest_loss = worst_losses[index_of_smallest_loss][0]
+        if loss > smallest_loss:
+            worst_losses[index_of_smallest_loss] = (loss, {
+                'noisy_pointcloud_1': noisy_pointcloud_1,
+                'noisy_pointcloud_2': noisy_pointcloud_2,
+                'chosen_points_1': corres[0],
+                'chosen_points_2': corres[1],
+                'rotation_matrix': rotation_matrix,
+                'best_rotation': best_rotation
+            })
+        # Update the worst losses list
+        index_of_smallest_loss = np.argmin([worst_point_losses[i][0] for i in range(len(worst_point_losses))])
+        smallest_loss = worst_point_losses[index_of_smallest_loss][0]
+        if point_distance > smallest_loss:
+            worst_point_losses[index_of_smallest_loss] = (point_distance, {
+                'noisy_pointcloud_1': noisy_pointcloud_1,
+                'noisy_pointcloud_2': noisy_pointcloud_2,
+                'chosen_points_1': corres[0],
+                'chosen_points_2': corres[1],
+                'rotation_matrix': rotation_matrix,
+                'best_rotation': best_rotation
+            })
+    return worst_losses, losses, final_thresh_list, final_inliers_list, point_distance_list, worst_point_losses, iter_2_ransac_convergence
+
 
 def view_stabiity(model_name=None, args_shape=None, scaling_factor=None):
     pcls, label = load_data()
@@ -1461,37 +1558,123 @@ def read_bin_file(bin_file):
     return points[:, :3]
 
 if __name__ == '__main__':
-    for i in range(1,2):
-    # checkData()
-    # for i in range(6,12):
-    # for i in range(6,7):
-        scaling_factor = i + 11
-        args_shape = configArgsPCT()
-        args_shape.batch_size = 1024
-        # args_shape.num_mlp_layers = 4
-        args_shape.num_mlp_layers = 3
-        args_shape.num_neurons_per_layer = 32
-        args_shape.sampled_points = 40
-        args_shape.use_second_deg = 1
-        args_shape.lpe_normalize = 1
-        # model_name = '4MLP32Nlpe6ContrNEWstdfun2Weight05_05LR001std01'
-        # model_name = '4MLP32Nlpe6ContrNEWstdfun2Weight05_02LR001std01NN5'
-        model_name = '3MLP32Ncls'
-        args_shape.exp = model_name
-        args_shape.lpe_dim = 6
-        args_shape.output_dim = 4
-        # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=args_shape, scaling_factor=10)
-        # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
-        #     = test_coress_dis(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)
-        worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
-            = test_classification(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)
-        # view_stabiity(model_name=model_name, args_shape=args_shape, scaling_factor=scaling_factor)
-        # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
-        #     = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=3, scaling_factor=scaling_factor)
-        # plot_losses(losses, num_of_inliers, filename=f'{scaling_factor}_'+"contrast_lpe6")
-        # plot_distances(shape_size_list, shortest_dist_list, avg_dist_list, dist_from_orig, filename=f'{scaling_factor}_'+"dist_plot_lpe6")
-        # plot_and_save_with_stats(iter_2_ransac_convergence, name=f'{scaling_factor}_'+"ransac_iter")
-        #
-        # plotWorst(worst_losses, model_name=f'{scaling_factor}_'+"contrast_lpe6")
+    scaling_factor = 10
+    names = ['max_diff', 'max_val', 'fps']
+    max_diff_list = []
+    max_val_list = []
+    fps_list = []
+    random_fps_loss_list = []
+    random_fps_iters_list = []
+    graph_list_loss = [max_diff_list, max_val_list, fps_list]
+    graph_list_iters = [[], [], []]
+    vals = [0,1,2]
+    num_of_iterations = [ 100 - (10 * i) for i in range(10)]
+    dummy = [ 1000 - (100 * i) for i in range(9)]
+    num_of_iterations = dummy + num_of_iterations
+    args_shape = configArgsPCT()
+    args_shape.batch_size = 1024
+    args_shape.num_mlp_layers = 3
+    args_shape.num_neurons_per_layer = 32
+    args_shape.sampled_points = 40
+    args_shape.use_second_deg = 1
+    args_shape.lpe_normalize = 1
+    model_name = '3MLP32Ncls'
+    args_shape.exp = model_name
+    args_shape.lpe_dim = 6
+    args_shape.output_dim = 4
+    for name,val, val_list, iters_list in zip(names,vals, graph_list_loss, graph_list_iters):
+        for num_of_ransac_iter in num_of_iterations:
+            worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses,iter_2_ransac_convergence \
+                = test_classification(model_name=model_name, args_shape=args_shape, max_non_unique_correspondences=5,
+                                      scaling_factor=scaling_factor, point_choice=val, num_of_ransac_iter=num_of_ransac_iter, random_pairing=0)
+            val_list.append(np.mean(losses))
+            iters_list.append(np.mean(iter_2_ransac_convergence))
+            plot_losses(losses, num_of_inliers, filename=f'cls_points_{name}_{num_of_ransac_iter}')
+            # plotWorst(worst_losses, model_name=f'{scaling_factor}_'+"contrast_lpe6")
 
 
+    for num_of_ransac_iter in num_of_iterations:
+        worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses,iter_2_ransac_convergence \
+            = test_classification(model_name=model_name, args_shape=args_shape, max_non_unique_correspondences=5,
+                                  scaling_factor=scaling_factor, point_choice=2,
+                                  num_of_ransac_iter=num_of_ransac_iter, random_pairing=1)
+        random_fps_loss_list.append(np.mean(losses))
+        random_fps_iters_list.append(np.mean(iter_2_ransac_convergence))
+        plot_losses(losses, num_of_inliers, filename=f'all_points_fps_{num_of_ransac_iter}')
+    plt.plot(num_of_iterations, graph_list[0], label="max_diff")
+    plt.plot(num_of_iterations, graph_list[1], label="max_val")
+    plt.plot(num_of_iterations, graph_list[2], label="fps")
+    plt.plot(num_of_iterations, random_fps_list, label="random_fps")
+
+    # Add labels and title
+    plt.xlabel("ransac_iters")
+    plt.ylabel("rot_loss")
+    plt.title("Loss for ransac iters")
+
+    # Add legend
+    plt.legend()
+
+    # Show the plot
+    plt.show()
+
+    # Plot iterations to convergence
+    plt.figure()
+    plt.plot(graph_list_iters[0], label="max_diff")
+    plt.plot(graph_list_iters[1], label="max_val")
+    plt.plot(graph_list_iters[2], label="fps")
+    plt.plot(random_fps_iters_list, label="random_fps")
+
+    # Add labels and title for the iterations to convergence plot
+    plt.xlabel("ransac_iters")
+    plt.ylabel("iterations to convergence")
+    plt.title("Iterations to Convergence for Ransac iters")
+    plt.legend()
+    plt.show()
+
+
+    # for i in range(1,2):
+    # # checkData()
+    # # for i in range(6,12):
+    # # for i in range(6,7):
+    #
+    #     scaling_factor = i + 9
+    #     args_shape = configArgsPCT()
+    #     args_shape.batch_size = 1024
+    #     # args_shape.num_mlp_layers = 4
+    #     args_shape.num_mlp_layers = 3
+    #     args_shape.num_neurons_per_layer = 32
+    #     args_shape.sampled_points = 40
+    #     args_shape.use_second_deg = 1
+    #     args_shape.lpe_normalize = 1
+    #     # model_name = '4MLP32Nlpe6ContrNEWstdfun2Weight05_05LR001std01'
+    #     # model_name = '4MLP32Nlpe6ContrNEWstdfun2Weight05_02LR001std01NN5'
+    #     model_name = '3MLP32Ncls'
+    #     args_shape.exp = model_name
+    #     args_shape.lpe_dim = 6
+    #     args_shape.output_dim = 4
+    #     # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=args_shape, scaling_factor=10)
+    #     # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
+    #     #     = test_coress_dis(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)
+    #
+    #     # cProfile.run('test_classification(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)', 'profile_output')
+    #     #
+    #     # # To print the profile stats
+    #     # p = pstats.Stats('profile_output')
+    #     # p.sort_stats('cumulative').print_stats(20)
+    #
+    #     worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
+    #         = test_classification(model_name=model_name, args_shape=args_shape, max_non_unique_correspondences=5,
+    #                           scaling_factor=scaling_factor, point_choice=0,
+    #                           num_of_ransac_iter=1000, random_pairing=0)
+    #     # view_stabiity(model_name=model_name, args_shape=args_shape, scaling_factor=scaling_factor)
+    #     # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
+    #     #     = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=3, scaling_factor=scaling_factor)
+    #     plot_losses(losses, num_of_inliers, filename=f'{scaling_factor}_'+"contrast_lpe6")
+    #     # plot_losses(point_distance_list, num_of_inliers, filename=f'{scaling_factor}_'+"point_contrast_lpe6")
+    #     # plot_distances(shape_size_list, shortest_dist_list, avg_dist_list, dist_from_orig, filename=f'{scaling_factor}_'+"dist_plot_lpe6")
+    #     # plot_and_save_with_stats(iter_2_ransac_convergence, name=f'{scaling_factor}_'+"ransac_iter")
+    #     #
+    #     plotWorst(worst_losses, model_name=f'{scaling_factor}_'+"contrast_lpe6")
+    #     plotWorst(worst_point_losses, model_name=f'{scaling_factor}_'+"point_contrast_lpe6")
+    #
+    #
