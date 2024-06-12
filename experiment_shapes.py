@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 from scipy.spatial.distance import cdist
 import random
 from sklearn.neighbors import NearestNeighbors
-import open3d as o3d
 import cProfile
 import pstats
 from scipy.spatial import cKDTree
