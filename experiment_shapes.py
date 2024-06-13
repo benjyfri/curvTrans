@@ -370,7 +370,7 @@ def checkOnShapes(model_name=None, input_data=None, args_shape=None, scaling_fac
 def load_data(partition='test', divide_data=1):
     BASE_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes'
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
-    # DATA_DIR = r'/content/curvTrans/bbsWithShapes/data'
+    DATA_DIR = r'/content/curvTrans/bbsWithShapes/data'
     all_data = []
     all_label = []
     for h5_name in glob.glob(os.path.join(DATA_DIR, 'modelnet40_ply_hdf5_2048', 'ply_data_%s*.h5' % partition)):
