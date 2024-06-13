@@ -374,6 +374,7 @@ def load_data(partition='test', divide_data=1):
     all_data = []
     all_label = []
     for h5_name in glob.glob(os.path.join(DATA_DIR, 'modelnet40_ply_hdf5_2048', 'ply_data_%s*.h5' % partition)):
+        print(f'++++++++{h5_name}++++++++')
         f = h5py.File(h5_name)
         data = f['data'][:].astype('float32')
         label = f['label'][:].astype('int64')
@@ -1906,15 +1907,22 @@ if __name__ == '__main__':
     all_iter_2_ransac_convergence = []
     labels = []
 
-    range_check = np.arange(100, 1100, 100)
-    for point_choice in [0,1,2]:
-        for ransac_iter in range_check:
-            for amount_of_points_to_subsample in range_check:
+    range_check_1 = [500]
+    range_check_2 = np.arange(800, 1100, 100)
+    # range_check_2 = np.arange(100, 1100, 100)
+    # for point_choice in [0,1,2]:
+    for point_choice in [0]:
+        for ransac_iter in range_check_1:
+            for amount_of_points_to_subsample in range_check_2:
                 print(f'----------------------')
                 print(f'Point choice: {point_choice}, ransac iter: {ransac_iter}, #subsample: {amount_of_points_to_subsample}')
                 worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
                     = test_multi_scale_classification(cls_args=cls_args, num_worst_losses=3, scaling_factor=scaling_factor, point_choice=point_choice,
                                                 num_of_ransac_iter=ransac_iter, subsampled_points=amount_of_points_to_subsample)
+                np.save(f'multi_output/{point_choice}_{ransac_iter}_{amount_of_points_to_subsample}_losses.npy', losses)
+                np.save(f'multi_output/{point_choice}_{ransac_iter}_{amount_of_points_to_subsample}_point_distance_list.npy', point_distance_list)
+                np.save(f'multi_output/{point_choice}_{ransac_iter}_{amount_of_points_to_subsample}_num_of_inliers.npy', num_of_inliers)
+                np.save(f'multi_output/{point_choice}_{ransac_iter}_{amount_of_points_to_subsample}_iter_2_ransac_convergence.npy', iter_2_ransac_convergence)
                 # Calculate mean loss
                 mean_loss = np.mean(losses)
 
