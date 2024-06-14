@@ -1908,7 +1908,7 @@ if __name__ == '__main__':
     labels = []
 
     # range_check_1 = [500]
-    range_check_1 = np.arange(100, 1100, 100)
+    range_check_1 = np.arange(600, 1100, 100)
     # range_check_2 = np.arange(800, 1100, 100)
     range_check_2 = np.arange(100, 1100, 100)
     # for point_choice in [0,1,2]:
