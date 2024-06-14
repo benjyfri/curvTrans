@@ -1908,12 +1908,11 @@ if __name__ == '__main__':
     labels = []
 
     # range_check_1 = [500]
-    range_check_1 = np.arange(700, 1100, 100)
-    range_check_2 = np.arange(100, 1100, 100)
+    range_check_1 = np.arange(100, 1100, 100)
     # range_check_2 = np.arange(800, 1100, 100)
-    # range_check_2 = np.arange(100, 1100, 100)
+    range_check_2 = np.arange(100, 1100, 100)
     # for point_choice in [0,1,2]:
-    for point_choice in [2]:
+    for point_choice in [1]:
         for ransac_iter in range_check_1:
             for amount_of_points_to_subsample in range_check_2:
                 print(f'----------------------')
