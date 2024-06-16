@@ -9,15 +9,19 @@ class shapeClassifier(nn.Module):
         self.lpe_normalize = args.lpe_normalize
         self.use_xyz = args.use_xyz
         self.use_second_deg = args.use_second_deg
+        self.use_lap_reorder = args.use_lap_reorder
         self.lpe_dim = args.lpe_dim
+        self.lap_eigenvalues_dim = args.lap_eigenvalues_dim
         input_dim = 0
         if self.use_xyz:
             input_dim = 3
         if self.use_second_deg:
             input_dim = 9
-        if self.lpe_dim != 0:
+        if (self.use_lap_reorder==1) and (self.lpe_dim != 0):
             input_dim = input_dim + (self.lpe_dim)
         input_size = input_dim * (args.sampled_points + 1)
+        if (self.use_lap_reorder==1) and (self.lap_eigenvalues_dim !=0):
+            input_size = input_size + (self.lap_eigenvalues_dim)
         if args.contrastive_mid_layer:
             self.classifier =  MLP_Returns_Mid_Layer(input_size= input_size, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim)
         else:
@@ -30,22 +34,27 @@ class shapeClassifier(nn.Module):
         # Reshape input to (batch_size * num_of_pcl_centroids, k_nearest_neighbors, 3)
         x = x.permute(0, 2, 3, 1).reshape(batch_size * num_of_pcl_centroids, k_nearest_neighbors, 3)
 
-        # Calculate Laplacian
-        l = self.createLap(x, self.lpe_normalize)
-        # Compute LPE embedding
-        eigvecs = self.top_k_smallest_eigenvectors(l, self.lpe_dim)
-        indices, fixed_eigs = self.sort_by_first_eigenvector(eigvecs)
+        if self.use_lap_reorder:
+            # Calculate Laplacian
+            l = self.createLap(x, self.lpe_normalize)
+            # Compute LPE embedding
+            eigvecs, eigenvals = self.top_k_smallest_eigenvectors(l, self.lpe_dim)
+            indices, fixed_eigs = self.sort_by_first_eigenvector(eigvecs)
 
-        # Gather and reshape fixed point cloud
-        data = torch.gather(x, 1, indices.unsqueeze(2).expand(-1, -1, 3))
-
+            # Gather and reshape fixed point cloud
+            data = torch.gather(x, 1, indices.unsqueeze(2).expand(-1, -1, 3))
+        else:
+            data = x
         if self.use_second_deg:
             x, y, z = data.unbind(dim=2)
             data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
-        if self.lpe_dim != 0:
+        if (self.use_lap_reorder!=0) and (self.lpe_dim != 0):
             data = torch.cat([data, fixed_eigs], dim=2)
         data = data.permute(0, 2, 1)
-        output = self.classifier(data)
+        if (self.use_lap_reorder == 0) or (self.lap_eigenvalues_dim == 0):
+            output = self.classifier(data)
+        else:
+            output = self.classifier(data, eigenvals[:, : self.lap_eigenvalues_dim])
         return output
 
     def createLap(self, point_cloud, normalized):
@@ -64,7 +73,7 @@ class shapeClassifier(nn.Module):
         if k<1:
             k=1
         eigenvalues, eigenvectors = torch.linalg.eigh(graph)
-        return eigenvectors[:,: ,1:k+1]
+        return eigenvectors[:,: ,1:k+1], eigenvalues
 
     def sort_by_first_eigenvector(self, eigenvectors):
         abs_eigenvector = torch.abs(eigenvectors[:, :, 0])
@@ -92,8 +101,10 @@ class MLP(nn.Module):
 
         self.model = nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, eigenvals=None):
         x = x.reshape(x.size(0), -1)
+        if eigenvals is not None:
+            x = torch.cat((x, eigenvals), dim=1)
         return self.model(x)
 
 class MLP_Returns_Mid_Layer(nn.Module):

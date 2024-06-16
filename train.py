@@ -200,6 +200,10 @@ def configArgsPCT():
                         help='learning rate (default: 0.001, 0.1 if using sgd)')
     parser.add_argument('--use_wandb', type=int, default=0, metavar='N',
                         help='use angles in learning ')
+    parser.add_argument('--use_lap_reorder', type=int, default=1, metavar='N',
+                        help='reorder points by laplacian order ')
+    parser.add_argument('--lap_eigenvalues_dim', type=int, default=0, metavar='N',
+                        help='use eigenvalues in as input')
     parser.add_argument('--use_second_deg', type=int, default=0, metavar='N',
                         help='use second degree embedding ')
     parser.add_argument('--lpe_normalize', type=int, default=0, metavar='N',
@@ -218,7 +222,7 @@ def configArgsPCT():
                         help='use classification loss')
     parser.add_argument('--contrastive_mid_layer', type=int, default=0, metavar='N',
                         help='use contrastive loss with middle layer (one before last)')
-    parser.add_argument('--rotate_data', type=int, default=0, metavar='N',
+    parser.add_argument('--rotate_data', type=int, default=1, metavar='N',
                         help='use rotated data')
     parser.add_argument('--num_neurons_per_layer', type=int, default=64, metavar='N',
                         help='how many neurons per layer to use')
