@@ -51,7 +51,7 @@ def train_and_test(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if args.use_wandb:
         wandb.login(key="ed8e8f26d1ee503cda463f300a605cb35e75ad23")
-        wandb.init(project="MLP-Contrastive-Smooth", name=args.exp_name)
+        wandb.init(project="MLP-Contrastive-Ablation", name=args.exp_name)
 
     print(device)
     print(args)
