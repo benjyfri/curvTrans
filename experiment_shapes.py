@@ -370,7 +370,7 @@ def checkOnShapes(model_name=None, input_data=None, args_shape=None, scaling_fac
 def load_data(partition='test', divide_data=1):
     BASE_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes'
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
-    DATA_DIR = r'/content/curvTrans/bbsWithShapes/data'
+    # DATA_DIR = r'/content/curvTrans/bbsWithShapes/data'
     all_data = []
     all_label = []
     for h5_name in glob.glob(os.path.join(DATA_DIR, 'modelnet40_ply_hdf5_2048', 'ply_data_%s*.h5' % partition)):
@@ -1205,7 +1205,7 @@ def test_coress_dis(model_name=None, args_shape=None, max_non_unique_corresponde
 
     return 1, 1, 1, 1, shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list
 
-def test_classification(cls_args=None,contr_args=None,smooth_args=None, max_non_unique_correspondences=3, num_worst_losses = 3, scaling_factor=None, point_choice=0, num_of_ransac_iter=100, random_pairing=0):
+def test_classification(cls_args=None,contr_args=None,smooth_args=None, max_non_unique_correspondences=3, num_worst_losses = 3, scaling_factor=None, point_choice=0, num_of_ransac_iter=100, random_pairing=0,subsampled_points=100):
     pcls, label = load_data()
     worst_losses = [(0, None)] * num_worst_losses  # Initialize with (loss, variables)
     worst_point_losses = [(0, None)] * num_worst_losses  # Initialize with (loss, variables)
@@ -1214,9 +1214,8 @@ def test_classification(cls_args=None,contr_args=None,smooth_args=None, max_non_
     final_thresh_list = []
     final_inliers_list = []
     iter_2_ransac_convergence = []
-    shapes = [86, 162, 174, 176, 179]
-    # shapes = np.arange(1000)
-    num_of_points_to_sample = 100
+    # shapes = [86, 162, 174, 176, 179]
+    shapes = np.arange(100)
     for k in shapes:
         if k%10 ==0:
             print(f'------------{k}------------')
@@ -1242,51 +1241,21 @@ def test_classification(cls_args=None,contr_args=None,smooth_args=None, max_non_
             continue
         if point_choice == 0:
             max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(emb_1[:,:4],
-                                                                                                             k=num_of_points_to_sample)
+                                                                                                             k=subsampled_points)
             max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(emb_2[:,:4],
-                                                                                                             k=num_of_points_to_sample)
+                                                                                                             k=subsampled_points)
         if point_choice == 1:
             max_values_1 = np.max(emb_1[:, :4], axis=1)
-            good_class_indices_1 = np.argsort(max_values_1)[-num_of_points_to_sample:][::-1]
+            good_class_indices_1 = np.argsort(max_values_1)[-subsampled_points:][::-1]
             max_values_2 = np.max(emb_2[:, :4], axis=1)
-            good_class_indices_2 = np.argsort(max_values_2)[-num_of_points_to_sample:][::-1]
+            good_class_indices_2 = np.argsort(max_values_2)[-subsampled_points:][::-1]
         if point_choice == 2:
-            good_class_indices_1 = farthest_point_sampling(emb_1[:, :4], k=num_of_points_to_sample)
-            good_class_indices_2 = farthest_point_sampling(emb_2[:, :4], k=num_of_points_to_sample)
+            good_class_indices_1 = farthest_point_sampling(emb_1[:, :4], k=subsampled_points)
+            good_class_indices_2 = farthest_point_sampling(emb_2[:, :4], k=subsampled_points)
 
         classification_pcl1 = np.argmax((emb_1[good_class_indices_1, :]), axis=1)
         classification_pcl2 = np.argmax((emb_2[good_class_indices_2, :]), axis=1)
 
-        # # learned_emb_1 = checkOnShapes(model_name=contr_args.exp,
-        # #                       input_data=noisy_pointcloud_1[good_class_indices_1, :], args_shape=contr_args, scaling_factor=scaling_factor)
-        # # learned_emb_2 = checkOnShapes(model_name=contr_args.exp,
-        # #                       input_data=noisy_pointcloud_2[good_class_indices_2, :] , args_shape=contr_args, scaling_factor=scaling_factor)
-        #
-        # learned_emb_1 = checkOnShapes(model_name=smooth_args.exp,
-        #                       input_data=noisy_pointcloud_1[good_class_indices_1, :], args_shape=smooth_args, scaling_factor=scaling_factor)
-        # learned_emb_2 = checkOnShapes(model_name=smooth_args.exp,
-        #                       input_data=noisy_pointcloud_2[good_class_indices_2, :] , args_shape=smooth_args, scaling_factor=scaling_factor)
-        #
-        # learned_emb_1 = learned_emb_1.detach().cpu().numpy()
-        # learned_emb_2 = learned_emb_2.detach().cpu().numpy()
-        #
-        # best_point_desc_pcl1 = np.hstack((emb_1[good_class_indices_1, :], learned_emb_1))
-        # best_point_desc_pcl2 = np.hstack((emb_2[good_class_indices_2, :], learned_emb_2))
-        #
-        # source_indices, target_indices = find_closest_points(best_point_desc_pcl1, best_point_desc_pcl2,
-        #                                                      num_neighbors=40,
-        #                                                      max_non_unique_correspondences=1)
-        #
-        # chosen_indices_pcl1 = good_class_indices_1[source_indices]
-        # chosen_indices_pcl2 = good_class_indices_2[target_indices]
-        # chosen_points_1 = noisy_pointcloud_1[chosen_indices_pcl1, :]
-        # chosen_points_2 = noisy_pointcloud_2[chosen_indices_pcl2, :]
-        #
-        # centered_points_1 = noisy_pointcloud_1[good_class_indices_1[source_indices], :] - np.mean(noisy_pointcloud_1)
-        # centered_points_2 = noisy_pointcloud_2[good_class_indices_2[target_indices], :] - np.mean(noisy_pointcloud_2)
-        # best_rotation, inliers, best_iter = ransac(centered_points_1, centered_points_2, max_iterations=1000,
-        #                                            threshold=0.1,
-        #                                            min_inliers=10)
 
         centered_points_1 = noisy_pointcloud_1[good_class_indices_1, :] - np.mean(noisy_pointcloud_1)
         centered_points_2 = noisy_pointcloud_2[good_class_indices_2, :] - np.mean(noisy_pointcloud_2)
@@ -1302,39 +1271,33 @@ def test_classification(cls_args=None,contr_args=None,smooth_args=None, max_non_
         cls2_1 = [pcl[1:] for pcl in result_2 if pcl[0]==1]
         cls2_2 = [pcl[1:] for pcl in result_2 if pcl[0]==2]
         cls2_3 = [pcl[1:] for pcl in result_2 if pcl[0]==3]
-        plot_8_point_clouds( cls1_0, cls1_1, cls1_2, cls1_3, cls2_0, cls2_1, cls2_2, cls2_3,  rotation=rotation_matrix)
+        # plot_8_point_clouds( cls1_0, cls1_1, cls1_2, cls1_3, cls2_0, cls2_1, cls2_2, cls2_3,  rotation=rotation_matrix)
         if random_pairing == 1:
             best_rotation, best_num_of_inliers, best_iter, corres, final_threshold = random_only_ransac(
                 cls1_0, cls1_1, cls1_2, cls1_3, cls2_0, cls2_1, cls2_2, cls2_3, max_iterations=num_of_ransac_iter,
                                                        threshold=0.1,
-                                                       min_inliers=num_of_points_to_sample/10)
+                                                       min_inliers=subsampled_points/10)
         else:
             best_rotation, best_num_of_inliers, best_iter, corres, final_threshold = classification_only_ransac(
                 cls1_0, cls1_1, cls1_2, cls1_3, cls2_0, cls2_1, cls2_2, cls2_3, max_iterations=num_of_ransac_iter,
                 threshold=0.1,
-                min_inliers=num_of_points_to_sample / 10)
+                min_inliers=subsampled_points / 10)
         final_thresh_list.append(final_threshold)
         final_inliers_list.append(best_num_of_inliers)
         iter_2_ransac_convergence.append(best_iter)
 
-        # center = np.mean(noisy_pointcloud_1, axis=0)
-        # transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
-        # loss = np.mean(((rotation_matrix @ best_rotation) - np.eye(3)) ** 2)
-        # losses.append(loss)
-        #
-        # kdtree = cKDTree(transformed_points1)
-        #
-        # # Query the KDTree with points from pcl2
-        # distances, indices = kdtree.query(noisy_pointcloud_2)
-        #
-        # point_distance = np.mean(distances)
-        # point_distance_list.append(point_distance)
-        #
-        # plot_point_clouds(transformed_points1, noisy_pointcloud_2, f'loss is: {loss}; best iter: {best_iter}')
-        # plot_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, rotation=rotation_matrix.T)
+        center = np.mean(noisy_pointcloud_1, axis=0)
+        transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
+        loss = np.mean(((rotation_matrix @ best_rotation) - np.eye(3)) ** 2)
+        losses.append(loss)
 
-        plot_point_clouds(transformed_points1, noisy_pointcloud_2, f'loss is: {loss}; inliers: {best_num_of_inliers}; threshold: {final_threshold}')
-        plot_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, corres[0], corres[1], rotation=rotation_matrix.T)
+        kdtree = cKDTree(transformed_points1)
+
+        # Query the KDTree with points from pcl2
+        distances, indices = kdtree.query(noisy_pointcloud_2)
+
+        point_distance = np.mean(distances)
+        point_distance_list.append(point_distance)
 
         # Update the worst losses list
         index_of_smallest_loss = np.argmin([worst_losses[i][0] for i in range(len(worst_losses))])
@@ -1372,7 +1335,7 @@ def test_multi_scale_classification(cls_args=None,num_worst_losses = 3, scaling_
     final_inliers_list = []
     iter_2_ransac_convergence = []
     # shapes = [86, 162, 174, 176, 179]
-    shapes = [86, 162]
+    # shapes = [86, 162]
     shapes = np.arange(100)
     num_of_points_to_sample = subsampled_points
     for k in shapes:
@@ -1887,124 +1850,76 @@ def create_args(cls_model_name, contrastive_model_name, smoothing_model_name):
     smoothing_args_shape.lpe_dim = 6
     smoothing_args_shape.output_dim = 8
     return cls_args_shape, contrastive_args_shape, smoothing_args_shape
+
+def select_top_10(data_dict):
+    mean_dict = {key: np.mean(value) for key, value in data_dict.items()}
+    sorted_keys = sorted(mean_dict, key=mean_dict.get)[:10]
+    print(f'----------------------')
+    print(f'mean: {np.mean([mean_dict[key] for key in sorted_keys])}')
+    print(f'best: {sorted_keys[0]} ,{mean_dict[sorted_keys[0]]}')
+    # print({key: mean_dict[key] for key in sorted_keys})
+    return {key: data_dict[key] for key in sorted_keys}
+def create_plot(data_dict, title, ylabel, amount_of_points_to_subsample):
+    plt.figure(figsize=(10, 6))
+    for key, data in data_dict.items():
+        point_choice, ransac_iter, subsample = key
+        if subsample != amount_of_points_to_subsample:
+            continue
+        label = f'Point choice: {point_choice}, Ransac iter: {ransac_iter}, #Subsample: {subsample}'
+        plt.plot(data, label=label)
+    plt.title(f"{title} (Subsample: {amount_of_points_to_subsample})")
+    plt.xlabel('Index')
+    plt.ylabel(ylabel)
+    plt.legend()
+    plt.show()
+def check_samplings(subsample_list=[200,300,400,500]):
+    for amount_2_sample in subsample_list:
+        cls_args, contr_args, smooth_args = create_args(cls_model_name='3MLP32Ncls', contrastive_model_name='3MLP32Ncontr',
+                                                        smoothing_model_name='3MLP32Nsmooth')
+        scaling_factor = 10
+        random_fps_loss_list = []
+        graph_list_loss = []
+        MS_graph_list_loss = []
+        num_of_iterations = [50, 100, 200, 400]
+
+        for num_of_ransac_iter in num_of_iterations:
+            worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
+                = test_classification(cls_args=cls_args, max_non_unique_correspondences=5,
+                                      scaling_factor=scaling_factor, point_choice=0,
+                                      num_of_ransac_iter=num_of_ransac_iter, random_pairing=0,
+                                      subsampled_points=amount_2_sample)
+            graph_list_loss.append(np.mean(losses))
+        np.save(f'{amount_2_sample}_graph_list_loss.npy', np.array(graph_list_loss))
+
+        for num_of_ransac_iter in num_of_iterations:
+            worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
+                = test_multi_scale_classification(cls_args=cls_args, num_worst_losses=3, scaling_factor=scaling_factor,
+                                                  point_choice=0,
+                                                  num_of_ransac_iter=num_of_ransac_iter,
+                                                  subsampled_points=amount_2_sample)
+            MS_graph_list_loss.append(np.mean(losses))
+        np.save(f'{amount_2_sample}_MS_graph_list_loss.npy', np.array(MS_graph_list_loss))
+
+        for num_of_ransac_iter in num_of_iterations:
+            worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
+                = test_classification(cls_args=cls_args, max_non_unique_correspondences=5,
+                                      scaling_factor=scaling_factor, point_choice=2,
+                                      num_of_ransac_iter=num_of_ransac_iter, random_pairing=1,
+                                      subsampled_points=amount_2_sample)
+            random_fps_loss_list.append(np.mean(losses))
+        np.save(f'{amount_2_sample}_random_fps_loss_list.npy', np.array(random_fps_loss_list))
+
+        plt.plot(num_of_iterations, graph_list_loss, label="max_diff")
+        plt.plot(num_of_iterations, MS_graph_list_loss, label="MS_max_diff")
+        plt.plot(num_of_iterations, random_fps_loss_list, label="random_fps")
+
+        # Add labels and title
+        plt.xlabel("ransac_iters")
+        plt.ylabel("rot_loss")
+        plt.title(f"Loss for ransac iters; Subsampled points: {amount_2_sample}")
+        # Add legend
+        plt.legend()
+        # Show the plot
+        plt.show()
 if __name__ == '__main__':
-    args_shape = configArgsPCT()
-    cls_args, contr_args,smooth_args =  create_args(cls_model_name='3MLP32Ncls', contrastive_model_name='3MLP32Ncontr', smoothing_model_name='3MLP32Nsmooth')
-    scaling_factor = 10
-    # view_stabiity(model_name=contr_args.exp, args_shape=contr_args, scaling_factor=scaling_factor)
-    # view_stabiity(model_name=smooth_args.exp, args_shape=smooth_args, scaling_factor=scaling_factor)
-    # for point_choice in range(3):
-    #     worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
-    #         = test_classification(cls_args=cls_args, contr_args=contr_args, smooth_args=smooth_args, max_non_unique_correspondences=5,
-    #                               scaling_factor=scaling_factor, point_choice=point_choice, num_of_ransac_iter=100,
-    #                               random_pairing=0)
-    #     print(f'--------------------{point_choice}--------------------')
-    #     print(f'loss avg: {np.mean(losses)}')
-    #     plotWorst(worst_losses, model_name=f'_{point_choice}_')
-
-    all_num_of_inliers = []
-    all_mean_losses = []
-    all_iter_2_ransac_convergence = []
-    labels = []
-
-    # range_check_1 = [500]
-    range_check_1 = np.arange(600, 1100, 100)
-    # range_check_2 = np.arange(800, 1100, 100)
-    range_check_2 = np.arange(100, 1100, 100)
-    # for point_choice in [0,1,2]:
-    for point_choice in [1]:
-        for ransac_iter in range_check_1:
-            for amount_of_points_to_subsample in range_check_2:
-                print(f'----------------------')
-                print(f'Point choice: {point_choice}, ransac iter: {ransac_iter}, #subsample: {amount_of_points_to_subsample}')
-                worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
-                    = test_multi_scale_classification(cls_args=cls_args, num_worst_losses=3, scaling_factor=scaling_factor, point_choice=point_choice,
-                                                num_of_ransac_iter=ransac_iter, subsampled_points=amount_of_points_to_subsample)
-                np.save(f'multi_output/{point_choice}_{ransac_iter}_{amount_of_points_to_subsample}_losses.npy', losses)
-                np.save(f'multi_output/{point_choice}_{ransac_iter}_{amount_of_points_to_subsample}_point_distance_list.npy', point_distance_list)
-                np.save(f'multi_output/{point_choice}_{ransac_iter}_{amount_of_points_to_subsample}_num_of_inliers.npy', num_of_inliers)
-                np.save(f'multi_output/{point_choice}_{ransac_iter}_{amount_of_points_to_subsample}_iter_2_ransac_convergence.npy', iter_2_ransac_convergence)
-                # Calculate mean loss
-                mean_loss = np.mean(losses)
-
-                # Store the results
-                all_num_of_inliers.append(num_of_inliers)
-                all_mean_losses.append(mean_loss)
-                all_iter_2_ransac_convergence.append(iter_2_ransac_convergence)
-                labels.append(f'PC: {point_choice}, RI: {ransac_iter}, SP: {amount_of_points_to_subsample}')
-
-    # Plot mean loss vs number of inliers
-    plt.figure(figsize=(12, 6))
-    for i in range(len(all_num_of_inliers)):
-        plt.plot(range(len(all_mean_losses[i])), all_mean_losses[i], label=labels[i])
-    plt.xlabel('Number of Inliers')
-    plt.ylabel('Mean Loss')
-    plt.title('Mean Loss vs Number of Inliers')
-    plt.legend()
-    plt.show()
-
-    # Plot iteration-wise RANSAC convergence
-    plt.figure(figsize=(12, 6))
-    for i in range(len(all_iter_2_ransac_convergence)):
-        plt.plot(range(len(all_iter_2_ransac_convergence[i])), all_iter_2_ransac_convergence[i], label=labels[i])
-    plt.xlabel('Iteration')
-    plt.ylabel('RANSAC Convergence')
-    plt.title('Iter 2 RANSAC Convergence')
-    plt.legend()
-    plt.show()
-
-    # Plot all number of inliers
-    plt.figure(figsize=(12, 6))
-    for i in range(len(all_num_of_inliers)):
-        plt.plot(range(len(all_num_of_inliers[i])), all_num_of_inliers[i], label=labels[i])
-    plt.xlabel('Configuration Index')
-    plt.ylabel('Number of Inliers')
-    plt.title('Number of Inliers for Different Configurations')
-    plt.legend()
-    plt.show()
-# for i in range(1,2):
-    # # checkData()
-    # # for i in range(6,12):
-    # # for i in range(6,7):
-    #
-    #     scaling_factor = i + 9
-    #     args_shape = configArgsPCT()
-    #     args_shape.batch_size = 1024
-    #     # args_shape.num_mlp_layers = 4
-    #     args_shape.num_mlp_layers = 3
-    #     args_shape.num_neurons_per_layer = 32
-    #     args_shape.sampled_points = 40
-    #     args_shape.use_second_deg = 1
-    #     args_shape.lpe_normalize = 1
-    #     # model_name = '4MLP32Nlpe6ContrNEWstdfun2Weight05_05LR001std01'
-    #     # model_name = '4MLP32Nlpe6ContrNEWstdfun2Weight05_02LR001std01NN5'
-    #     model_name = '3MLP32Ncls'
-    #     args_shape.exp = model_name
-    #     args_shape.lpe_dim = 6
-    #     args_shape.output_dim = 4
-    #     # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=args_shape, scaling_factor=10)
-    #     # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
-    #     #     = test_coress_dis(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)
-    #
-    #     # cProfile.run('test_classification(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=5, scaling_factor=scaling_factor)', 'profile_output')
-    #     #
-    #     # # To print the profile stats
-    #     # p = pstats.Stats('profile_output')
-    #     # p.sort_stats('cumulative').print_stats(20)
-    #
-    #     worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
-    #         = test_classification(model_name=model_name, args_shape=args_shape, max_non_unique_correspondences=5,
-    #                           scaling_factor=scaling_factor, point_choice=0,
-    #                           num_of_ransac_iter=1000, random_pairing=0)
-    #     # view_stabiity(model_name=model_name, args_shape=args_shape, scaling_factor=scaling_factor)
-    #     # worst_losses, losses, num_of_inliers, iter_2_ransac_convergence,shape_size_list, dist_from_orig, shortest_dist_list, avg_dist_list  \
-    #     #     = findRotTrans(model_name=model_name, args_shape=args_shape,max_non_unique_correspondences=3, scaling_factor=scaling_factor)
-    #     plot_losses(losses, num_of_inliers, filename=f'{scaling_factor}_'+"contrast_lpe6")
-    #     # plot_losses(point_distance_list, num_of_inliers, filename=f'{scaling_factor}_'+"point_contrast_lpe6")
-    #     # plot_distances(shape_size_list, shortest_dist_list, avg_dist_list, dist_from_orig, filename=f'{scaling_factor}_'+"dist_plot_lpe6")
-    #     # plot_and_save_with_stats(iter_2_ransac_convergence, name=f'{scaling_factor}_'+"ransac_iter")
-    #     #
-    #     plotWorst(worst_losses, model_name=f'{scaling_factor}_'+"contrast_lpe6")
-    #     plotWorst(worst_point_losses, model_name=f'{scaling_factor}_'+"point_contrast_lpe6")
-    #
-    #
+    check_samplings(subsample_list=[100,200,300,400,500])
