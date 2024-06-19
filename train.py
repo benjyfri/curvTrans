@@ -51,7 +51,7 @@ def train_and_test(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if args.use_wandb:
         wandb.login(key="ed8e8f26d1ee503cda463f300a605cb35e75ad23")
-        wandb.init(project="MLP-Contrastive-Ablation", name=args.exp_name)
+        wandb.init(project=args.wandb_proj, name=args.exp_name)
 
     print(device)
     print(args)
@@ -190,6 +190,8 @@ def train_and_test(args):
 
 def configArgsPCT():
     parser = argparse.ArgumentParser(description='Point Cloud Recognition')
+    parser.add_argument('--wandb_proj', type=str, default='MLP-Contrastive-Ablation', metavar='N',
+                        help='Name of the wnadb project name to upload the run data')
     parser.add_argument('--exp_name', type=str, default='exp', metavar='N',
                         help='Name of the experiment')
     parser.add_argument('--batch_size', type=int, default=512, metavar='batch_size',
@@ -210,6 +212,8 @@ def configArgsPCT():
                         help='use PCT transformer version')
     parser.add_argument('--std_dev', type=float, default=0, metavar='N',
                         help='amount of noise to add to data')
+    parser.add_argument('--pcl_scaling', type=float, default=1.0, metavar='N',
+                        help='scaling the point cloud')
     parser.add_argument('--contr_loss_weight', type=float, default=1.0, metavar='N',
                         help='weight of contrastive loss')
     parser.add_argument('--smoothness_loss', type=float, default=0.0, metavar='N',

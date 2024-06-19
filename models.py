@@ -54,7 +54,7 @@ class shapeClassifier(nn.Module):
         if (self.use_lap_reorder == 0) or (self.lap_eigenvalues_dim == 0):
             output = self.classifier(data)
         else:
-            output = self.classifier(data, eigenvals[:, : self.lap_eigenvalues_dim])
+            output = self.classifier(data, eigenvals[:, 1 : 1 + self.lap_eigenvalues_dim])
         return output
 
     def createLap(self, point_cloud, normalized):

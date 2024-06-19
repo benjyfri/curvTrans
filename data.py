@@ -20,6 +20,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.sampled_points = args.sampled_points
         self.smoothness_loss = args.smoothness_loss
         self.smooth_num_of_neighbors = args.smooth_num_of_neighbors
+        self.pcl_scaling = args.pcl_scaling
     def __len__(self):
         return self.num_point_clouds
 
@@ -30,6 +31,10 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                     self.point_clouds_group[point_cloud_name].attrs}
         point_cloud = self.point_clouds_group[point_cloud_name]
         point_cloud = np.array(point_cloud, dtype=np.float32)
+        increase_scale = np.random.uniform(low=1, high=self.pcl_scaling)
+        decrease_scale = np.random.uniform(low=(1/self.pcl_scaling), high=1)
+        scale = random.choice([increase_scale, decrease_scale])
+        point_cloud = scale * point_cloud
         point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
         # permute points
         shuffled_indices = torch.randperm(self.sampled_points) + 1
