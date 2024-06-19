@@ -18,282 +18,7 @@ from sklearn.neighbors import NearestNeighbors
 import cProfile
 import pstats
 from scipy.spatial import cKDTree
-
-def plot_multiclass_point_clouds(point_clouds_1, point_clouds_2, rotation=None, title=""):
-    """
-    Plot pairs of sub point clouds in an interactive 3D plot with Plotly.
-
-    Args:
-        point_clouds_1 (list of np.ndarray): List of sub point clouds from pcl1.
-        point_clouds_2 (list of corresponding np.ndarray): List of sub point clouds from pcl2.
-        rotation (np.ndarray): Rotation matrix to apply to the point clouds.
-        title (str): Title of the plot.
-    """
-    fig = go.Figure()
-
-    # Filter out empty sub point clouds
-    point_clouds_1 = [pc for pc in point_clouds_1 if len(pc) > 0]
-    point_clouds_2 = [np.array(pc) for pc in point_clouds_2 if len(pc) > 0]
-
-    if rotation is not None:
-        center = np.mean(np.vstack(point_clouds_1), axis=0)
-        point_clouds_1 = [np.matmul((pc - center), rotation) for pc in point_clouds_1]
-        axis = np.argmin(np.max(np.vstack(point_clouds_1), axis=0))
-        for pc in point_clouds_1:
-            pc[:, axis] += 1.5
-
-    # Define a broad range of colors
-    cmap = plt.get_cmap('tab20')
-    colors = [cmap(i) for i in range(cmap.N)]
-
-    # Plot each point cloud from point_clouds_1 and point_clouds_2 with corresponding color
-    for i, point_cloud1 in enumerate(point_clouds_1):
-        fig.add_trace(go.Scatter3d(
-            x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
-            mode='markers', marker=dict(size=2, color=f'rgb({colors[i][0]*255},{colors[i][1]*255},{colors[i][2]*255})', opacity=0.5),
-            name=f'Class {i+1}'
-        ))
-    for i, point_cloud2 in enumerate(point_clouds_2):
-        fig.add_trace(go.Scatter3d(
-            x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
-            mode='markers', marker=dict(size=2, color=f'rgb({colors[i][0]*255},{colors[i][1]*255},{colors[i][2]*255})', opacity=0.5),
-            name=f'Class {i+1}'
-        ))
-
-    fig.update_layout(
-        title=title,
-        scene=dict(
-            xaxis=dict(title='X'),
-            yaxis=dict(title='Y'),
-            zaxis=dict(title='Z'),
-        ),
-        margin=dict(r=20, l=10, b=10, t=100)
-    )
-
-    fig.show()
-def plot_8_point_clouds(cls1_1, cls1_2, cls1_3, cls1_4, cls2_1, cls2_2, cls2_3, cls2_4, rotation=None, title=""):
-    """
-    Plot four pairs of sub point clouds in an interactive 3D plot with Plotly.
-
-    Args:
-        cls1_1, cls1_2, cls1_3, cls1_4 (np.ndarray): Sub point clouds from pcl1.
-        cls2_1, cls2_2, cls2_3, cls2_4 (np.ndarray): Corresponding sub point clouds from pcl2.
-        rotation (np.ndarray): Rotation matrix to apply to the point clouds.
-        title (str): Title of the plot.
-    """
-    fig = go.Figure()
-
-    # Combine the inputs into lists for easier iteration
-    pcl1 = [cls1_1, cls1_2, cls1_3, cls1_4]
-    pcl1 = [x for x in pcl1 if len(x)>0]
-
-    pcl2 = [cls2_1, cls2_2, cls2_3, cls2_4]
-    pcl2 = [np.array(x) for x in pcl2 if len(x) > 0]
-
-    if rotation is not None:
-        center = np.mean(np.vstack(pcl1), axis=0)
-        pcl1 = [np.matmul((pcl - center), rotation) for pcl in pcl1]
-        axis = np.argmin(np.max(np.vstack(pcl1), axis=0))
-        for pcl in pcl1:
-            pcl[:, axis] += 1.5
-
-    # Define a color list for four point clouds
-    colors = ['blue', 'orange', 'brown', 'red']
-    names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
-    # Plot each point cloud from pcl1 and pcl2 with corresponding color
-    # Plot each point cloud from pcl1 and pcl2 with corresponding color
-    for i, (point_cloud1) in enumerate(pcl1):
-        fig.add_trace(go.Scatter3d(
-            x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
-            mode='markers', marker=dict(size=2, color=colors[i], opacity=0.5),
-            name=f'PCL1 - {names[i]}'
-        ))
-    for i, (point_cloud2) in enumerate(pcl2):
-        fig.add_trace(go.Scatter3d(
-            x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
-            mode='markers', marker=dict(size=2, color=colors[i], opacity=0.5),
-            name=f'PCL2 - {names[i]}'
-        ))
-
-    fig.update_layout(
-        title=title,
-        scene=dict(
-            xaxis=dict(title='X'),
-            yaxis=dict(title='Y'),
-            zaxis=dict(title='Z'),
-        ),
-        margin=dict(r=20, l=10, b=10, t=100)
-    )
-
-    fig.show()
-
-def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, rotation=None, title=""):
-  """
-  Plot four point clouds in an interactive 3D plot with Plotly.
-
-  Args:
-      point_cloud1 (np.ndarray): First point cloud of shape (41, 3)
-      point_cloud2 (np.ndarray): Second point cloud of shape (41, 3)
-      point_cloud3 (np.ndarray): Third point cloud of shape (41, 3)
-      point_cloud4 (np.ndarray): Fourth point cloud of shape (41, 3)
-  """
-  fig = go.Figure()
-  if rotation is not None:
-      center = np.mean(point_cloud1, axis=0)
-      point_cloud1 = np.matmul((point_cloud1 - center), rotation.T)
-      point_cloud3 = np.matmul((point_cloud3 - center), rotation.T)
-      axis = np.argmin(np.max(point_cloud1, axis=0))
-
-      point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
-      point_cloud3[:, axis] = point_cloud3[:, axis] + 1.5
-
-  # Define a color list for four point clouds
-  colors = ['blue', 'orange', 'brown', 'red']
-
-  # Add traces for each point cloud with corresponding color
-  for i, point_cloud in enumerate(
-      [point_cloud1, point_cloud2, point_cloud3, point_cloud4]):
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud[:, 0], y=point_cloud[:, 1], z=point_cloud[:, 2],
-        mode='markers', marker=dict(size=2, color=colors[i]),
-        name=f'Point Cloud {i+1}'
-    ))
-
-  for i in range(len(point_cloud3)):
-      fig.add_trace(go.Scatter3d(
-          x=[point_cloud3[i, 0], point_cloud4[i, 0]],
-          y=[point_cloud3[i, 1], point_cloud4[i, 1]],
-          z=[point_cloud3[i, 2], point_cloud4[i, 2]],
-          mode='lines', line=dict(color='black', width=2),
-          showlegend=False
-      ))
-
-  fig.update_layout(
-      title=title,
-      scene=dict(
-          xaxis=dict(title='X'),
-          yaxis=dict(title='Y'),
-          zaxis=dict(title='Z'),
-      ),
-      margin=dict(r=20, l=10, b=10, t=100)
-  )
-
-  fig.show()
-
-def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, filename="plot.html", rotation=None, title=""):
-  """
-  Plot four point clouds in an interactive 3D plot with Plotly and save it.
-
-  Args:
-      point_cloud1 (np.ndarray): First point cloud of shape (41, 3)
-      point_cloud2 (np.ndarray): Second point cloud of shape (41, 3)
-      point_cloud3 (np.ndarray): Third point cloud of shape (41, 3)
-      point_cloud4 (np.ndarray): Fourth point cloud of shape (41, 3)
-      filename (str, optional): Filename to save the plot. Defaults to "plot.png".
-  """
-  fig = go.Figure()
-
-  # Define a color list for four point clouds
-  colors = ['blue', 'orange', 'brown', 'red']
-
-  if rotation is not None:
-      center = np.mean(point_cloud1, axis=0)
-      point_cloud1 = np.matmul((point_cloud1 - center), rotation)
-      point_cloud3 = np.matmul((point_cloud3 - center), rotation)
-      axis = np.argmin(np.max(point_cloud1, axis=0))
-
-      point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
-      point_cloud3[:, axis] = point_cloud3[:, axis] + 1.5
-
-  # Add traces for each point cloud with corresponding color
-  for i, point_cloud in enumerate(
-      [point_cloud1, point_cloud2, point_cloud3, point_cloud4]):
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud[:, 0], y=point_cloud[:, 1], z=point_cloud[:, 2],
-        mode='markers', marker=dict(size=2, color=colors[i]),
-        name=f'Point Cloud {i+1}'
-    ))
-
-  for i in range(len(point_cloud3)):
-      fig.add_trace(go.Scatter3d(
-          x=[point_cloud3[i, 0], point_cloud4[i, 0]],
-          y=[point_cloud3[i, 1], point_cloud4[i, 1]],
-          z=[point_cloud3[i, 2], point_cloud4[i, 2]],
-          mode='lines', line=dict(color='black', width=2),
-          showlegend=False
-      ))
-
-  fig.update_layout(
-      title=title,
-      scene=dict(
-          xaxis=dict(title='X'),
-          yaxis=dict(title='Y'),
-          zaxis=dict(title='Z'),
-      ),
-      margin=dict(r=20, l=10, b=10, t=100)
-  )
-
-  # Save the figure as a png image
-  fig.write_html(filename)
-
-def save_point_clouds(point_cloud1, point_cloud2, title="", filename="plot.html"):
-    """
-    Plot two point clouds in an interactive 3D plot with Plotly and save it.
-
-    Args:
-        point_cloud1 (np.ndarray): First point cloud of shape (41, 3)
-        point_cloud2 (np.ndarray): Second point cloud of shape (41, 3)
-        title (str, optional): Title for the plot. Defaults to "".
-        filename (str, optional): Filename to save the plot. Defaults to "plot.png".
-    """
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
-        mode='markers', marker=dict(size=2,color='red'), name='Point Cloud 1'
-    ))
-
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
-        mode='markers', marker=dict(size=2,color='blue'), name='Point Cloud 2'
-    ))
-
-    fig.update_layout(
-        scene=dict(
-            xaxis=dict(title='X'),
-            yaxis=dict(title='Y'),
-            zaxis=dict(title='Z'),
-        ),
-        margin=dict(r=20, l=10, b=10, t=10),
-        title=title
-    )
-
-    # Save the figure as a png image
-    fig.write_html(filename)
-
-def plot_point_clouds(point_cloud1, point_cloud2, title=""):
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
-        mode='markers', marker=dict(size=2,color='red'), name='Point Cloud 1'
-    ))
-
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
-        mode='markers', marker=dict(size=2,color='blue'), name='Point Cloud 2'
-    ))
-
-    fig.update_layout(
-        scene=dict(
-            xaxis=dict(title='X'),
-            yaxis=dict(title='Y'),
-            zaxis=dict(title='Z'),
-        ),
-        margin=dict(r=20, l=10, b=10, t=10),
-        title=title
-    )
-    fig.show()
+from plotting_functions import *
 
 
 def farthest_point_sampling(point_cloud, k):
@@ -332,7 +57,7 @@ def get_k_nearest_neighbors(point_cloud, k):
         np.ndarray: Array of shape (1, 3, pcl_size, k) containing the k nearest neighbors for each point
     """
     pcl_size = point_cloud.shape[0]
-    neigh = NearestNeighbors(n_neighbors=k+1)
+    neigh = NearestNeighbors(n_neighbors=k)
     neigh.fit(point_cloud)
     distances, indices = neigh.kneighbors(point_cloud)
 
@@ -340,11 +65,36 @@ def get_k_nearest_neighbors(point_cloud, k):
     neighbors_non_centered = np.empty((1, 3, pcl_size, k), dtype=point_cloud.dtype)
     # Each point cloud should be centered around first point which is at the origin
     for i in range(pcl_size):
-        orig = point_cloud[indices[i, 1:]] - point_cloud[indices[i, 1:]][0,:]
+        orig = point_cloud[indices[i, :]] - point_cloud[i,:]
         neighbors_centered[0, :, i, :] = orig.T
-        neighbors_non_centered[0, :, i, :] = (point_cloud[indices[i, 1:]]).T
+        neighbors_non_centered[0, :, i, :] = (point_cloud[indices[i, :]]).T
 
     return neighbors_centered, neighbors_non_centered
+def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):
+    """
+    Returns the k nearest neighbors for each point in the point cloud.
+
+    Args:
+        point_cloud (np.ndarray): Point cloud of shape (pcl_size, 3)
+        k (int): Number of nearest neighbors to return
+
+    Returns:
+        np.ndarray: Array of shape (1, 3, pcl_size, k) containing the k nearest neighbors for each point
+    """
+    pcl_size = pcl_interest.shape[0]
+    neigh = NearestNeighbors(n_neighbors=k)
+    neigh.fit(pcl_src)
+    distances, indices = neigh.kneighbors(pcl_interest)
+
+    neighbors_centered = np.empty((1, 3, pcl_size, k), dtype=pcl_src.dtype)
+    # Each point cloud should be centered around first point which is at the origin
+    for i in range(pcl_size):
+        orig = pcl_src[indices[i, :]] - pcl_interest[i,:]
+        if not (np.array_equal(orig[0,], np.array([0,0,0]))):
+            orig = np.vstack([np.array([0,0,0]), orig])[:-1]
+        neighbors_centered[0, :, i, :] = orig.T
+
+    return neighbors_centered
 def find_mean_diameter_for_specific_coordinate(specific_coordinates):
     pairwise_distances = torch.cdist(specific_coordinates.unsqueeze(2), specific_coordinates.unsqueeze(2))
     largest_dist = pairwise_distances.view(specific_coordinates.shape[0], -1).max(dim=1).values
@@ -356,6 +106,22 @@ def checkOnShapes(model_name=None, input_data=None, args_shape=None, scaling_fac
     model.load_state_dict(torch.load(f'{model_name}.pt'))
     model.eval()
     neighbors_centered, neighbors_non_centered = get_k_nearest_neighbors(input_data, 41)
+    src_knn_pcl = torch.tensor(neighbors_centered)
+    x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
+    y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
+    z_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,2,:,:])
+    scale = torch.mean(torch.stack((x_scale_src, y_scale_src, z_scale_src), dim=0))
+    #scale KNN point clouds to be of size 1
+    src_knn_pcl = src_knn_pcl / scale
+    #use 23 as it is around the size of the synthetic point clouds
+    src_knn_pcl = scaling_factor * src_knn_pcl
+    output = model(src_knn_pcl.permute(2,1,0,3))
+    return output
+def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None):
+    model = shapeClassifier(args_shape)
+    model.load_state_dict(torch.load(f'{model_name}.pt'))
+    model.eval()
+    neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
     src_knn_pcl = torch.tensor(neighbors_centered)
     x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
     y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
@@ -440,9 +206,9 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_fact
         pointcloud = pcls[k][:]
         # bin_file = "000098.bin"
         # pointcloud = read_bin_file(bin_file)
-        noisy_pointcloud = pointcloud #+ np.random.normal(0, 0.01, pointcloud.shape)
+        noisy_pointcloud = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
         pointcloud = noisy_pointcloud.astype(np.float32)
-        surface_labels , colors = checkOnShapes(model_name=model_name,
+        colors = checkOnShapes(model_name=model_name,
                                     input_data=pointcloud, args_shape=args_shape, scaling_factor=scaling_factor)
         colors = colors.detach().cpu().numpy()
         colors = colors[:,:4]
@@ -512,31 +278,31 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_fact
         fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
         fig_max_embedding.show()
 
-        # Plot the maximum value embedding with specified colors
-        max_embedding_index = surface_labels
-        max_embedding_colors = np.array(['red', 'blue', 'green', 'pink'])[max_embedding_index]
-
-        data_max_embedding = []
-        colors_shape = ['red', 'blue', 'green', 'pink']
-        names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
-        for color, name in zip(colors_shape, names):
-            indices = np.where(max_embedding_colors == color)[0]
-            data_max_embedding.append(
-                go.Scatter3d(
-                    x=pointcloud[indices, 0],
-                    y=pointcloud[indices, 1],
-                    z=pointcloud[indices, 2],
-                    mode='markers',
-                    marker=dict(
-                        size=2,
-                        opacity=0.8,
-                        color=color
-                    ),
-                    name=f'Max Value Embedding - {name}'
-                )
-            )
-        fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
-        fig_max_embedding.show()
+        # # Plot the maximum value embedding with specified colors
+        # max_embedding_index = surface_labels
+        # max_embedding_colors = np.array(['red', 'blue', 'green', 'pink'])[max_embedding_index]
+        #
+        # data_max_embedding = []
+        # colors_shape = ['red', 'blue', 'green', 'pink']
+        # names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
+        # for color, name in zip(colors_shape, names):
+        #     indices = np.where(max_embedding_colors == color)[0]
+        #     data_max_embedding.append(
+        #         go.Scatter3d(
+        #             x=pointcloud[indices, 0],
+        #             y=pointcloud[indices, 1],
+        #             z=pointcloud[indices, 2],
+        #             mode='markers',
+        #             marker=dict(
+        #                 size=2,
+        #                 opacity=0.8,
+        #                 color=color
+        #             ),
+        #             name=f'Max Value Embedding - {name}'
+        #         )
+        #     )
+        # fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
+        # fig_max_embedding.show()
 
 
 def find_max_difference_indices(array, k=200):
@@ -1034,23 +800,6 @@ def plotWorst(worst_losses, model_name=""):
         save_point_clouds(transformed_points1, noisy_pointcloud_2 - center2, title="", filename=model_name+f"_{loss:.3f}_{count}_loss.html")
         count = count + 1
 
-
-def plot_and_save_with_stats(numbers, name):
-    # Calculate mean and median
-    mean_value = np.mean(numbers)
-    median_value = np.median(numbers)
-
-    # Create the plot
-    plt.figure()
-    plt.plot(numbers)
-    plt.grid(True)
-    plt.title(f'Mean: {mean_value:.2f}, Median: {median_value:.2f}')
-    plt.xlabel('Index')
-    plt.ylabel('Value')
-
-    # Save the plot
-    plt.savefig(f'{name}_plot.png')
-    plt.show()
 def plot_losses(losses, inliers, filename="loss_plot.png"):
     """
     Plots the given list of losses and corresponding number of inliers,
@@ -1080,38 +829,6 @@ def plot_losses(losses, inliers, filename="loss_plot.png"):
     plt.show()
 
 
-
-def plot_distances(Max_dist, min_dist, avg_dist_list, dist_from_orig, filename="dist_plot.png"):
-    # Create x-axis values (assuming len(Max_dist) = len(min_dist) = len(dist_from_orig))
-    x = list(range(len(Max_dist)))
-
-    # Plot Max_dist
-    plt.plot(x, Max_dist, label=f'Max Distances {np.mean(Max_dist):.3f}', color='blue')
-
-    # Plot min_dist
-    plt.plot(x, min_dist, label=f'Min Distances {np.mean(min_dist):.3f}', color='red')
-
-    # Plot min_dist
-    plt.plot(x, avg_dist_list, label=f'AVG Distances {np.mean(avg_dist_list):.3f}', color='purple')
-
-    # Plot dist_from_orig
-    plt.plot(x, dist_from_orig, label=f'Dist from Origin {np.mean(dist_from_orig):.3f}', color='green')
-
-    plt.grid(True)
-    # Add labels and legend
-    plt.xlabel('Index')
-    plt.ylabel('Distance')
-    # Calculate mean and median of dist_from_orig
-    # mean_dist = np.mean(dist_from_orig)
-    # median_dist = np.median(dist_from_orig)
-
-    # Add mean and median to the title
-    title = f'Distances Plot'
-    plt.title(title)
-    plt.legend()
-    plt.savefig(filename)
-    # Show the plot
-    plt.show()
 
 def test_coress_dis(model_name=None, args_shape=None, max_non_unique_correspondences=3, num_worst_losses = 3, scaling_factor=None):
     pcls, label = load_data()
@@ -1250,8 +967,8 @@ def test_classification(cls_args=None,contr_args=None,smooth_args=None, max_non_
             max_values_2 = np.max(emb_2[:, :4], axis=1)
             good_class_indices_2 = np.argsort(max_values_2)[-subsampled_points:][::-1]
         if point_choice == 2:
-            good_class_indices_1 = farthest_point_sampling(emb_1[:, :4], k=subsampled_points)
-            good_class_indices_2 = farthest_point_sampling(emb_2[:, :4], k=subsampled_points)
+            good_class_indices_1 = farthest_point_sampling(noisy_pointcloud_1, k=subsampled_points)
+            good_class_indices_2 = farthest_point_sampling(noisy_pointcloud_2, k=subsampled_points)
 
         classification_pcl1 = np.argmax((emb_1[good_class_indices_1, :]), axis=1)
         classification_pcl2 = np.argmax((emb_2[good_class_indices_2, :]), axis=1)
@@ -1334,9 +1051,9 @@ def test_multi_scale_classification(cls_args=None,num_worst_losses = 3, scaling_
     final_thresh_list = []
     final_inliers_list = []
     iter_2_ransac_convergence = []
-    # shapes = [86, 162, 174, 176, 179]
+    shapes = [86, 162, 174, 176, 179]
     # shapes = [86, 162]
-    shapes = np.arange(100)
+    # shapes = np.arange(100)
     num_of_points_to_sample = subsampled_points
     for k in shapes:
         if k%10 ==0:
@@ -1372,8 +1089,8 @@ def test_multi_scale_classification(cls_args=None,num_worst_losses = 3, scaling_
             max_values_2 = np.max(emb_2[:, :4], axis=1)
             good_class_indices_2 = np.argsort(max_values_2)[-num_of_points_to_sample:][::-1]
         if point_choice == 2:
-            good_class_indices_1 = farthest_point_sampling(emb_1[:, :4], k=num_of_points_to_sample)
-            good_class_indices_2 = farthest_point_sampling(emb_2[:, :4], k=num_of_points_to_sample)
+            good_class_indices_1 = farthest_point_sampling(noisy_pointcloud_1, k=num_of_points_to_sample)
+            good_class_indices_2 = farthest_point_sampling(noisy_pointcloud_2, k=num_of_points_to_sample)
 
         classification_pcl1 = np.argmax((emb_1[good_class_indices_1, :]), axis=1)
         classification_pcl2 = np.argmax((emb_2[good_class_indices_2, :]), axis=1)
@@ -1382,10 +1099,20 @@ def test_multi_scale_classification(cls_args=None,num_worst_losses = 3, scaling_
         centered_points_2 = noisy_pointcloud_2[good_class_indices_2, :] - np.mean(noisy_pointcloud_2)
 
 
-        global_emb_1 = checkOnShapes(model_name=cls_args.exp,
-                                    input_data=centered_points_1, args_shape=cls_args, scaling_factor=scaling_factor)
-        global_emb_2 = checkOnShapes(model_name=cls_args.exp,
-                                    input_data=centered_points_2,args_shape=cls_args, scaling_factor=scaling_factor)
+        # global_emb_1 = checkOnShapes(model_name=cls_args.exp,
+        #                             input_data=centered_points_1, args_shape=cls_args, scaling_factor=scaling_factor)
+        # global_emb_2 = checkOnShapes(model_name=cls_args.exp,
+        #                             input_data=centered_points_2,args_shape=cls_args, scaling_factor=scaling_factor)
+
+        fps_indices_1 = farthest_point_sampling(noisy_pointcloud_1, k=50)
+        fps_indices_2 = farthest_point_sampling(noisy_pointcloud_2, k=50)
+
+        global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                                    pcl_src=noisy_pointcloud_1[fps_indices_1,:], pcl_interest=centered_points_1, args_shape=cls_args, scaling_factor=scaling_factor)
+
+        global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                                            pcl_src=noisy_pointcloud_2[fps_indices_2,:], pcl_interest=centered_points_2, args_shape=cls_args, scaling_factor=scaling_factor)
+
 
         global_emb_1 = global_emb_1.detach().cpu().numpy()
         global_emb_2 = global_emb_2.detach().cpu().numpy()
@@ -1407,7 +1134,7 @@ def test_multi_scale_classification(cls_args=None,num_worst_losses = 3, scaling_
             index = classification_pcl2[i] * 4 + global_classification_pcl2[i]
             pcl2_classes[index].append(centered_points_2[i,:])
 
-        # plot_multiclass_point_clouds(pcl1_classes, pcl2_classes, rotation=rotation_matrix, title="")
+        plot_multiclass_point_clouds(pcl1_classes, pcl2_classes, rotation=rotation_matrix, title="")
 
         best_rotation, best_num_of_inliers, best_iter, corres, final_threshold = multiclass_classification_only_ransac(
             pcl1_classes, pcl2_classes, max_iterations=num_of_ransac_iter,
@@ -1430,8 +1157,8 @@ def test_multi_scale_classification(cls_args=None,num_worst_losses = 3, scaling_
         point_distance = np.mean(distances)
         point_distance_list.append(point_distance)
 
-        # plot_point_clouds(transformed_points1, noisy_pointcloud_2, f'loss is: {loss}; inliers: {best_num_of_inliers}; threshold: {final_threshold}')
-        # plot_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, corres[0], corres[1], rotation=rotation_matrix.T)
+        plot_point_clouds(transformed_points1, noisy_pointcloud_2, f'loss is: {loss}; inliers: {best_num_of_inliers}; threshold: {final_threshold}')
+        plot_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, corres[0], corres[1], rotation=rotation_matrix.T)
 
         # Update the worst losses list
         index_of_smallest_loss = np.argmin([worst_losses[i][0] for i in range(len(worst_losses))])
@@ -1506,132 +1233,6 @@ def view_stabiity(model_name=None, args_shape=None, scaling_factor=None):
         # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1[:,:4], emb_2[:,:4])
         # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1[:,4:], emb_2[:,4:])
 
-def plot_point_cloud_with_colors_by_dist(point_cloud, embedding):
-    # Generate random index to choose a point
-    random_index = np.random.randint(len(point_cloud))
-    random_index = 10
-    random_point = point_cloud[random_index]
-    random_embedding = embedding[random_index]
-
-    # Calculate distances from the random embedding to all other embeddings
-    distances = np.linalg.norm(embedding - random_embedding, axis=1)
-
-    # Find indices of the 10 closest points
-    closest_indices = np.argsort(distances)[:10]
-
-    # Define color scale based on distances
-    max_distance = distances.max()
-    min_distance = distances.min()
-    colors = [(d - min_distance) / (max_distance - min_distance) for d in distances]
-    colors = 1 / np.array(colors)
-    colors = np.log(colors)
-
-    # Plot point cloud with colors based on distances
-    fig = go.Figure(data=[go.Scatter3d(
-        x=point_cloud[:, 0],
-        y=point_cloud[:, 1],
-        z=point_cloud[:, 2],
-        mode='markers',
-        marker=dict(
-            size=4,
-            color=colors,
-            colorscale='plasma',
-            opacity=0.8,
-            colorbar=dict(title='Distance')
-        )
-    )])
-
-    # Add the 10 closest points as a separate trace for better visibility
-    closest_points = point_cloud[closest_indices]
-    fig.add_trace(go.Scatter3d(
-        x=closest_points[:, 0],
-        y=closest_points[:, 1],
-        z=closest_points[:, 2],
-        mode='markers',
-        marker=dict(
-            size=8,
-            color='green',  # 10 closest points are red
-            opacity=1
-        )
-    ))
-
-    # Add the randomly chosen point as a separate trace for better visibility
-    fig.add_trace(go.Scatter3d(
-        x=[random_point[0]],
-        y=[random_point[1]],
-        z=[random_point[2]],
-        mode='markers',
-        marker=dict(
-            size=8,
-            color='red',  # Chosen point is red
-            opacity=1
-        )
-    ))
-    fig.show()
-
-def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embedding1, embedding2):
-    # Generate random index to choose a point from point_cloud1
-    random_index = np.random.randint(len(point_cloud1))
-    random_index = 10
-    random_point = point_cloud2[random_index]
-    random_embedding = embedding1[random_index]
-
-    # Calculate distances from the random embedding to all embeddings in embedding2
-    distances = np.linalg.norm(embedding2 - random_embedding, axis=1)
-
-    # Find indices of the 20 closest points
-    closest_indices = np.argsort(distances)[:20]
-
-    # Define color scale based on distances
-    max_distance = distances.max()
-    min_distance = distances.min()
-    colors = [(d - min_distance) / (max_distance - min_distance) for d in distances]
-    colors = 1 / np.array(colors)
-    colors = np.log(colors)
-
-    # Plot point cloud 2 with colors based on distances
-    fig = go.Figure(data=[go.Scatter3d(
-        x=point_cloud2[:, 0],
-        y=point_cloud2[:, 1],
-        z=point_cloud2[:, 2],
-        mode='markers',
-        marker=dict(
-            size=4,
-            color=colors,
-            colorscale='plasma',
-            opacity=0.8,
-            colorbar=dict(title='Distance')
-        )
-    )])
-
-    # Add the 20 closest points as a separate trace for better visibility
-    closest_points = point_cloud2[closest_indices]
-    fig.add_trace(go.Scatter3d(
-        x=closest_points[:, 0],
-        y=closest_points[:, 1],
-        z=closest_points[:, 2],
-        mode='markers',
-        marker=dict(
-            size=8,
-            color='green',  # 20 closest points are green
-            opacity=1
-        )
-    ))
-
-    # Add the randomly chosen point from point_cloud1 as a separate trace for better visibility
-    fig.add_trace(go.Scatter3d(
-        x=[random_point[0]],
-        y=[random_point[1]],
-        z=[random_point[2]],
-        mode='markers',
-        marker=dict(
-            size=8,
-            color='red',  # Chosen point is red
-            opacity=1
-        )
-    ))
-
-    fig.show()
 def fit_surface_quadratic_constrained(points):
     """
     Fits a quadratic surface constrained to f = 0 to a centered point cloud.
@@ -1720,47 +1321,6 @@ def fix_orientation(point_cloud):
     rotated_point_cloud = np.dot(point_cloud, rotation_matrix)
 
     return rotated_point_cloud + centroid
-def plot_point_clouds(point_cloud1, point_cloud2, title):
-    """
-    Plot two point clouds in an interactive 3D plot with Plotly.
-
-    Args:
-        point_cloud1 (np.ndarray): First point cloud of shape (41, 3)
-        point_cloud2 (np.ndarray): Second point cloud of shape (41, 3)
-        title (str): Title of the plot
-    """
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
-        mode='markers', marker=dict(color='red'),opacity=0.8, name='Point Cloud 1'
-    ))
-
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
-        mode='markers', marker=dict(color='blue'),opacity=0.8, name='Point Cloud 2'
-    ))
-    # Add a separate trace for the point (0, 0, 0) in bright pink
-    fig.add_trace(go.Scatter3d(
-        x=[0], y=[0], z=[0],
-        mode='markers', marker=dict(color='rgb(255, 105, 180)'), name='Origin (0, 0, 0)'
-    ))
-
-    fig.update_layout(
-        title=title,  # Set the title
-        title_y=0.9,  # Adjust the y position of the title
-        scene=dict(
-            xaxis=dict(title='X', range=[min(point_cloud1[:,0].min(), point_cloud2[:,0].min()),
-                                         max(point_cloud1[:,0].max(), point_cloud2[:,0].max())]),
-            yaxis=dict(title='Y', range=[min(point_cloud1[:,1].min(), point_cloud2[:,1].min()),
-                                         max(point_cloud1[:,1].max(), point_cloud2[:,1].max())]),
-            zaxis=dict(title='Z', range=[min(point_cloud1[:,2].min(), point_cloud2[:,2].min()),
-                                         max(point_cloud1[:,2].max(), point_cloud2[:,2].max())])
-        ),
-        margin=dict(r=20, l=10, b=10, t=10)
-    )
-
-    fig.show()
 def random_rotation(point_cloud):
     """
     Applies a random rotation to a 3D point cloud.
@@ -1851,6 +1411,21 @@ def create_args(cls_model_name, contrastive_model_name, smoothing_model_name):
     smoothing_args_shape.output_dim = 8
     return cls_args_shape, contrastive_args_shape, smoothing_args_shape
 
+def create_3MLP32N2deg_lpe0eig36_args():
+    cls_args_shape = configArgsPCT()
+    cls_args_shape.batch_size = 1024
+    cls_args_shape.num_mlp_layers = 3
+    cls_args_shape.num_neurons_per_layer = 32
+    cls_args_shape.sampled_points = 40
+    cls_args_shape.use_second_deg = 1
+    cls_args_shape.lpe_normalize = 0
+    cls_args_shape.exp = '3MLP32N2deg_lpe0eig36'
+    cls_args_shape.lpe_dim = 0
+    cls_args_shape.output_dim = 4
+    cls_args_shape.use_lap_reorder = 1
+    cls_args_shape.lap_eigenvalues_dim = 36
+    return cls_args_shape, 1, 1
+
 def select_top_10(data_dict):
     mean_dict = {key: np.mean(value) for key, value in data_dict.items()}
     sorted_keys = sorted(mean_dict, key=mean_dict.get)[:10]
@@ -1922,4 +1497,17 @@ def check_samplings(subsample_list=[200,300,400,500]):
         # Show the plot
         plt.show()
 if __name__ == '__main__':
-    check_samplings(subsample_list=[100,200,300,400,500])
+    # check_samplings(subsample_list=[100,200,300,400,500])
+    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args()
+    scaling_factor = 17
+    scaling_factor = 15
+    # visualizeShapesWithEmbeddings(model_name='3MLP32N2deg_lpe0eig36', args_shape=cls_args, scaling_factor=scaling_factor)
+    # for scaling_factor in [10, 15, 20, 25]:
+    for scaling_factor in [15]:
+        worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
+            = test_multi_scale_classification(cls_args=cls_args, num_worst_losses=3, scaling_factor=scaling_factor,
+                                              point_choice=2,
+                                              num_of_ransac_iter=100,
+                                              subsampled_points=300)
+        # plot_losses(losses=losses, inliers=num_of_inliers, filename=f'{scaling_factor}_sf_multiscale.png')
+        # plotWorst(worst_losses=worst_losses, model_name=f'{scaling_factor}_sf_multiscale')
