@@ -30,7 +30,7 @@ def plot_multiclass_point_clouds(point_clouds_1, point_clouds_2, rotation=None, 
         title (str): Title of the plot.
     """
     fig = go.Figure()
-
+    total_classes = len(point_clouds_1)
     # Filter out empty sub point clouds
     colors_pcl_1 = [clr for clr, pc in enumerate(point_clouds_1) if len(pc) > 0]
     point_clouds_1 = [pc for pc in point_clouds_1 if len(pc) > 0]
@@ -46,8 +46,11 @@ def plot_multiclass_point_clouds(point_clouds_1, point_clouds_2, rotation=None, 
             pc[:, axis] += 1.5
 
     # Define a broad range of colors
-    cmap = plt.get_cmap('tab20')
-    colors = [cmap(i) for i in range(cmap.N)]
+    # num_classes = len(set(colors_pcl_1) | set(colors_pcl_2))
+    # cmap = plt.get_cmap('tab20', len(point_clouds_1))
+    cmap = plt.get_cmap('plasma')
+    jumps = (int)(cmap.N // (total_classes-1))
+    colors = [cmap(i*jumps) for i in range(total_classes)]
 
     # Plot each point cloud from point_clouds_1 and point_clouds_2 with corresponding color
     for i, point_cloud1 in enumerate(point_clouds_1):
@@ -395,3 +398,66 @@ def plot_distances(Max_dist, min_dist, avg_dist_list, dist_from_orig, filename="
     plt.savefig(filename)
     # Show the plot
     plt.show()
+def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embedding1, embedding2):
+    # Generate random index to choose a point from point_cloud1
+    random_index = np.random.randint(len(point_cloud1))
+    # random_index = 10
+    random_point = point_cloud2[random_index]
+    random_embedding = embedding1[random_index]
+
+    # Calculate distances from the random embedding to all embeddings in embedding2
+    distances = np.linalg.norm(embedding2 - random_embedding, axis=1)
+
+    # Find indices of the 20 closest points
+    closest_indices = np.argsort(distances)[:20]
+
+    # Define color scale based on distances
+    max_distance = distances.max()
+    min_distance = distances.min()
+    colors = [(d - min_distance) / (max_distance - min_distance) for d in distances]
+    colors = 1 / np.array(colors)
+    colors = np.log(colors)
+
+    # Plot point cloud 2 with colors based on distances
+    fig = go.Figure(data=[go.Scatter3d(
+        x=point_cloud2[:, 0],
+        y=point_cloud2[:, 1],
+        z=point_cloud2[:, 2],
+        mode='markers',
+        marker=dict(
+            size=4,
+            color=colors,
+            colorscale='plasma',
+            opacity=0.8,
+            colorbar=dict(title='Distance')
+        )
+    )])
+
+    # Add the 20 closest points as a separate trace for better visibility
+    closest_points = point_cloud2[closest_indices]
+    fig.add_trace(go.Scatter3d(
+        x=closest_points[:, 0],
+        y=closest_points[:, 1],
+        z=closest_points[:, 2],
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='green',  # 20 closest points are green
+            opacity=1
+        )
+    ))
+
+    # Add the randomly chosen point from point_cloud1 as a separate trace for better visibility
+    fig.add_trace(go.Scatter3d(
+        x=[random_point[0]],
+        y=[random_point[1]],
+        z=[random_point[2]],
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='red',  # Chosen point is red
+            opacity=1
+        )
+    ))
+
+    fig.show()
