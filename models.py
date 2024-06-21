@@ -17,10 +17,10 @@ class shapeClassifier(nn.Module):
             input_dim = 3
         if self.use_second_deg:
             input_dim = 9
-        if (self.use_lap_reorder==1) and (self.lpe_dim != 0):
+        if (self.lpe_dim != 0):
             input_dim = input_dim + (self.lpe_dim)
         input_size = input_dim * (args.sampled_points + 1)
-        if (self.use_lap_reorder==1) and (self.lap_eigenvalues_dim !=0):
+        if (self.lap_eigenvalues_dim !=0):
             input_size = input_size + (self.lap_eigenvalues_dim)
         if args.contrastive_mid_layer:
             self.classifier =  MLP_Returns_Mid_Layer(input_size= input_size, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim)
@@ -34,13 +34,14 @@ class shapeClassifier(nn.Module):
         # Reshape input to (batch_size * num_of_pcl_centroids, k_nearest_neighbors, 3)
         x = x.permute(0, 2, 3, 1).reshape(batch_size * num_of_pcl_centroids, k_nearest_neighbors, 3)
 
-        if self.use_lap_reorder:
+        if self.use_lap_reorder or self.lpe_dim or self.lap_eigenvalues_dim:
             # Calculate Laplacian
             l = self.createLap(x, self.lpe_normalize)
             # Compute LPE embedding
             eigvecs, eigenvals = self.top_k_smallest_eigenvectors(l, self.lpe_dim)
             indices, fixed_eigs = self.sort_by_first_eigenvector(eigvecs)
 
+        if self.use_lap_reorder:
             # Gather and reshape fixed point cloud
             data = torch.gather(x, 1, indices.unsqueeze(2).expand(-1, -1, 3))
         else:
@@ -48,10 +49,10 @@ class shapeClassifier(nn.Module):
         if self.use_second_deg:
             x, y, z = data.unbind(dim=2)
             data = torch.stack([x ** 2, x * y, x * z, y ** 2, y * z, z ** 2, x, y, z], dim=2)
-        if (self.use_lap_reorder!=0) and (self.lpe_dim != 0):
+        if (self.lpe_dim != 0):
             data = torch.cat([data, fixed_eigs], dim=2)
         data = data.permute(0, 2, 1)
-        if (self.use_lap_reorder == 0) or (self.lap_eigenvalues_dim == 0):
+        if (self.lap_eigenvalues_dim == 0):
             output = self.classifier(data)
         else:
             output = self.classifier(data, eigenvals[:, 1 : 1 + self.lap_eigenvalues_dim])
