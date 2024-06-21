@@ -341,3 +341,76 @@ def find_closest_points(embeddings1, embeddings2, num_neighbors=40, max_non_uniq
     emb1_indices = smallest_distances_indices.squeeze()
     emb2_indices = indices[smallest_distances_indices].squeeze()
     return emb1_indices, emb2_indices
+
+def random_rotation_translation(pointcloud, translation=np.array([0,0,0])):
+  """
+  Performs a random 3D rotation on a point cloud after centering it.
+
+  Args:
+      pointcloud: A NumPy array of shape (N, 3) representing the point cloud.
+
+  Returns:
+      A new NumPy array of shape (N, 3) representing the rotated point cloud.
+  """
+  # Center the point cloud by subtracting the mean of its coordinates
+  center = np.mean(pointcloud, axis=0)
+  centered_cloud = pointcloud - center
+
+  # Generate random rotation angles for each axis
+  theta_x = np.random.rand() * 2 * np.pi
+  theta_y = np.random.rand() * 2 * np.pi
+  theta_z = np.random.rand() * 2 * np.pi
+  rotation_matrix = (Rotation.from_euler("xyz", [theta_x, theta_y, theta_z], degrees=False)).as_matrix()
+  # Apply rotation to centered pointcloud
+  rotated_cloud = (centered_cloud @ rotation_matrix)
+  new_pointcloud = (rotated_cloud + center) + translation
+
+  return new_pointcloud , rotation_matrix, translation
+
+def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None):
+    model = shapeClassifier(args_shape)
+    model.load_state_dict(torch.load(f'models_weights/{model_name}.pt'))
+    model.eval()
+    neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
+    src_knn_pcl = torch.tensor(neighbors_centered)
+    x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
+    y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
+    z_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,2,:,:])
+    scale = torch.mean(torch.stack((x_scale_src, y_scale_src, z_scale_src), dim=0))
+    #scale KNN point clouds to be of size 1
+    src_knn_pcl = src_knn_pcl / scale
+    #use 23 as it is around the size of the synthetic point clouds
+    src_knn_pcl = scaling_factor * src_knn_pcl
+    output = model(src_knn_pcl.permute(2,1,0,3))
+    return output
+def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):
+    """
+    Returns the k nearest neighbors for each point in the point cloud.
+
+    Args:
+        point_cloud (np.ndarray): Point cloud of shape (pcl_size, 3)
+        k (int): Number of nearest neighbors to return
+
+    Returns:
+        np.ndarray: Array of shape (1, 3, pcl_size, k) containing the k nearest neighbors for each point
+    """
+    pcl_size = pcl_interest.shape[0]
+    neigh = NearestNeighbors(n_neighbors=k)
+    neigh.fit(pcl_src)
+    distances, indices = neigh.kneighbors(pcl_interest)
+
+    neighbors_centered = np.empty((1, 3, pcl_size, k), dtype=pcl_src.dtype)
+    # Each point cloud should be centered around first point which is at the origin
+    for i in range(pcl_size):
+        orig = pcl_src[indices[i, :]] - pcl_interest[i,:]
+        if not (np.array_equal(orig[0,], np.array([0,0,0]))):
+            orig = np.vstack([np.array([0,0,0]), orig])[:-1]
+        neighbors_centered[0, :, i, :] = orig.T
+
+    return neighbors_centered
+
+def find_mean_diameter_for_specific_coordinate(specific_coordinates):
+    pairwise_distances = torch.cdist(specific_coordinates.unsqueeze(2), specific_coordinates.unsqueeze(2))
+    largest_dist = pairwise_distances.view(specific_coordinates.shape[0], -1).max(dim=1).values
+    mean_distance = torch.mean(largest_dist)
+    return mean_distance

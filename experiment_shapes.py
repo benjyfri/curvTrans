@@ -103,9 +103,10 @@ def find_mean_diameter_for_specific_coordinate(specific_coordinates):
 
 def checkOnShapes(model_name=None, input_data=None, args_shape=None, scaling_factor=None):
     model = shapeClassifier(args_shape)
-    model.load_state_dict(torch.load(f'{model_name}.pt'))
+    model.load_state_dict(torch.load(f'models_weights/{model_name}.pt'))
     model.eval()
     neighbors_centered, neighbors_non_centered = get_k_nearest_neighbors(input_data, 41)
+    aaa=get_k_nearest_neighbors_diff_pcls(input_data, input_data, k=41)
     src_knn_pcl = torch.tensor(neighbors_centered)
     x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
     y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
@@ -119,7 +120,7 @@ def checkOnShapes(model_name=None, input_data=None, args_shape=None, scaling_fac
     return output
 def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None):
     model = shapeClassifier(args_shape)
-    model.load_state_dict(torch.load(f'{model_name}.pt'))
+    model.load_state_dict(torch.load(f'models_weights/{model_name}.pt'))
     model.eval()
     neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
     src_knn_pcl = torch.tensor(neighbors_centered)
@@ -1321,48 +1322,6 @@ def fix_orientation(point_cloud):
     rotated_point_cloud = np.dot(point_cloud, rotation_matrix)
 
     return rotated_point_cloud + centroid
-def random_rotation(point_cloud):
-    """
-    Applies a random rotation to a 3D point cloud.
-
-    Args:
-        point_cloud: A NumPy array of shape (N, 3) representing the point cloud.
-
-    Returns:
-        A NumPy array of shape (N, 3) representing the rotated point cloud.
-    """
-
-    is_rotation = False
-    while not is_rotation:
-        # Generate random rotation angles around x, y, and z axes
-        theta_x = np.random.uniform(0, 2 * np.pi)
-        theta_y = np.random.uniform(0, 2 * np.pi)
-        theta_z = np.random.uniform(0, 2 * np.pi)
-
-        # Rotation matrices around x, y, and z axes
-        Rx = np.array([[1, 0, 0],
-                       [0, np.cos(theta_x), -np.sin(theta_x)],
-                       [0, np.sin(theta_x), np.cos(theta_x)]])
-
-        Ry = np.array([[np.cos(theta_y), 0, np.sin(theta_y)],
-                       [0, 1, 0],
-                       [-np.sin(theta_y), 0, np.cos(theta_y)]])
-
-        Rz = np.array([[np.cos(theta_z), -np.sin(theta_z), 0],
-                       [np.sin(theta_z), np.cos(theta_z), 0],
-                       [0, 0, 1]])
-
-        # Combine rotation matrices
-        R = np.matmul(Rz, np.matmul(Ry, Rx))
-
-        # Check if rotation is valid (determinant close to 1)
-        is_rotation = np.isclose(np.linalg.det(R), 1.0, atol=1e-6)
-
-    # Apply rotation to point cloud
-    rotated_point_cloud = np.matmul(point_cloud, R.T)
-    return rotated_point_cloud
-
-
 def read_bin_file(bin_file):
     """
     Read a .bin file and return a numpy array of shape (N, 3) where N is the number of points.

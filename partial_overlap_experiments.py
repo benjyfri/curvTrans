@@ -169,21 +169,22 @@ if __name__ == '__main__':
     scaling_factor = 15
     # check_overlap()
     # visualizeShapesWithEmbeddings(model_name='3MLP32N2deg_lpe0eig36', args_shape=cls_args, scaling_factor=scaling_factor)
-    shapes = range(20,25)
-    shapes = [1,5,10,15,20,25,30,35]
-    shapes = [1,5,10]
-    shapes = [15,20,25]
-    shapes = [20]
-    for scaling_factor in shapes:
+    scaling_factors = range(20,25)
+    scaling_factors = [1,5,10,15,20,25,30,35]
+    scaling_factors = [1,5,10]
+    scaling_factors = [15,20,25]
+    scaling_factors = [20]
+    for scaling_factor in scaling_factors:
         # worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
         #     = test_multi_scale_classification(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=2, receptive_field=[1, 4], amount_of_interest_points=100,
         #                             interest_point_choice=2, num_of_ransac_iter=50, shapes=[86, 179], plot_graphs=1,create_pcls_func=partial(split_point_cloud, overlap_ratio=0.3))
 
-        # worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
-        #     = test_multi_scale_classification(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=1, receptive_field=[1, 4], amount_of_interest_points=1000,
-        #                             interest_point_choice=2, num_of_ransac_iter=50, plot_graphs=1)
+        worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
+            = test_multi_scale_using_embedding(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=2, receptive_field=[1, 4], amount_of_interest_points=1000,
+                                    interest_point_choice=2, num_of_ransac_iter=50, plot_graphs=1)
+        plot_losses(losses=losses, inliers=num_of_inliers, filename=f'loss_is_not_lost.png')
         # visualizeShapesWithEmbeddings(model_name='3MLP32N2deg_lpe0eig36_1_4', args_shape=cls_args,
         #                               scaling_factor=scaling_factor)
-        view_stabiity(model_name='3MLP32N2deg_lpe0eig36_1_4', args_shape=cls_args,
-                                      scaling_factor=scaling_factor)
+        # view_stabiity(model_name='3MLP32N2deg_lpe0eig36_1_4', args_shape=cls_args,
+        #                               scaling_factor=scaling_factor)
         # view_stabiity(model_name=None, args_shape=None, scaling_factor=None)

@@ -23,11 +23,7 @@ from experiments_utils import *
 import platform
 
 
-def find_mean_diameter_for_specific_coordinate(specific_coordinates):
-    pairwise_distances = torch.cdist(specific_coordinates.unsqueeze(2), specific_coordinates.unsqueeze(2))
-    largest_dist = pairwise_distances.view(specific_coordinates.shape[0], -1).max(dim=1).values
-    mean_distance = torch.mean(largest_dist)
-    return mean_distance
+
 def load_data(partition='test', divide_data=1):
     BASE_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes'
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
@@ -73,47 +69,6 @@ def farthest_point_sampling(point_cloud, k):
         sampled_indices[i] = current_index
 
     return sampled_indices
-def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):
-    """
-    Returns the k nearest neighbors for each point in the point cloud.
-
-    Args:
-        point_cloud (np.ndarray): Point cloud of shape (pcl_size, 3)
-        k (int): Number of nearest neighbors to return
-
-    Returns:
-        np.ndarray: Array of shape (1, 3, pcl_size, k) containing the k nearest neighbors for each point
-    """
-    pcl_size = pcl_interest.shape[0]
-    neigh = NearestNeighbors(n_neighbors=k)
-    neigh.fit(pcl_src)
-    distances, indices = neigh.kneighbors(pcl_interest)
-
-    neighbors_centered = np.empty((1, 3, pcl_size, k), dtype=pcl_src.dtype)
-    # Each point cloud should be centered around first point which is at the origin
-    for i in range(pcl_size):
-        orig = pcl_src[indices[i, :]] - pcl_interest[i,:]
-        if not (np.array_equal(orig[0,], np.array([0,0,0]))):
-            orig = np.vstack([np.array([0,0,0]), orig])[:-1]
-        neighbors_centered[0, :, i, :] = orig.T
-
-    return neighbors_centered
-def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None):
-    model = shapeClassifier(args_shape)
-    model.load_state_dict(torch.load(f'models_weights/{model_name}.pt'))
-    model.eval()
-    neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
-    src_knn_pcl = torch.tensor(neighbors_centered)
-    x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
-    y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
-    z_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,2,:,:])
-    scale = torch.mean(torch.stack((x_scale_src, y_scale_src, z_scale_src), dim=0))
-    #scale KNN point clouds to be of size 1
-    src_knn_pcl = src_knn_pcl / scale
-    #use 23 as it is around the size of the synthetic point clouds
-    src_knn_pcl = scaling_factor * src_knn_pcl
-    output = model(src_knn_pcl.permute(2,1,0,3))
-    return output
 
 def find_max_difference_indices(array, k=200):
     # Find the maximum values along axis 1
@@ -126,32 +81,6 @@ def find_max_difference_indices(array, k=200):
     if len(good_class_indices) != k:
         raise Exception(f'Wrong size! k = {k}, actual size = {len(good_class_indices)}')
     return max_values, max_indices, diff_from_max, good_class_indices
-
-def random_rotation_translation(pointcloud, translation=np.array([0,0,0])):
-  """
-  Performs a random 3D rotation on a point cloud after centering it.
-
-  Args:
-      pointcloud: A NumPy array of shape (N, 3) representing the point cloud.
-
-  Returns:
-      A new NumPy array of shape (N, 3) representing the rotated point cloud.
-  """
-  # Center the point cloud by subtracting the mean of its coordinates
-  center = np.mean(pointcloud, axis=0)
-  centered_cloud = pointcloud - center
-
-  # Generate random rotation angles for each axis
-  theta_x = np.random.rand() * 2 * np.pi
-  theta_y = np.random.rand() * 2 * np.pi
-  theta_z = np.random.rand() * 2 * np.pi
-  rotation_matrix = (Rotation.from_euler("xyz", [theta_x, theta_y, theta_z], degrees=False)).as_matrix()
-  # Apply rotation to centered pointcloud
-  rotated_cloud = (centered_cloud @ rotation_matrix)
-  new_pointcloud = (rotated_cloud + center) + translation
-
-  return new_pointcloud , rotation_matrix, translation
-
 
 
 def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
@@ -174,6 +103,7 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
     N = data1.shape[0]
     best_inliers = None
     best_rotation = None
+    corres = None
     best_translation = None
 
     # src_mean = np.mean(data1, axis=0)
@@ -197,12 +127,13 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
         # Update best model if we have enough inliers
         if len(inliers1) >= min_inliers and (best_inliers is None or len(inliers1) > len(best_inliers)):
             best_inliers = inliers1
+            corres = [inliers1, inliers2]
             best_rotation = rotation
             # best_translation = translation
             best_iter = iteration
     if best_inliers == None:
         return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold + 0.1, min_inliers=min_inliers)
-    return best_rotation, best_inliers, best_iter
+    return best_rotation, len(best_inliers), best_iter, corres, threshold
 def multiclass_classification_only_ransac(cls_1, cls_2, max_iterations=1000, threshold=0.1, min_inliers=2):
     # N = data1.shape[0]
     best_num_of_inliers = 0
@@ -550,29 +481,6 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
         emb_1 = emb_1.detach().cpu().numpy()
         emb_2 = emb_2.detach().cpu().numpy()
 
-
-        if np.isnan(np.sum(emb_1)) or np.isnan(np.sum(emb_2)):
-            print(f'oish')
-            continue
-
-        # How to choose the interest points
-        if interest_point_choice == 0:
-            max_values_1, max_indices_1, diff_from_max_1, good_class_indices_1 = find_max_difference_indices(emb_1[:,:4],
-                                                                                                             k=amount_of_interest_points)
-            max_values_2, max_indices_2, diff_from_max_2, good_class_indices_2 = find_max_difference_indices(emb_2[:,:4],
-                                                                                                             k=amount_of_interest_points)
-        if interest_point_choice == 1:
-            max_values_1 = np.max(emb_1[:, :4], axis=1)
-            good_class_indices_1 = np.argsort(max_values_1)[-amount_of_interest_points:][::-1]
-            max_values_2 = np.max(emb_2[:, :4], axis=1)
-            good_class_indices_2 = np.argsort(max_values_2)[-amount_of_interest_points:][::-1]
-        if interest_point_choice == 2:
-            good_class_indices_1 = farthest_point_sampling(noisy_pointcloud_1, k=amount_of_interest_points)
-            good_class_indices_2 = farthest_point_sampling(noisy_pointcloud_2, k=amount_of_interest_points)
-
-        centered_points_1 = noisy_pointcloud_1[good_class_indices_1, :] - np.mean(noisy_pointcloud_1)
-        centered_points_2 = noisy_pointcloud_2[good_class_indices_2, :] - np.mean(noisy_pointcloud_2)
-
         # multiscale embeddings
         if scales > 1:
             for scale in receptive_field[1:]:
@@ -580,21 +488,22 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
                 fps_indices_2 = farthest_point_sampling(noisy_pointcloud_2, k=(int)(len(noisy_pointcloud_2)//scale))
 
                 global_emb_1 = classifyPoints(model_name=cls_args.exp,
-                                            pcl_src=noisy_pointcloud_1[fps_indices_1,:], pcl_interest=centered_points_1, args_shape=cls_args, scaling_factor=scaling_factor)
+                                            pcl_src=noisy_pointcloud_1[fps_indices_1,:], pcl_interest=noisy_pointcloud_1, args_shape=cls_args, scaling_factor=scaling_factor)
 
                 global_emb_2 = classifyPoints(model_name=cls_args.exp,
-                                            pcl_src=noisy_pointcloud_2[fps_indices_2,:], pcl_interest=centered_points_2, args_shape=cls_args, scaling_factor=scaling_factor)
+                                            pcl_src=noisy_pointcloud_2[fps_indices_2,:], pcl_interest=noisy_pointcloud_2, args_shape=cls_args, scaling_factor=scaling_factor)
 
 
                 global_emb_1 = global_emb_1.detach().cpu().numpy()
                 global_emb_2 = global_emb_2.detach().cpu().numpy()
 
-                emb_1 = np.vstack((global_emb_1, emb_1))
-                emb_2 = np.vstack((global_emb_2, emb_2))
+                emb_1 = np.hstack((emb_1, global_emb_1))
+                emb_2 = np.hstack((emb_2, global_emb_2))
 
-
-
-        best_rotation, inliers, best_iter = ransac(centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
+        emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_neighbors=40, max_non_unique_correspondences=1)
+        centered_points_1 = noisy_pointcloud_1[good_class_indices_1, :] - np.mean(noisy_pointcloud_1)
+        centered_points_2 = noisy_pointcloud_2[good_class_indices_2, :] - np.mean(noisy_pointcloud_2)
+        best_rotation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
                                                    threshold=0.1,
                                                    min_inliers=(int)(amount_of_interest_points // 10))
 
