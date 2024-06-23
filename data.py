@@ -334,3 +334,8 @@ def plotFunc(a, b, c, d, e,sampled_points):
 
     # Show the plot
     fig.show()
+def random_rotation(point_cloud):
+    rot = R.random().as_matrix()
+    rot_mat = torch.tensor(rot, dtype=torch.float32)
+    rotated_point_cloud = torch.matmul(point_cloud, rot_mat.T)
+    return rotated_point_cloud
