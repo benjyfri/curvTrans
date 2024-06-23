@@ -5,6 +5,7 @@ import h5py
 from utils import createLPEembedding, positional_encoding_nerf
 import plotly.express as px
 import random
+from scipy.spatial.transform import Rotation as R
 
 class BasicPointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
@@ -35,15 +36,18 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         decrease_scale = np.random.uniform(low=(1/self.pcl_scaling), high=1)
         scale = random.choice([increase_scale, decrease_scale])
         point_cloud = scale * point_cloud
-        point_cloud = torch.tensor(point_cloud, dtype=torch.float32)
+        if self.rotate_data:
+            # point_cloud1 = random_rotation(point_cloud)
+            rot = R.random().as_matrix()
+            point_cloud1 = np.matmul(point_cloud, rot.T)
+        else:
+            point_cloud1 = point_cloud
+        point_cloud1 = torch.tensor(point_cloud1, dtype=torch.float32)
         # permute points
         shuffled_indices = torch.randperm(self.sampled_points) + 1
         permuted_indices = torch.cat((torch.tensor([0]), shuffled_indices), dim=0)
-        point_cloud = point_cloud[permuted_indices]
-        if self.rotate_data:
-            point_cloud1 = random_rotation(point_cloud)
-        else:
-            point_cloud1 = point_cloud
+        point_cloud1 = point_cloud1[permuted_indices]
+
         #Add noise to point cloud
         if self.std_dev != 0:
             noise = torch.normal(0, self.std_dev, size=point_cloud1.shape, dtype=torch.float32)
@@ -239,38 +243,6 @@ def calculate_angle_and_area(a, b, c , d):
     area = 0.5 * np.linalg.norm(np.cross(ab, ac))
 
     return angle_at_a, angle_at_c, angle_at_d, area
-
-
-def random_rotation(point_cloud):
-    device = point_cloud.device
-    is_rotation = False
-    while is_rotation==False:
-
-        # Generate random rotation angles around x, y, and z axes
-        theta_x = torch.tensor(np.random.uniform(0, 2 * np.pi), device=device)
-        theta_y = torch.tensor(np.random.uniform(0, 2 * np.pi), device=device)
-        theta_z = torch.tensor(np.random.uniform(0, 2 * np.pi), device=device)
-
-        # Rotation matrices around x, y, and z axes
-        Rx = torch.tensor([[1, 0, 0],
-                           [0, torch.cos(theta_x), -torch.sin(theta_x)],
-                           [0, torch.sin(theta_x), torch.cos(theta_x)]], device=device)
-
-        Ry = torch.tensor([[torch.cos(theta_y), 0, torch.sin(theta_y)],
-                           [0, 1, 0],
-                           [-torch.sin(theta_y), 0, torch.cos(theta_y)]], device=device)
-
-        Rz = torch.tensor([[torch.cos(theta_z), -torch.sin(theta_z), 0],
-                           [torch.sin(theta_z), torch.cos(theta_z), 0],
-                           [0, 0, 1]], device=device)
-
-        # Combine rotation matrices
-        R = torch.matmul(Rz, torch.matmul(Ry, Rx))
-        is_rotation = torch.allclose(torch.eye(3, device=device), torch.matmul(R, R.T),atol=1e-06)
-    # Apply rotation to point cloud
-    rotated_point_cloud = torch.matmul(point_cloud, R.T)
-    return rotated_point_cloud
-import plotly.graph_objects as go
 
 def plot_point_clouds(point_cloud1, point_cloud2, title):
     """
