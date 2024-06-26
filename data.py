@@ -22,6 +22,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.smoothness_loss = args.smoothness_loss
         self.smooth_num_of_neighbors = args.smooth_num_of_neighbors
         self.pcl_scaling = args.pcl_scaling
+        self.normalization_factor = args.normalization_factor
     def __len__(self):
         return self.num_point_clouds
 
@@ -32,10 +33,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                     self.point_clouds_group[point_cloud_name].attrs}
         point_cloud = self.point_clouds_group[point_cloud_name]
         point_cloud = np.array(point_cloud, dtype=np.float32)
-        increase_scale = np.random.uniform(low=1, high=self.pcl_scaling)
-        decrease_scale = np.random.uniform(low=(1/self.pcl_scaling), high=1)
-        scale = random.choice([increase_scale, decrease_scale])
-        point_cloud = scale * point_cloud
+        point_cloud = point_cloud / self.normalization_factor
+        if self.pcl_scaling > 1.0:
+            increase_scale = np.random.uniform(low=1, high=self.pcl_scaling)
+            decrease_scale = np.random.uniform(low=(1/self.pcl_scaling), high=1)
+            scale = random.choice([increase_scale, decrease_scale])
+            point_cloud = scale * point_cloud
         if self.rotate_data:
             # point_cloud1 = random_rotation(point_cloud)
             rot = R.random().as_matrix()

@@ -214,6 +214,8 @@ def configArgsPCT():
                         help='amount of noise to add to data')
     parser.add_argument('--pcl_scaling', type=float, default=1.0, metavar='N',
                         help='scaling the point cloud')
+    parser.add_argument('--normalization_factor', type=float, default=1.0, metavar='N',
+                        help='scaling the data set to be in cube [-1 1]')
     parser.add_argument('--contr_loss_weight', type=float, default=1.0, metavar='N',
                         help='weight of contrastive loss')
     parser.add_argument('--smoothness_loss', type=float, default=0.0, metavar='N',
