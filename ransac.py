@@ -106,17 +106,23 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
     corres = None
     best_translation = None
 
-    # src_mean = np.mean(data1, axis=0)
-    # dst_mean = np.mean(data2, axis=0)
-
     src_centered = data1 #- src_mean
     dst_centered = data2 #- dst_mean
+    dists = np.linalg.norm((src_centered-dst_centered), axis=1)
     best_iter = 0
     for iteration in range(max_iterations):
         # Randomly sample 3 corresponding points
-        indices = np.random.choice(N, size=3, replace=False)
-        src_points = src_centered[indices]
-        dst_points = dst_centered[indices]
+        counter = 0
+        while True:
+            counter += 1
+            indices = np.random.choice(N, size=3, replace=False)
+            src_points = src_centered[indices]
+            dst_points = dst_centered[indices]
+            dist_1,dist_2,dist_3 = dists[indices]
+            largest_diff = max(dist_1, dist_2, dist_2) - min(dist_1, dist_2, dist_2)
+            if largest_diff < 0.05 or counter > 50:
+                # print(counter)
+                break
 
         # Estimate rotation and translation
         rotation = estimate_rigid_transform(src_points, dst_points)
@@ -127,7 +133,7 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
         # Update best model if we have enough inliers
         if len(inliers1) >= min_inliers and (best_inliers is None or len(inliers1) > len(best_inliers)):
             best_inliers = inliers1
-            corres = [inliers1, inliers2]
+            corres = [src_centered[inliers1], dst_centered[inliers2]]
             best_rotation = rotation
             # best_translation = translation
             best_iter = iteration
@@ -449,7 +455,7 @@ def test_multi_scale_classification(cls_args=None,num_worst_losses = 3, scaling_
 
 
 def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
-                                    interest_point_choice=0, num_of_ransac_iter=100, shapes=[86, 162, 174, 176, 179], plot_graphs=0, create_pcls_func=None):
+                                    num_of_ransac_iter=100, shapes=[86, 162, 174, 176, 179], plot_graphs=0, create_pcls_func=None):
     pcls, label = load_data()
     worst_losses = [(0, None)] * num_worst_losses
     worst_point_losses = [(0, None)] * num_worst_losses
@@ -473,9 +479,14 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
         noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
         noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
-        emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1, args_shape=cls_args, scaling_factor=scaling_factor)
+        chosen_fps_indices_1 = farthest_point_sampling(noisy_pointcloud_1, k=amount_of_interest_points)
+        chosen_pcl_1 = noisy_pointcloud_1[chosen_fps_indices_1, :]
+        chosen_fps_indices_2 = farthest_point_sampling(noisy_pointcloud_2, k=amount_of_interest_points)
+        chosen_pcl_2 = noisy_pointcloud_2[chosen_fps_indices_2, :]
 
-        emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
+
+        emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
 
 
         emb_1 = emb_1.detach().cpu().numpy()
@@ -488,10 +499,10 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
                 fps_indices_2 = farthest_point_sampling(noisy_pointcloud_2, k=(int)(len(noisy_pointcloud_2)//scale))
 
                 global_emb_1 = classifyPoints(model_name=cls_args.exp,
-                                            pcl_src=noisy_pointcloud_1[fps_indices_1,:], pcl_interest=noisy_pointcloud_1, args_shape=cls_args, scaling_factor=scaling_factor)
+                                            pcl_src=noisy_pointcloud_1[fps_indices_1,:], pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
 
                 global_emb_2 = classifyPoints(model_name=cls_args.exp,
-                                            pcl_src=noisy_pointcloud_2[fps_indices_2,:], pcl_interest=noisy_pointcloud_2, args_shape=cls_args, scaling_factor=scaling_factor)
+                                            pcl_src=noisy_pointcloud_2[fps_indices_2,:], pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
 
 
                 global_emb_1 = global_emb_1.detach().cpu().numpy()
@@ -500,19 +511,20 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
                 emb_1 = np.hstack((emb_1, global_emb_1))
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
-        emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_neighbors=40, max_non_unique_correspondences=1)
-        centered_points_1 = noisy_pointcloud_1[good_class_indices_1, :] - np.mean(noisy_pointcloud_1)
-        centered_points_2 = noisy_pointcloud_2[good_class_indices_2, :] - np.mean(noisy_pointcloud_2)
+        emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_neighbors=amount_of_interest_points, max_non_unique_correspondences=1)
+        centered_points_1 = chosen_pcl_1[emb1_indices, :] - np.mean(noisy_pointcloud_1)
+        centered_points_2 = chosen_pcl_2[emb2_indices, :] - np.mean(noisy_pointcloud_2)
+
         best_rotation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
                                                    threshold=0.1,
                                                    min_inliers=(int)(amount_of_interest_points // 10))
 
-
+        final_inliers_list.append(best_num_of_inliers)
         iter_2_ransac_convergence.append(best_iter)
 
         center = np.mean(noisy_pointcloud_1, axis=0)
         transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
-        loss = np.mean(((rotation_matrix @ best_rotation) - np.eye(3)) ** 2)
+        loss = np.mean(((rotation_matrix @ best_rotation.T) - np.eye(3)) ** 2)
         losses.append(loss)
 
         kdtree = cKDTree(transformed_points1)
