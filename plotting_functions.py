@@ -40,7 +40,7 @@ def plot_multiclass_point_clouds(point_clouds_1, point_clouds_2, rotation=None, 
 
     if rotation is not None:
         center = np.mean(np.vstack(point_clouds_1), axis=0)
-        point_clouds_1 = [np.matmul((pc - center), rotation) for pc in point_clouds_1]
+        point_clouds_1 = [np.matmul((pc - center), rotation.T) for pc in point_clouds_1]
         axis = np.argmin(np.max(np.vstack(point_clouds_1), axis=0))
         for pc in point_clouds_1:
             pc[:, axis] += 1.5
@@ -98,7 +98,7 @@ def plot_8_point_clouds(cls1_1, cls1_2, cls1_3, cls1_4, cls2_1, cls2_2, cls2_3, 
 
     if rotation is not None:
         center = np.mean(np.vstack(pcl1), axis=0)
-        pcl1 = [np.matmul((pcl - center), rotation) for pcl in pcl1]
+        pcl1 = [np.matmul((pcl - center), rotation.T) for pcl in pcl1]
         axis = np.argmin(np.max(np.vstack(pcl1), axis=0))
         for pcl in pcl1:
             pcl[:, axis] += 1.5
@@ -204,8 +204,8 @@ def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
 
   if rotation is not None:
       center = np.mean(point_cloud1, axis=0)
-      point_cloud1 = np.matmul((point_cloud1 - center), rotation)
-      point_cloud3 = np.matmul((point_cloud3 - center), rotation)
+      point_cloud1 = np.matmul((point_cloud1 - center), rotation.T)
+      point_cloud3 = np.matmul((point_cloud3 - center), rotation.T)
       axis = np.argmin(np.max(point_cloud1, axis=0))
 
       point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
@@ -401,7 +401,7 @@ def plot_distances(Max_dist, min_dist, avg_dist_list, dist_from_orig, filename="
 def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embedding1, embedding2):
     # Generate random index to choose a point from point_cloud1
     random_index = np.random.randint(len(point_cloud1))
-    # random_index = 10
+    random_index = 100
     random_point = point_cloud2[random_index]
     random_embedding = embedding1[random_index]
 
@@ -415,7 +415,11 @@ def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embe
     max_distance = distances.max()
     min_distance = distances.min()
     colors = [(d - min_distance) / (max_distance - min_distance) for d in distances]
-    colors = 1 / np.array(colors)
+    colors = np.array(colors)
+    zero_indices = (colors == 0)
+    non_zero_indices = (colors != 0)
+    colors[non_zero_indices] = 1 / np.array(colors[non_zero_indices])
+    colors[zero_indices] = np.inf
     colors = np.log(colors)
 
     # Plot point cloud 2 with colors based on distances
