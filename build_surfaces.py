@@ -83,14 +83,10 @@ def createDataSet():
                      size_of_pcl=40)
         print(f'Finished test saddle surfaces')
 
-def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40, std=0.05):
+def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40):
     for k in range(amount_of_pcl):
         a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=5, epsilon=0.05)
         point_cloud = samplePoints(a, b, c, d, e, count=size_of_pcl)
-        noise = np.random.normal(loc=0, scale=std, size=point_cloud.shape)
-        rotated_pcl = random_rotation(point_cloud)
-        plot_point_clouds(point_cloud, rotated_pcl + noise)
-        point_cloud = rotated_pcl + noise
         point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = a
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['b'] = b
@@ -143,24 +139,6 @@ def createFunction(gaussian_curv, mean_curv, boundary=3, epsilon=0.05):
             if H > -(boundary):
                 okFunc=False
                 continue
-
-    return a, b, c, d, e, count , H , K
-def createFunctionSpecificHK(gaussian_curv, mean_curv, epsilon=0.05):
-    okFunc = False
-    count = 0
-    while not okFunc:
-        okFunc=True
-        count += 1
-        a, b, c, d, e = [random.uniform(-5, 5) for _ in range(5)]
-        K = (4 * (a * b) - ((c ** 2))) / ((1 + d ** 2 + e ** 2) ** 2)
-        H = (a * (1 + e ** 2) - d * e * c + b * (1 + d ** 2)) / (((d ** 2) + (e ** 2) + 1) ** 1.5)
-
-        if abs(H - mean_curv) > epsilon:
-            okFunc = False
-            continue
-        if abs(K - gaussian_curv)>epsilon:
-            okFunc=False
-            continue
 
     return a, b, c, d, e, count , H , K
 
@@ -537,24 +515,4 @@ def plot_point_clouds(point_cloud1, point_cloud2):
 if __name__ == '__main__':
     createDataSet()
 
-
-    # a1, b1, c1, d1, e1, _, H, K = createFunction(gaussian_curv=-1, mean_curv=-33, boundary=5, epsilon=0.05)
-    # point_cloud = samplePoints(a1, b1, c1, d1, e1, count=5)
-    # a2, b2, c2, d2, e2, K2, H2 = fit_surface_quadratic_constrained(point_cloud)
-    # plotFunc(a1, b1, c1, d1, e1, point_cloud)
-    # a2, b2, c2, d2, e2, _, H, K = createFunction(gaussian_curv=0, mean_curv=1, boundary=5, epsilon=0.05)
-    # point_cloud = samplePoints(a2, b2, c2, d2, e2, count=40)
-    # plotFunc(a2, b2, c2, d2, e2, point_cloud)
-    # #
-    # parameter_sets = [
-    #         (a1, b1, c1, d1, e1),
-    #
-    #         (a2, b2, c2, d2, e2)]
-    # plotMultiplePcls(parameter_sets, names=['saddle', 'valley'])
-    #
-    #
-
-    # testNoiseEffect(sigma=0.05)
-    # for i in range(5):
-    #     accuracyHKdependingOnNumOfPoints(sigma=((i+1))/(10))
     print("yay")

@@ -2,13 +2,11 @@ import numpy as np
 from plotting_functions import *
 from ransac import *
 def load_data(partition='test', divide_data=1):
-    BASE_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes'
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
     # DATA_DIR = r'/content/curvTrans/bbsWithShapes/data'
     all_data = []
     all_label = []
     for h5_name in glob.glob(os.path.join(DATA_DIR, 'modelnet40_ply_hdf5_2048', 'ply_data_%s*.h5' % partition)):
-        print(f'++++++++{h5_name}++++++++')
         f = h5py.File(h5_name)
         data = f['data'][:].astype('float32')
         label = f['label'][:].astype('int64')
@@ -447,6 +445,35 @@ def find_closest_points(embeddings1, embeddings2, num_neighbors=40, max_non_uniq
     emb2_indices = indices[smallest_distances_indices].squeeze()
     return emb1_indices, emb2_indices
 
+def find_closest_points_best_buddy(embeddings1, embeddings2, num_neighbors=40, max_non_unique_correspondences=3):
+    classification_1 = np.argmax(embeddings1[:, :4], axis=1)
+    classification_2 = np.argmax(embeddings2[:, :4], axis=1)
+
+    # Initialize NearestNeighbors instance for embeddings1 and embeddings2
+    nbrs1 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
+    nbrs2 = NearestNeighbors(n_neighbors=max_non_unique_correspondences, algorithm='auto').fit(embeddings1)
+
+    # Find the indices and distances of the closest points
+    distances1, indices1 = nbrs1.kneighbors(embeddings1)
+    distances2, indices2 = nbrs2.kneighbors(embeddings2)
+
+    duplicates = np.zeros(len(embeddings1))
+    best_buddies = []
+
+    for i, index in enumerate(indices1.squeeze()):
+        # Check if the point is a best buddy
+        if ( i in indices2[index] ) and ( classification_1[i] == classification_2[index] ):
+            best_buddies.append((i, index))
+
+    # Sort by distances and select the top num_neighbors
+    best_buddies = sorted(best_buddies, key=lambda x: distances1[x[0]])
+    best_buddies = best_buddies[:num_neighbors]
+
+    emb1_indices = np.array([x[0] for x in best_buddies])
+    emb2_indices = np.array([x[1] for x in best_buddies])
+
+    return emb1_indices, emb2_indices
+
 def random_rotation_translation(pointcloud, translation=np.array([0,0,0])):
   """
   Performs a random 3D rotation on a point cloud after centering it.
@@ -468,24 +495,7 @@ def random_rotation_translation(pointcloud, translation=np.array([0,0,0])):
   new_pointcloud = (rotated_cloud + center) + translation
 
   return new_pointcloud , rotation_matrix, translation
-def calcDensity(src_knn_pcl):
-    min_coords = torch.min(src_knn_pcl[0].permute(1,2,0), dim=1)[0]
-    max_coords = torch.max(src_knn_pcl[0].permute(1,2,0), dim=1)[0]
-    bounding_box_volumes = torch.prod(max_coords - min_coords, dim=1)
-    num_points = src_knn_pcl.shape[-1]
-    densities = num_points / bounding_box_volumes
-    avg_density = torch.mean(densities)
-    scaling_density = torch.pow(avg_density, (1 / 3))
-    scaling_train_data_density = 0.56959049569571
-    total_density_scale = scaling_density / scaling_train_data_density
-    return total_density_scale
-def calcStd(src_knn_pcl):
-    x_std_src = torch.std(src_knn_pcl[0,0,:,:])
-    y_std_src = torch.std(src_knn_pcl[0,1,:,:])
-    z_std_src = torch.std(src_knn_pcl[0,2,:,:])
-    std_avg = torch.mean(torch.stack([x_std_src, y_std_src, z_std_src]))
-    scaling_to_train = (2.15 / std_avg)
-    return scaling_to_train
+
 def calcDist(src_knn_pcl):
     pcl = src_knn_pcl[0].permute(1,2,0)
     pairwise_distances = torch.cdist(pcl, pcl, p=2)
@@ -514,18 +524,9 @@ def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=N
     neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
     src_knn_pcl = torch.tensor(neighbors_centered)
 
-    # x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
-    # y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
-    # z_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,2,:,:])
-    # scale = torch.mean(torch.stack((x_scale_src, y_scale_src, z_scale_src), dim=0))
-    # # src_knn_pcl = src_knn_pcl *  (1 / scale)
-    # scaling_factor_final = scaling_factor *  (1 / scale)
-
-
     scaling_factor_final = calcDist(src_knn_pcl)
 
     src_knn_pcl = scaling_factor_final * src_knn_pcl
-    # plot_point_clouds(((src_knn_pcl[0].permute(1, 2, 0))[10]), ((src_knn_pcl[0].permute(1, 2, 0))[10]),"")
     output = model(src_knn_pcl.permute(2,1,0,3))
     return output
 def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):

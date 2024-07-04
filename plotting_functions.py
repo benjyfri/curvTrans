@@ -148,6 +148,8 @@ def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
       center = np.mean(point_cloud1, axis=0)
       point_cloud1 = np.matmul((point_cloud1 - center), rotation.T)
       point_cloud3 = np.matmul((point_cloud3 - center), rotation.T)
+      point_cloud1 += center
+      point_cloud3 += center
       axis = np.argmin(np.max(point_cloud1, axis=0))
 
       point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
