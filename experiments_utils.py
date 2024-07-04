@@ -147,8 +147,8 @@ def checkSyntheticData():
     print(f'z diameter: {np.mean(diameter_list_z)}')
 def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_factor=None, rgb=False):
     pcls, label = load_data()
-    shapes = [86, 174, 179]
-    shapes = [51, 54, 86, 174, 179]
+    shapes = [86, 174, 51]
+    # shapes = [51, 54, 86, 174, 179]
     # shapes = range(50,60)
     for k in shapes:
         pointcloud = pcls[k][:]
@@ -496,26 +496,34 @@ def random_rotation_translation(pointcloud, translation=np.array([0,0,0])):
 
   return new_pointcloud , rotation_matrix, translation
 
-def calcDist(src_knn_pcl):
+def calcDist(src_knn_pcl, scaling_mode):
     pcl = src_knn_pcl[0].permute(1,2,0)
     pairwise_distances = torch.cdist(pcl, pcl, p=2)
     sum_distances = torch.sum(pairwise_distances, dim=(1, 2))
     num_points = pcl.shape[1]
     num_pairs = num_points * (num_points - 1)
-    avg_distances = torch.mean(sum_distances / num_pairs)
-    # return ((1 / avg_distances) * 4.726)
-    diam = (((torch.max(pairwise_distances[:, 0, :], dim=1))[0]))
-    d_mean = (torch.mean(diam)).item()
-    d_median = (torch.median(diam)).item()
-    d_max = (torch.max(diam)).item()
-    d_min = (torch.min(diam)).item()
-    d_90 = (torch.quantile(diam, 0.9)).item()
 
-    # scale = 13.23 / d_mean
-    scale = 12.75 / d_median
-    # scale = 37.06 / d_max
-    # scale = 2.22 / d_min
-    # scale = 19.13 / d_90
+    diam = (((torch.max(pairwise_distances[:, 0, :], dim=1))[0]))
+
+    if scaling_mode == "mean":
+        d_mean = (torch.mean(diam)).item()
+        scale = 13.23 / d_mean
+
+    if scaling_mode == "median":
+        d_median = (torch.median(diam)).item()
+        scale = 12.75 / d_median
+
+    if scaling_mode == "max":
+        d_max = (torch.max(diam)).item()
+        scale = 37.06 / d_max
+
+    if scaling_mode == "min":
+        d_min = (torch.min(diam)).item()
+        scale = 2.22 / d_min
+    if scaling_mode == "d_90":
+        d_90 = (torch.quantile(diam, 0.9)).item()
+        scale = 19.13 / d_90
+
     return scale
 def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None):
     model = shapeClassifier(args_shape)
@@ -524,7 +532,7 @@ def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=N
     neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
     src_knn_pcl = torch.tensor(neighbors_centered)
 
-    scaling_factor_final = calcDist(src_knn_pcl)
+    scaling_factor_final = calcDist(src_knn_pcl, scaling_factor)
 
     src_knn_pcl = scaling_factor_final * src_knn_pcl
     output = model(src_knn_pcl.permute(2,1,0,3))
