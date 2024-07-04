@@ -20,24 +20,109 @@ def load_data(partition='test', divide_data=1):
     # return all_data, all_label
     size = len(all_label)
     return all_data[:(int)(size/divide_data),:,:], all_label[:(int)(size/divide_data),:]
+def farthest_point_sampling(point_cloud, k):
+    N, _ = point_cloud.shape
 
-def checkData():
+    # Array to hold indices of sampled points
+    sampled_indices = np.zeros(k, dtype=int)
+
+    # Initialize distances to a large value
+    distances = np.full(N, np.inf)
+
+    # Randomly select the first point
+    current_index = np.random.randint(N)
+    sampled_indices[0] = current_index
+
+    for i in range(1, k):
+        # Update distances to the farthest point selected so far
+        current_point = point_cloud[current_index]
+        new_distances = np.linalg.norm(point_cloud - current_point, axis=1)
+        distances = np.minimum(distances, new_distances)
+
+        # Select the point that has the maximum distance to the sampled points
+        current_index = np.argmax(distances)
+        sampled_indices[i] = current_index
+
+    return sampled_indices
+def checkSyntheticData():
     args = configArgsPCT()
     args.std_dev = 0.05
     args.rotate_data = 1
-    # args.batch_size = 40000
+    args.std_dev = 0
+    args.batch_size = 40000
     max_list_x = []
     min_list_x = []
     max_list_y = []
     min_list_y = []
     max_list_z = []
     min_list_z = []
+    std_list_x = []
+    std_list_y = []
+    std_list_z = []
+    diameter_list_x = []
+    diameter_list_y = []
+    diameter_list_z = []
+    full_diameter_from_center_mean_list = []
+    full_diameter_from_center_median_list = []
+    full_diameter_from_center_max_list = []
+    full_diameter_from_center_min_list = []
+    full_diameter_from_center_09_list = []
+    density_list = []
+    avg_dist_list = []
     train_dataset = BasicPointCloudDataset(file_path="train_surfaces_40_stronger_boundaries.h5", args=args)
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
+    # test_dataset = BasicPointCloudDataset(file_path="test_surfaces_40_stronger_boundaries.h5", args=args)
+    # test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    # with tqdm(test_dataloader) as tqdm_bar:
     with tqdm(train_dataloader) as tqdm_bar:
         for batch in tqdm_bar:
             pcl = batch['point_cloud']
+            # plot_point_clouds(pcl[2], pcl[2],
+            #                   f'H: {batch["info"]["H"][2].item():.2f}, K: {batch["info"]["K"][2].item():.2f}, Class: {int(batch["info"]["class"][2].item())} ')
+            # pcl = pcl / 37
+            # Calculate the mean along the point dimension (axis 1)
+            mean = pcl.mean(axis=1, keepdim=True)
+
+            # Center the data by subtracting the mean
+            centered_pointcloud = pcl - mean
+            std = centered_pointcloud.std(axis=1, keepdim=True)
+            std_list_x.append(torch.mean(std, dim=0)[0][0].item())
+            std_list_y.append(torch.mean(std, dim=0)[0][1].item())
+            std_list_z.append(torch.mean(std, dim=0)[0][2].item())
+
+            diameter_list_x.append((torch.mean((torch.max(pcl[:,:,0], dim=1).values)-(torch.min(pcl[:,:,0], dim=1).values))).item())
+            diameter_list_y.append((torch.mean((torch.max(pcl[:,:,1], dim=1).values)-(torch.min(pcl[:,:,1], dim=1).values))).item())
+            diameter_list_z .append((torch.mean((torch.max(pcl[:,:,2], dim=1).values)-(torch.min(pcl[:,:,2], dim=1).values))).item())
+
+            min_coords = torch.min(pcl, dim=1)[0]
+            max_coords = torch.max(pcl, dim=1)[0]
+
+            # Compute the volume of the bounding box for each point cloud
+            bounding_box_volumes = torch.prod(max_coords - min_coords, dim=1)
+
+            # Number of points in each point cloud (assuming all point clouds have the same number of points)
+            num_points = pcl.shape[1]
+
+            # Calculate the density for each point cloud
+            densities = num_points / bounding_box_volumes
+            avg_density = torch.mean(densities)
+            density_list.append(avg_density)
+
+            pairwise_distances = torch.cdist(pcl, pcl, p=2)
+            sum_distances = torch.sum(pairwise_distances, dim=(1, 2))
+            num_pairs = num_points * (num_points - 1)
+            avg_distances = sum_distances / num_pairs
+            avg_dist_list.append(torch.mean(avg_distances).item())
+
+            diam = (((torch.max(pairwise_distances[:, 0, :], dim=1))[0]))
+
+            full_diameter_from_center_mean_list.append((torch.mean(diam)).item())
+            full_diameter_from_center_max_list.append((torch.max(diam)).item())
+            full_diameter_from_center_min_list.append((torch.min(diam)).item())
+            full_diameter_from_center_09_list.append((torch.quantile(diam, 0.9)).item())
+            full_diameter_from_center_median_list.append((torch.median(diam)).item())
             pcl = pcl.reshape(pcl.shape[0]*pcl.shape[1], -1)
+
             max_list_x.append(torch.max(pcl[:,0]).item())
             min_list_x.append(torch.min(pcl[:,0]).item())
             max_list_y.append(torch.max(pcl[:,1]).item())
@@ -45,52 +130,39 @@ def checkData():
             max_list_z.append(torch.max(pcl[:,2]).item())
             min_list_z.append(torch.min(pcl[:,2]).item())
             print('yay')
-    print(f'-----------X--------------')
-    print(f'MIN mean: {np.mean(min_list_x)}')
-    print(f'MIN median: {np.median(min_list_x)}')
-    print(f'MIN MIN: {np.min(min_list_x)}')
-    print(f'MAX mean: {np.mean(max_list_x)}')
-    print(f'MAX median: {np.median(max_list_x)}')
-    print(f'MAX MAX: {np.max(max_list_x)}')
-    print(f'-----------Y--------------')
-    print(f'MIN mean: {np.mean(min_list_y)}')
-    print(f'MIN median: {np.median(min_list_y)}')
-    print(f'MIN MIN: {np.min(min_list_y)}')
-    print(f'MAX mean: {np.mean(max_list_y)}')
-    print(f'MAX median: {np.median(max_list_y)}')
-    print(f'MAX MAX: {np.max(max_list_y)}')
-    print(f'-----------Z--------------')
-    print(f'MIN mean: {np.mean(min_list_z)}')
-    print(f'MIN median: {np.median(min_list_z)}')
-    print(f'MIN MIN: {np.min(min_list_z)}')
-    print(f'MAX mean: {np.mean(max_list_z)}')
-    print(f'MAX median: {np.median(max_list_z)}')
-    print(f'MAX MAX: {np.max(max_list_z)}')
-def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_factor=None):
+    print(f'-----------STD--------------')
+    print(f'x std: {np.mean(std_list_x)}')
+    print(f'y std: {np.mean(std_list_y)}')
+    print(f'z std: {np.mean(std_list_z)}')
+    print(f'-----------Density--------------')
+    print(f'Density: {np.mean(density_list)}')
+    print(f'-----------distance--------------')
+    print(f'Distance: {np.mean(avg_dist_list)}')
+    print(f'-----------DIAMETER--------------')
+    print(f'full diameter from center MEAN: {np.mean(full_diameter_from_center_mean_list)}')
+    print(f'full diameter from center MEDIAN: {np.mean(full_diameter_from_center_median_list)}')
+    print(f'full diameter from center MAX: {np.mean(full_diameter_from_center_max_list)}')
+    print(f'full diameter from center MIN: {np.mean(full_diameter_from_center_min_list)}')
+    print(f'full diameter from center 90: {np.mean(full_diameter_from_center_09_list)}')
+    print(f'x diameter: {np.mean(diameter_list_x)}')
+    print(f'y diameter: {np.mean(diameter_list_y)}')
+    print(f'z diameter: {np.mean(diameter_list_z)}')
+def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_factor=None, rgb=False):
     pcls, label = load_data()
     shapes = [86, 174, 179]
-    # shapes = [86]
+    shapes = [51, 54, 86, 174, 179]
+    # shapes = range(50,60)
     for k in shapes:
         pointcloud = pcls[k][:]
         # bin_file = "000098.bin"
         # pointcloud = read_bin_file(bin_file)
         noisy_pointcloud = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
         pointcloud = noisy_pointcloud.astype(np.float32)
-        colors = checkOnShapes(model_name=model_name,
-                                    input_data=pointcloud, args_shape=args_shape, scaling_factor=scaling_factor)
+        colors = classifyPoints(model_name=model_name, pcl_src=pointcloud, pcl_interest=pointcloud,
+                       args_shape=args_shape, scaling_factor=scaling_factor)
+
         colors = colors.detach().cpu().numpy()
         colors = colors[:,:4]
-
-        colors_normalized = colors.copy()
-        colors_normalized[:, 0] = ((colors[:, 0] - colors[:, 0].min()) / (
-                    colors[:, 0].max() - colors[:, 0].min())) * 255
-        colors_normalized[:, 1] = ((colors[:, 1] - colors[:, 1].min()) / (
-                    colors[:, 1].max() - colors[:, 1].min())) * 255
-        colors_normalized[:, 2] = ((colors[:, 2] - colors[:, 2].min()) / (
-                    colors[:, 2].max() - colors[:, 2].min())) * 255
-        colors_normalized[:, 3] = ((colors[:, 3] - colors[:, 3].min()) / (
-                    colors[:, 3].max() - colors[:, 3].min())) * 255
-        colors_normalized = np.clip(colors_normalized, 0, 255).astype(np.uint8)
         layout = go.Layout(
             title=f"Point Cloud with Embedding-based Colors {k}",
             scene=dict(
@@ -99,26 +171,38 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_fact
                 zaxis_title='Z'
             )
         )
-        data_rgb = [
-            go.Scatter3d(
-                x=pointcloud[:, 0],
-                y=pointcloud[:, 1],
-                z=pointcloud[:, 2],
-                mode='markers',
-                marker=dict(
-                    size=2,
-                    opacity=0.8,
-                    color=['rgb(' + ', '.join(map(str, rgb)) + ')' for rgb in colors_normalized],  # Set RGB values
-                ),
-                name='RGB Embeddings'
-            )
-        ]
+        if rgb:
+            colors_normalized = colors.copy()
+            colors_normalized[:, 0] = ((colors[:, 0] - colors[:, 0].min()) / (
+                        colors[:, 0].max() - colors[:, 0].min())) * 255
+            colors_normalized[:, 1] = ((colors[:, 1] - colors[:, 1].min()) / (
+                        colors[:, 1].max() - colors[:, 1].min())) * 255
+            colors_normalized[:, 2] = ((colors[:, 2] - colors[:, 2].min()) / (
+                        colors[:, 2].max() - colors[:, 2].min())) * 255
+            colors_normalized[:, 3] = ((colors[:, 3] - colors[:, 3].min()) / (
+                        colors[:, 3].max() - colors[:, 3].min())) * 255
+            colors_normalized = np.clip(colors_normalized, 0, 255).astype(np.uint8)
 
-        # Your existing code
+            data_rgb = [
+                go.Scatter3d(
+                    x=pointcloud[:, 0],
+                    y=pointcloud[:, 1],
+                    z=pointcloud[:, 2],
+                    mode='markers',
+                    marker=dict(
+                        size=2,
+                        opacity=0.8,
+                        color=['rgb(' + ', '.join(map(str, rgb)) + ')' for rgb in colors_normalized],  # Set RGB values
+                    ),
+                    name='RGB Embeddings'
+                )
+            ]
 
-        # Plotting the RGB embeddings separately
-        fig_rgb = go.Figure(data=data_rgb, layout=layout)
-        fig_rgb.show()
+            # Your existing code
+
+            # Plotting the RGB embeddings separately
+            fig_rgb = go.Figure(data=data_rgb, layout=layout)
+            fig_rgb.show()
 
         # Plot the maximum value embedding with specified colors
         max_embedding_index = np.argmax(colors, axis=1)
@@ -189,9 +273,10 @@ def plotWorst(worst_losses, model_name=""):
         save_point_clouds(transformed_points1, noisy_pointcloud_2 - center2, title="", filename=model_name+f"_{loss:.3f}_{count}_loss.html")
         count = count + 1
 
-def view_stabiity(model_name=None, args_shape=None, scaling_factor=None):
+def view_stabiity(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
+                                    num_of_ransac_iter=100, shapes=[86, 162, 174, 176, 179], plot_graphs=0, create_pcls_func=None):
     pcls, label = load_data()
-    shapes = [82, 83, 86, 174]
+    shapes = [51,54, 86, 174]
     for k in shapes:
         pointcloud = pcls[k][:]
         rotated_pcl, rotation_matrix, _ = random_rotation_translation(pointcloud)
@@ -201,14 +286,37 @@ def view_stabiity(model_name=None, args_shape=None, scaling_factor=None):
         noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
         noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
-        emb_1 = classifyPoints(model_name=model_name, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1, args_shape=args_shape, scaling_factor=scaling_factor)
-        emb_2 = classifyPoints(model_name=model_name, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2, args_shape=args_shape, scaling_factor=scaling_factor)
+        emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2, args_shape=cls_args, scaling_factor=scaling_factor)
 
         emb_1 = emb_1.detach().cpu().numpy()
         emb_2 = emb_2.detach().cpu().numpy()
 
-
         plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2)
+        # multiscale embeddings
+        if scales > 1:
+            for scale in receptive_field[1:]:
+                fps_indices_1 = farthest_point_sampling(noisy_pointcloud_1, k=(int)(len(noisy_pointcloud_1) // scale))
+                fps_indices_2 = farthest_point_sampling(noisy_pointcloud_2, k=(int)(len(noisy_pointcloud_2) // scale))
+
+                global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                                              pcl_src=noisy_pointcloud_1[fps_indices_1, :],
+                                              pcl_interest=noisy_pointcloud_1, args_shape=cls_args,
+                                              scaling_factor=scaling_factor)
+
+                global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                                              pcl_src=noisy_pointcloud_2[fps_indices_2, :],
+                                              pcl_interest=noisy_pointcloud_2, args_shape=cls_args,
+                                              scaling_factor=scaling_factor)
+
+                global_emb_1 = global_emb_1.detach().cpu().numpy()
+                global_emb_2 = global_emb_2.detach().cpu().numpy()
+                # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, global_emb_1, global_emb_2)
+                emb_1 = np.hstack((emb_1, global_emb_1))
+                emb_2 = np.hstack((emb_2, global_emb_2))
+                plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2)
+
+        # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2)
         # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1[:,:4], emb_2[:,:4])
         # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1[:,4:], emb_2[:,4:])
 
@@ -321,14 +429,11 @@ def find_closest_points(embeddings1, embeddings2, num_neighbors=40, max_non_uniq
     classification_2 = np.argmax(embeddings2[:,:4], axis=1)
 
     # Initialize NearestNeighbors instance
-    # nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:,4:])
-    # nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
-    nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:,:4])
+    nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
 
     # Find the indices and distances of the closest points in embeddings2 for each point in embeddings1
-    # distances, indices = nbrs.kneighbors(embeddings1[:,4:])
-    # distances, indices = nbrs.kneighbors(embeddings1)
-    distances, indices = nbrs.kneighbors(embeddings1[:,:4])
+    distances, indices = nbrs.kneighbors(embeddings1)
+
     duplicates = np.zeros(len(embeddings1))
     for i,index in enumerate(indices):
         if duplicates[index] >= max_non_unique_correspondences:
@@ -357,30 +462,70 @@ def random_rotation_translation(pointcloud, translation=np.array([0,0,0])):
   centered_cloud = pointcloud - center
 
   # Generate random rotation angles for each axis
-  theta_x = np.random.rand() * 2 * np.pi
-  theta_y = np.random.rand() * 2 * np.pi
-  theta_z = np.random.rand() * 2 * np.pi
-  rotation_matrix = (Rotation.from_euler("xyz", [theta_x, theta_y, theta_z], degrees=False)).as_matrix()
+  rotation_matrix = Rotation.random().as_matrix()
   # Apply rotation to centered pointcloud
-  rotated_cloud = (centered_cloud @ rotation_matrix)
+  rotated_cloud = (centered_cloud @ rotation_matrix.T)
   new_pointcloud = (rotated_cloud + center) + translation
 
   return new_pointcloud , rotation_matrix, translation
+def calcDensity(src_knn_pcl):
+    min_coords = torch.min(src_knn_pcl[0].permute(1,2,0), dim=1)[0]
+    max_coords = torch.max(src_knn_pcl[0].permute(1,2,0), dim=1)[0]
+    bounding_box_volumes = torch.prod(max_coords - min_coords, dim=1)
+    num_points = src_knn_pcl.shape[-1]
+    densities = num_points / bounding_box_volumes
+    avg_density = torch.mean(densities)
+    scaling_density = torch.pow(avg_density, (1 / 3))
+    scaling_train_data_density = 0.56959049569571
+    total_density_scale = scaling_density / scaling_train_data_density
+    return total_density_scale
+def calcStd(src_knn_pcl):
+    x_std_src = torch.std(src_knn_pcl[0,0,:,:])
+    y_std_src = torch.std(src_knn_pcl[0,1,:,:])
+    z_std_src = torch.std(src_knn_pcl[0,2,:,:])
+    std_avg = torch.mean(torch.stack([x_std_src, y_std_src, z_std_src]))
+    scaling_to_train = (2.15 / std_avg)
+    return scaling_to_train
+def calcDist(src_knn_pcl):
+    pcl = src_knn_pcl[0].permute(1,2,0)
+    pairwise_distances = torch.cdist(pcl, pcl, p=2)
+    sum_distances = torch.sum(pairwise_distances, dim=(1, 2))
+    num_points = pcl.shape[1]
+    num_pairs = num_points * (num_points - 1)
+    avg_distances = torch.mean(sum_distances / num_pairs)
+    # return ((1 / avg_distances) * 4.726)
+    diam = (((torch.max(pairwise_distances[:, 0, :], dim=1))[0]))
+    d_mean = (torch.mean(diam)).item()
+    d_median = (torch.median(diam)).item()
+    d_max = (torch.max(diam)).item()
+    d_min = (torch.min(diam)).item()
+    d_90 = (torch.quantile(diam, 0.9)).item()
 
+    # scale = 13.23 / d_mean
+    scale = 12.75 / d_median
+    # scale = 37.06 / d_max
+    # scale = 2.22 / d_min
+    # scale = 19.13 / d_90
+    return scale
 def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None):
     model = shapeClassifier(args_shape)
     model.load_state_dict(torch.load(f'models_weights/{model_name}.pt'))
     model.eval()
     neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
     src_knn_pcl = torch.tensor(neighbors_centered)
-    x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
-    y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
-    z_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,2,:,:])
-    scale = torch.mean(torch.stack((x_scale_src, y_scale_src, z_scale_src), dim=0))
-    #scale KNN point clouds to be of size 1
-    src_knn_pcl = src_knn_pcl / scale
-    #use 23 as it is around the size of the synthetic point clouds
-    src_knn_pcl = scaling_factor * src_knn_pcl
+
+    # x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
+    # y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
+    # z_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,2,:,:])
+    # scale = torch.mean(torch.stack((x_scale_src, y_scale_src, z_scale_src), dim=0))
+    # # src_knn_pcl = src_knn_pcl *  (1 / scale)
+    # scaling_factor_final = scaling_factor *  (1 / scale)
+
+
+    scaling_factor_final = calcDist(src_knn_pcl)
+
+    src_knn_pcl = scaling_factor_final * src_knn_pcl
+    # plot_point_clouds(((src_knn_pcl[0].permute(1, 2, 0))[10]), ((src_knn_pcl[0].permute(1, 2, 0))[10]),"")
     output = model(src_knn_pcl.permute(2,1,0,3))
     return output
 def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):
