@@ -278,6 +278,14 @@ def view_stabiity(cls_args=None,num_worst_losses = 3, scaling_factor=None, scale
     for k in shapes:
         pointcloud = pcls[k][:]
         rotated_pcl, rotation_matrix, _ = random_rotation_translation(pointcloud)
+        chosen_point = [10,10]
+        if create_pcls_func is not None:
+            pcl1, pcl2, pcl1_indices, pcl2_indices, overlapping_indices = create_pcls_func(pointcloud)
+            chosen_overlapping_point = np.random.choice(overlapping_indices)
+            index_pcl_1 = np.where(pcl1_indices == chosen_overlapping_point)[0][0]
+            index_pcl_2 = np.where(pcl2_indices == chosen_overlapping_point)[0][0]
+            chosen_point = [index_pcl_1, index_pcl_2]
+            rotated_pcl, rotation_matrix, translation = random_rotation_translation(pcl2)
 
         noisy_pointcloud_1 = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
         noisy_pointcloud_1 = noisy_pointcloud_1.astype(np.float32)
@@ -290,7 +298,7 @@ def view_stabiity(cls_args=None,num_worst_losses = 3, scaling_factor=None, scale
         emb_1 = emb_1.detach().cpu().numpy()
         emb_2 = emb_2.detach().cpu().numpy()
 
-        plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2)
+        plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2, chosen_point)
         # multiscale embeddings
         if scales > 1:
             for scale in receptive_field[1:]:
@@ -312,11 +320,7 @@ def view_stabiity(cls_args=None,num_worst_losses = 3, scaling_factor=None, scale
                 # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, global_emb_1, global_emb_2)
                 emb_1 = np.hstack((emb_1, global_emb_1))
                 emb_2 = np.hstack((emb_2, global_emb_2))
-                plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2)
-
-        # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2)
-        # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1[:,:4], emb_2[:,:4])
-        # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1[:,4:], emb_2[:,4:])
+                plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2, chosen_point)
 
 def fit_surface_quadratic_constrained(points):
     """
@@ -509,21 +513,24 @@ def calcDist(src_knn_pcl, scaling_mode):
         d_mean = (torch.mean(diam)).item()
         scale = 13.23 / d_mean
 
-    if scaling_mode == "median":
+    elif scaling_mode == "median":
         d_median = (torch.median(diam)).item()
         scale = 12.75 / d_median
 
-    if scaling_mode == "max":
+    elif scaling_mode == "max":
         d_max = (torch.max(diam)).item()
         scale = 37.06 / d_max
 
-    if scaling_mode == "min":
+    elif scaling_mode == "min":
         d_min = (torch.min(diam)).item()
         scale = 2.22 / d_min
-    if scaling_mode == "d_90":
+    elif scaling_mode == "d_90":
         d_90 = (torch.quantile(diam, 0.9)).item()
         scale = 19.13 / d_90
-
+    else:
+        d_min = (torch.min(diam)).item()
+        scale = 2.22 / d_min
+        scale = scale * scaling_mode
     return scale
 def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None):
     model = shapeClassifier(args_shape)

@@ -331,7 +331,7 @@ def test_multi_scale_classification(cls_args=None,num_worst_losses = 3, scaling_
         rotated_pcl, rotation_matrix, translation = random_rotation_translation(pcl1)
 
         if create_pcls_func is not None:
-            pcl1, pcl2 = create_pcls_func(pcl1)
+            pcl1, pcl2, pcl1_indices, pcl2_indices, overlapping_indices = create_pcls_func(pcl1)
             rotated_pcl, rotation_matrix, translation = random_rotation_translation(pcl2)
 
         noisy_pointcloud_1 = pcl1 + np.random.normal(0, 0.01, pcl1.shape)
@@ -484,7 +484,7 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
         rotated_pcl, rotation_matrix, translation = random_rotation_translation(pcl1)
 
         if create_pcls_func is not None:
-            pcl1, pcl2 = create_pcls_func(pcl1)
+            pcl1, pcl2, pcl1_indices, pcl2_indices, overlapping_indices = create_pcls_func(pcl1)
             rotated_pcl, rotation_matrix, translation = random_rotation_translation(pcl2)
 
         noisy_pointcloud_1 = pcl1 + np.random.normal(0, 0.01, pcl1.shape)
@@ -524,7 +524,8 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
                 emb_1 = np.hstack((emb_1, global_emb_1))
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
-        emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_neighbors=amount_of_interest_points, max_non_unique_correspondences=1)
+        # emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_neighbors=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_neighbors=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
 

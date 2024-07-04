@@ -400,12 +400,10 @@ def plot_distances(Max_dist, min_dist, avg_dist_list, dist_from_orig, filename="
     plt.savefig(filename)
     # Show the plot
     plt.show()
-def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embedding1, embedding2):
+def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embedding1, embedding2, chosen_indices):
     # Generate random index to choose a point from point_cloud1
-    random_index = np.random.randint(len(point_cloud1))
-    random_index = 100
-    random_point = point_cloud2[random_index]
-    random_embedding = embedding1[random_index]
+    random_point = point_cloud2[chosen_indices[1]]
+    random_embedding = embedding1[chosen_indices[0]]
 
     # Calculate distances from the random embedding to all embeddings in embedding2
     distances = np.linalg.norm(embedding2 - random_embedding, axis=1)

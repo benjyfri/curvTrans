@@ -66,42 +66,50 @@ def split_pointcloud_overlap(point_cloud, overlap_ratio):
     split_point_bot = np.percentile(projected_points[:,0], 100 * (1 - ratio))
 
     # Filter the pointcloud based on the split point
-    pcl1 = point_cloud[projected_points[:,0] <= split_point_top]
-    pcl2 = point_cloud[projected_points[:,0] > split_point_bot]
+    pcl1_indices = np.where(projected_points[:,0] <= split_point_top)[0]
+    pcl2_indices = np.where(projected_points[:,0] > split_point_bot)[0]
+    pcl1 = point_cloud[pcl1_indices]
+    pcl2 = point_cloud[pcl2_indices]
+    overlapping_indices = np.where(np.logical_and((projected_points[:,0] <= split_point_top),projected_points[:,0] > split_point_bot))[0]
 
-    return pcl1, pcl2
+    return pcl1, pcl2, pcl1_indices, pcl2_indices, overlapping_indices
 if __name__ == '__main__':
     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36_1')
     scaling_factors = [15,20,25]
     # scaling_factors = ["90pct"]
     scaling_factors = ["max" , "mean", "median", "min", "d_90"]
-    scaling_factors = ["min"]
+    # scaling_factors = ["min"]
+    # scaling_factors = [0.5, 2,4,8]
+    # scaling_factors = ["median"]
     # subsamples = [20,50,100,200,300]
     subsamples = [200,300]
     subsamples = [300]
-    receptive_fields_list = [ [1, 20, 40] , [1, 10, 20, 30, 40]]
-    receptive_fields_list = [[1, 10, 20, 30, 40]]
-    receptive_fields_list = [[1, 20, 40] ]
-    scales_list = [3,5]
+    # receptive_fields_list = [ [1, 20, 40] , [1, 10, 20, 30, 40]]
+    # receptive_fields_list = [[1, 10, 20, 30, 40]]
+    # receptive_fields_list = [[1, 20, 40] ]
+    receptive_fields_list = [[1, 20, 30] ]
+    # scales_list = [3,5]
+    scales_list = [5]
     scales_list = [3]
     for scales, receptive_field in zip(scales_list, receptive_fields_list):
         for amount_of_interest_points in subsamples:
             for scaling_factor in scaling_factors:
-                print(f'Scaling factor: {scaling_factor}, amount_of_interest_points: {amount_of_interest_points}, #scales: {scales}')
+                for max_non_unique_correspondences in [3,1]:
+                    print(f'Scaling factor: {scaling_factor}, amount_of_interest_points: {amount_of_interest_points}, #scales: {scales}, max_non_unique_correspondences: {max_non_unique_correspondences}')
 
-                # worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
-                #     = test_multi_scale_using_embedding(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=scales, receptive_field=receptive_field, amount_of_interest_points=amount_of_interest_points,
-                #                             num_of_ransac_iter=50, shapes=range(100))
-                # plot_losses(losses=losses, inliers=num_of_inliers, filename=f'{scaling_factor}_{amount_of_interest_points}_loss_{scales}_scales_emb.png')
+                    worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
+                        = test_multi_scale_using_embedding(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=scales, receptive_field=receptive_field, amount_of_interest_points=amount_of_interest_points,
+                                                num_of_ransac_iter=50, shapes=range(100), pct_of_points_2_take=1, max_non_unique_correspondences=max_non_unique_correspondences)
+                    plot_losses(losses=losses, inliers=num_of_inliers, filename=f'{scaling_factor}_{max_non_unique_correspondences}_{amount_of_interest_points}_loss_{scales}_scales_emb.png')
 
-                worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
-                    = test_multi_scale_using_embedding(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=3, receptive_field=[1, 20, 30], amount_of_interest_points=50,
-                                            num_of_ransac_iter=500, shapes=range(1,5),create_pcls_func=partial(split_pointcloud_overlap, overlap_ratio=0.3), max_non_unique_correspondences=3, pct_of_points_2_take=0.75)
-
-                plot_losses(losses=losses, inliers=num_of_inliers, filename=f'{scaling_factor}_{amount_of_interest_points}_loss_{scales}_scales_emb.png')
-                # plotWorst(worst_losses=worst_losses, model_name=f'{scaling_factor}_{amount_of_interest_points}_{scales}_scales_emb')
-                # visualizeShapesWithEmbeddings(model_name='3MLP32N2deg_lpe0eig36_1', args_shape=cls_args,
-                #                               scaling_factor=scaling_factor, rgb=False)
-                # view_stabiity(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=5, receptive_field=[1, 10, 20, 30, 40], amount_of_interest_points=300,
-                #                             num_of_ransac_iter=50, plot_graphs=1)
-                # exit(0)
+                    # worst_losses, losses, final_thresh_list, num_of_inliers, point_distance_list, worst_point_losses, iter_2_ransac_convergence \
+                    #     = test_multi_scale_using_embedding(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=scales, receptive_field=receptive_field, amount_of_interest_points=50,
+                    #                             num_of_ransac_iter=500, shapes=range(1,5),create_pcls_func=partial(split_pointcloud_overlap, overlap_ratio=0.3), max_non_unique_correspondences=1, pct_of_points_2_take=0.75)
+                    #
+                    # plot_losses(losses=losses, inliers=num_of_inliers, filename=f'{scaling_factor}_{amount_of_interest_points}_loss_{scales}_scales_emb.png')
+                    # plotWorst(worst_losses=worst_losses, model_name=f'{scaling_factor}_{amount_of_interest_points}_{scales}_scales_emb')
+                    # visualizeShapesWithEmbeddings(model_name='3MLP32N2deg_lpe0eig36_1', args_shape=cls_args,
+                    #                               scaling_factor=scaling_factor, rgb=False)
+                    # view_stabiity(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=5, receptive_field=[1, 10, 20, 30], amount_of_interest_points=300,
+                    #                             num_of_ransac_iter=50, plot_graphs=1,create_pcls_func=partial(split_pointcloud_overlap, overlap_ratio=0.3))
+                    # exit(0)
