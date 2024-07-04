@@ -113,20 +113,29 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
     for iteration in range(max_iterations):
         # Randomly sample 3 corresponding points
         counter = 0
+        smallest_diff = np.inf
+        best_src_points = None
+        best_dst_points = None
         while True:
             counter += 1
             indices = np.random.choice(N, size=3, replace=False)
             src_points = src_centered[indices]
             dst_points = dst_centered[indices]
-            dist_1,dist_2,dist_3 = dists[indices]
+            dist_1, dist_2, dist_3 = dists[indices]
             largest_diff = max(dist_1, dist_2, dist_2) - min(dist_1, dist_2, dist_2)
+            if largest_diff < smallest_diff:
+                smallest_diff = largest_diff
+                best_src_points = src_points
+                best_dst_points = dst_points
+
             if largest_diff < 0.05 or counter > 50:
                 # print(counter)
+                src_points = best_src_points
+                dst_points = best_dst_points
                 break
 
         # Estimate rotation and translation
-        rotation = estimate_rigid_transform(src_points, dst_points)
-        # translation = dst_mean - np.matmul(src_mean, rotation)
+        rotation, translation = estimate_rigid_transform(src_points, dst_points)
         # Find inliers
         inliers1, inliers2 = find_inliers(src_centered, dst_centered, rotation, threshold)
 
@@ -135,11 +144,11 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
             best_inliers = inliers1
             corres = [src_centered[inliers1], dst_centered[inliers2]]
             best_rotation = rotation
-            # best_translation = translation
+            best_translation = translation
             best_iter = iteration
     if best_inliers == None:
         return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold + 0.1, min_inliers=min_inliers)
-    return best_rotation, len(best_inliers), best_iter, corres, threshold
+    return best_rotation, best_translation, len(best_inliers), best_iter, corres, threshold
 def multiclass_classification_only_ransac(cls_1, cls_2, max_iterations=1000, threshold=0.1, min_inliers=2):
     # N = data1.shape[0]
     best_num_of_inliers = 0
@@ -169,8 +178,7 @@ def multiclass_classification_only_ransac(cls_1, cls_2, max_iterations=1000, thr
         src_points = np.array([random.choice(pcl_1[cls]) for cls in chosen_classes])
         dst_points = np.array([random.choice(pcl_2[cls]) for cls in chosen_classes])
         # Estimate rotation and translation
-        rotation = estimate_rigid_transform(src_points, dst_points)
-        # translation = dst_mean - np.matmul(src_mean, rotation)
+        rotation, translation  = estimate_rigid_transform(src_points, dst_points)
         # Find inliers
         inliers_1, inliers_2 = find_inliers_classification_multiclass(cls_1, cls_2, rotation=rotation, threshold=threshold)
 
@@ -179,13 +187,13 @@ def multiclass_classification_only_ransac(cls_1, cls_2, max_iterations=1000, thr
             best_num_of_inliers = len(inliers_1)
             corres = [inliers_1, inliers_2]
             best_rotation = rotation
-            # best_translation = translation
+            best_translation = translation
             best_iter = iteration
     if best_num_of_inliers == 0:
         return multiclass_classification_only_ransac(cls_1, cls_2, max_iterations=max_iterations,
                                                    threshold=threshold + 0.1,
                                                    min_inliers=min_inliers)
-    return best_rotation, best_num_of_inliers, best_iter, corres, threshold
+    return best_rotation, best_translation, best_num_of_inliers, best_iter, corres, threshold
 
 def random_only_ransac(cls1_1,cls1_2,cls1_3,cls1_4, cls2_1,cls2_2,cls2_3,cls2_4,
                                max_iterations=1000, threshold=0.1, min_inliers=2):
@@ -208,8 +216,7 @@ def random_only_ransac(cls1_1,cls1_2,cls1_3,cls1_4, cls2_1,cls2_2,cls2_3,cls2_4,
         src_points = np.array([random.choice(pcl_1) for i in range(3)])
         dst_points = np.array([random.choice(pcl_2) for j in range(3)])
         # Estimate rotation and translation
-        rotation = estimate_rigid_transform(src_points, dst_points)
-        # translation = dst_mean - np.matmul(src_mean, rotation)
+        rotation, translation  = estimate_rigid_transform(src_points, dst_points)
         # Find inliers
         dummy_1 = pcl_1.tolist()
         dummy_2 = pcl_2.tolist()
@@ -226,11 +233,16 @@ def random_only_ransac(cls1_1,cls1_2,cls1_3,cls1_4, cls2_1,cls2_2,cls2_3,cls2_4,
         return random_only_ransac(dummy_1, [], [], [], dummy_2, [], [], [], max_iterations=max_iterations,
                                                    threshold=threshold + 0.1,
                                                    min_inliers=min_inliers)
-    return best_rotation, best_num_of_inliers, best_iter, corres, threshold
+    return best_rotation, best_translation, best_num_of_inliers, best_iter, corres, threshold
 
 
 def estimate_rigid_transform(src_points, dst_points):
-    H = np.matmul(src_points.T, dst_points)
+    src_mean = np.mean(src_points, axis=0)
+    dst_mean = np.mean(dst_points, axis=0)
+    src_centered = src_points - src_mean
+    dst_centered = dst_points - dst_mean
+    H = np.matmul(src_centered.T, dst_centered)
+    # H = np.matmul(src_points.T, dst_points)
     U, _, Vt = np.linalg.svd(H)
     R = np.matmul(Vt.T, U.T)
 
@@ -238,7 +250,8 @@ def estimate_rigid_transform(src_points, dst_points):
     if np.linalg.det(R) < 0:
         Vt[2, :] *= -1
         R = np.matmul(Vt, U.T)
-    return R
+    translation = dst_mean - ( R @ src_mean )
+    return R, translation
 
 
 def find_inliers(data1, data2, rotation, threshold):
@@ -455,7 +468,7 @@ def test_multi_scale_classification(cls_args=None,num_worst_losses = 3, scaling_
 
 
 def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
-                                    num_of_ransac_iter=100, shapes=[86, 162, 174, 176, 179], plot_graphs=0, create_pcls_func=None):
+                                    num_of_ransac_iter=100, shapes=[86, 162, 174, 176, 179], create_pcls_func=None, max_non_unique_correspondences=3, pct_of_points_2_take=0.75):
     pcls, label = load_data()
     worst_losses = [(0, None)] * num_worst_losses
     worst_point_losses = [(0, None)] * num_worst_losses
@@ -512,18 +525,17 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
         emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_neighbors=amount_of_interest_points, max_non_unique_correspondences=1)
-        centered_points_1 = chosen_pcl_1[emb1_indices, :] - np.mean(noisy_pointcloud_1)
-        centered_points_2 = chosen_pcl_2[emb2_indices, :] - np.mean(noisy_pointcloud_2)
+        centered_points_1 = chosen_pcl_1[emb1_indices, :]
+        centered_points_2 = chosen_pcl_2[emb2_indices, :]
 
-        best_rotation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
+        best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
                                                    threshold=0.1,
                                                    min_inliers=(int)(amount_of_interest_points // 10))
 
         final_inliers_list.append(best_num_of_inliers)
         iter_2_ransac_convergence.append(best_iter)
 
-        center = np.mean(noisy_pointcloud_1, axis=0)
-        transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
+        transformed_points1 = np.matmul(noisy_pointcloud_1, best_rotation.T) + best_translation
         loss = np.mean(((rotation_matrix @ best_rotation.T) - np.eye(3)) ** 2)
         losses.append(loss)
 
