@@ -6,7 +6,7 @@ from utils import createLPEembedding, positional_encoding_nerf
 import plotly.express as px
 import random
 from scipy.spatial.transform import Rotation as R
-
+import plotly.graph_objects as go
 class BasicPointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
@@ -31,8 +31,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
-        point_cloud = self.point_clouds_group[point_cloud_name]
-        point_cloud = np.array(point_cloud, dtype=np.float32)
+        # point_cloud = self.point_clouds_group[point_cloud_name]
+        # point_cloud_orig = np.array(point_cloud, dtype=np.float32)
+
+        point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
+                                            count=self.sampled_points)
+
         point_cloud = point_cloud / self.normalization_factor
         if self.pcl_scaling > 1.0:
             increase_scale = np.random.uniform(low=1, high=self.pcl_scaling)

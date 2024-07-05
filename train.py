@@ -59,12 +59,14 @@ def train_and_test(args):
     learning_rate = args.lr
 
     # Create instances for training and testing datasets
-    if args.sampled_points==20:
-        train_dataset = BasicPointCloudDataset(file_path="train_surfaces.h5" , args=args)
-        test_dataset = BasicPointCloudDataset(file_path='test_surfaces.h5' , args=args)
-    if args.sampled_points==40:
-        train_dataset = BasicPointCloudDataset(file_path="train_surfaces_40_stronger_boundaries.h5" , args=args)
-        test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5' , args=args)
+    # if args.sampled_points==20:
+    #     train_dataset = BasicPointCloudDataset(file_path="train_surfaces.h5" , args=args)
+    #     test_dataset = BasicPointCloudDataset(file_path='test_surfaces.h5' , args=args)
+    # if args.sampled_points==40:
+
+    train_dataset = BasicPointCloudDataset(file_path="train_surfaces_40_stronger_boundaries.h5" , args=args)
+    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5' , args=args)
+
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     model = shapeClassifier(args).to(device)
@@ -246,10 +248,12 @@ def configArgsPCT():
     return args
 def testPretrainedModel(args, model=None):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    if args.sampled_points == 20:
-        test_dataset = BasicPointCloudDataset(file_path='test_surfaces.h5', args=args)
-    elif args.sampled_points == 40:
-        test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5', args=args)
+    # if args.sampled_points == 20:
+    #     test_dataset = BasicPointCloudDataset(file_path='test_surfaces.h5', args=args)
+    # elif args.sampled_points == 40:
+
+    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5', args=args)
+
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     if model is None:
         model = MLP(input_size=36 * (args.sampled_points + 1), num_layers=args.num_mlp_layers,
