@@ -22,10 +22,7 @@ class shapeClassifier(nn.Module):
         input_size = input_dim * (args.sampled_points + 1)
         if (self.lap_eigenvalues_dim !=0):
             input_size = input_size + (self.lap_eigenvalues_dim)
-        if args.contrastive_mid_layer:
-            self.classifier =  MLP_Returns_Mid_Layer(input_size= input_size, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim)
-        else:
-            self.classifier =  MLP(input_size= input_size, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim)
+        self.classifier =  MLP(input_size= input_size, num_layers=args.num_mlp_layers, num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim)
 
 
     def forward(self, x):
