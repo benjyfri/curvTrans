@@ -21,11 +21,10 @@ from scipy.spatial import cKDTree
 from plotting_functions import *
 from experiments_utils import *
 import platform
-
-
+from modelnet import ModelNetHdf
+import transforms
 
 def load_data(partition='test', divide_data=1):
-    BASE_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes'
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
     if platform.system() != "Windows":
         DATA_DIR = r'/content/curvTrans/bbsWithShapes/data'
@@ -44,6 +43,30 @@ def load_data(partition='test', divide_data=1):
     size = len(all_label)
     return all_data[:(int)(size/divide_data),:,:], all_label[:(int)(size/divide_data),:]
 
+def farthest_point_sampling_torch(point_cloud, k):
+    N, _ = point_cloud.shape
+
+    # Array to hold indices of sampled points
+    sampled_indices = torch.zeros(k, dtype=torch.long)
+
+    # Initialize distances to a large value
+    distances = torch.full((N,), float('inf'), device=point_cloud.device)
+
+    # Randomly select the first point
+    current_index = torch.randint(N, (1,), device=point_cloud.device).item()
+    sampled_indices[0] = current_index
+
+    for i in range(1, k):
+        # Update distances to the farthest point selected so far
+        current_point = point_cloud[current_index]
+        new_distances = torch.norm(point_cloud - current_point, dim=1)
+        distances = torch.minimum(distances, new_distances)
+
+        # Select the point that has the maximum distance to the sampled points
+        current_index = torch.argmax(distances).item()
+        sampled_indices[i] = current_index
+
+    return sampled_indices
 
 def farthest_point_sampling(point_cloud, k):
     N, _ = point_cloud.shape
@@ -81,7 +104,6 @@ def find_max_difference_indices(array, k=200):
     if len(good_class_indices) != k:
         raise Exception(f'Wrong size! k = {k}, actual size = {len(good_class_indices)}')
     return max_values, max_indices, diff_from_max, good_class_indices
-
 
 def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
     """
@@ -149,6 +171,81 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
     if best_inliers == None:
         return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold + 0.1, min_inliers=min_inliers)
     return best_rotation, best_translation, len(best_inliers), best_iter, corres, threshold
+
+def ransac_torch(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
+    """
+    Performs RANSAC to find the best rotation and translation between two sets of 3D points.
+
+    Args:
+        data1 (np.ndarray): Array of shape (N, 3) containing the first set of 3D points.
+        data2 (np.ndarray): Array of shape (N, 3) containing the second set of 3D points.
+        max_iterations (int): Maximum number of RANSAC iterations.
+        threshold (float): Maximum distance for a point to be considered an inlier.
+        min_inliers (int): Minimum number of inliers required to consider a model valid.
+
+    Returns:
+        rotation (np.ndarray): Array of shape (3, 3) representing the rotation matrix.
+        translation (np.ndarray): Array of shape (3,) representing the translation vector.
+        inliers1 (np.ndarray): Array containing the indices of the inliers in data1.
+        inliers2 (np.ndarray): Array containing the indices of the inliers in data2.
+    """
+    N = data1.shape[0]
+    if N<3:
+        raise Exception("Not enough corresponding points to perform RANSAC.")
+    best_inliers = None
+    corres = None
+    src_centered = data1
+    dst_centered = data2
+    dists = torch.norm((src_centered-dst_centered), dim=1)
+    best_iter = 0
+    for iteration in range(max_iterations):
+        # Randomly sample 3 corresponding points
+        counter = 0
+        smallest_diff = float('inf')
+        best_src_points = None
+        best_dst_points = None
+        while True:
+            counter += 1
+            indices = np.random.choice(N, size=3, replace=False)
+            src_points = src_centered[indices]
+            dst_points = dst_centered[indices]
+            dist_1, dist_2, dist_3 = dists[indices]
+            largest_diff = max(dist_1, dist_2, dist_2) - min(dist_1, dist_2, dist_2)
+            if largest_diff < smallest_diff:
+                smallest_diff = largest_diff
+                best_src_points = src_points
+                best_dst_points = dst_points
+
+            if largest_diff < 0.05 or counter > 50:
+                src_points = best_src_points
+                dst_points = best_dst_points
+                break
+
+        # Estimate rotation and translation
+        rotation, translation = estimate_rigid_transform_torch(src_points, dst_points)
+        # Find inliers
+        inliers1, inliers2 = find_inliers_torch(src_centered, dst_centered, rotation, translation, threshold)
+
+        # Update best model if we have enough inliers
+        if len(inliers1) >= min_inliers and (best_inliers is None or len(inliers1) > len(best_inliers)):
+            best_inliers = inliers1
+            corres = [src_centered[inliers1], dst_centered[inliers2]]
+            best_iter = iteration
+    if best_inliers == None:
+        return ransac_torch(data1, data2, max_iterations=max_iterations, threshold=threshold + 0.1, min_inliers=min_inliers)
+
+    #improve registration with LS
+    highest_consensus = len(best_inliers)
+    while(True):
+        best_rotation, best_translation = estimate_rigid_transform_torch(corres[0], corres[1])
+        inliers1, inliers2 = find_inliers_torch(src_centered, dst_centered, best_rotation, best_translation, threshold)
+        best_inliers = inliers1
+        corres = [src_centered[inliers1], dst_centered[inliers2]]
+        if len(best_inliers) > highest_consensus:
+            highest_consensus = len(best_inliers)
+        else:
+            break
+    return best_rotation, best_translation, highest_consensus, best_iter, corres, threshold
 def multiclass_classification_only_ransac(cls_1, cls_2, max_iterations=1000, threshold=0.1, min_inliers=2):
     # N = data1.shape[0]
     best_num_of_inliers = 0
@@ -254,6 +351,28 @@ def estimate_rigid_transform(src_points, dst_points):
     return R, translation
 
 
+
+def estimate_rigid_transform_torch(src_points, dst_points):
+    src_mean = torch.mean(src_points, dim=0)
+    dst_mean = torch.mean(dst_points, dim=0)
+
+    src_centered = src_points - src_mean
+    dst_centered = dst_points - dst_mean
+
+    H = torch.matmul(src_centered.t(), dst_centered)
+
+    U, _, Vt = torch.linalg.svd(H)
+    R = torch.matmul(Vt.t(), U.t())
+
+    if torch.linalg.det(R) < 0:
+        Vt[2, :] *= -1
+        R = torch.matmul(Vt.t(), U.t())
+
+    translation = dst_mean - torch.matmul(R, src_mean)
+
+    return R, translation
+
+#TODO: Must fix translation!!!
 def find_inliers(data1, data2, rotation, threshold):
     """
     Finds the inliers in two sets of 3D points given a rotation and translation.
@@ -266,6 +385,23 @@ def find_inliers(data1, data2, rotation, threshold):
         # transformed = np.matmul(point1, rotation)
         transformed = np.matmul(rotation, point1)
         distance = np.linalg.norm(transformed - point2)
+        if distance < threshold:
+            inliers1.append(i)
+            inliers2.append(i)
+
+    return inliers1, inliers2
+def find_inliers_torch(data1, data2, rotation, translation, threshold):
+    """
+    Finds the inliers in two sets of 3D points given a rotation and translation.
+    """
+    inliers1 = []
+    inliers2 = []
+    for i in range(data1.shape[0]):
+        point1 = data1[i]
+        point2 = data2[i]
+
+        transformed = (torch.matmul(point1, rotation.t())) + translation
+        distance = torch.norm(transformed - point2)
         if distance < threshold:
             inliers1.append(i)
             inliers2.append(i)
@@ -531,7 +667,7 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
 
         best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
                                                    threshold=0.1,
-                                                   min_inliers=(int)(amount_of_interest_points // 10))
+                                                   min_inliers=(int)((amount_of_interest_points*pct_of_points_2_take) // 10))
 
         final_inliers_list.append(best_num_of_inliers)
         iter_2_ransac_convergence.append(best_iter)
@@ -574,3 +710,95 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
             })
     return worst_losses, losses, final_thresh_list, final_inliers_list, point_distance_list, worst_point_losses, iter_2_ransac_convergence
 
+
+def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
+                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, pct_of_points_2_take=0.75):
+    worst_losses = [(0, None)] * num_worst_losses
+    losses_rot = []
+    losses_trans = []
+    point_distance_list = []
+    final_thresh_list = []
+    final_inliers_list = []
+    iter_2_ransac_convergence = []
+    test_dataset = test_predator_data()
+    test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    for batch_idx, data in enumerate(test_dataloader):
+        if batch_idx%10 ==0:
+            print(f'------------{batch_idx}------------')
+
+        src_pcd, tgt_pcd, rot, trans, matching_inds, sample = (data['src_pcd'].squeeze().to(device), data['tgt_pcd'].squeeze().to(device), data['rot'].squeeze().to(device),
+                                                               data['trans'].squeeze().to(device), data['matching_inds'].squeeze().to(device), data['sample'])
+        chosen_fps_indices_1 = farthest_point_sampling_torch(src_pcd, k=amount_of_interest_points)
+        chosen_pcl_1 = src_pcd[chosen_fps_indices_1, :]
+        chosen_fps_indices_2 = farthest_point_sampling_torch(tgt_pcd, k=amount_of_interest_points)
+        chosen_pcl_2 = tgt_pcd[chosen_fps_indices_2, :]
+
+        emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor, device=device)
+
+        emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor, device=device)
+
+        # multiscale embeddings
+        if scales > 1:
+            for scale in receptive_field[1:]:
+                fps_indices_1 = farthest_point_sampling_torch(src_pcd, k=(int)(len(src_pcd)//scale))
+                fps_indices_2 = farthest_point_sampling_torch(tgt_pcd, k=(int)(len(tgt_pcd)//scale))
+
+                global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                                            pcl_src=src_pcd[fps_indices_1,:], pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor, device=device)
+
+                global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                                            pcl_src=tgt_pcd[fps_indices_2,:], pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor, device=device)
+
+                emb_1 = torch.hstack((emb_1, global_emb_1))
+                emb_2 = torch.hstack((emb_2, global_emb_2))
+
+        emb1_indices, emb2_indices = find_closest_points_torch(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        # emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_neighbors=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        centered_points_1 = chosen_pcl_1[emb1_indices, :]
+        centered_points_2 = chosen_pcl_2[emb2_indices, :]
+
+        best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac_torch(centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
+                                                   threshold=0.1,
+                                                   min_inliers=(int)((amount_of_interest_points*pct_of_points_2_take) // 10))
+        plot_4_point_clouds(src_pcd, tgt_pcd, corres[0], corres[1])
+        final_inliers_list.append(best_num_of_inliers)
+        iter_2_ransac_convergence.append(best_iter)
+
+        # transformed_points1 = torch.matmul(src_pcd, best_rotation.T) + best_translation
+        loss_rot = torch.mean(((rot @ best_rotation.T) - torch.eye(3, device=device)) ** 2)
+        criterion = torch.nn.MSELoss()
+        loss_trans = criterion(trans, best_translation)
+        losses_rot.append(loss_rot)
+        losses_trans.append(loss_trans)
+
+        # Update the worst losses list
+        index_of_smallest_loss = torch.argmin(torch.tensor([worst_losses[i][0] for i in range(len(worst_losses))]))
+        smallest_loss = worst_losses[index_of_smallest_loss][0]
+        if loss_rot > smallest_loss:
+            worst_losses[index_of_smallest_loss] = (loss_rot, {
+                'noisy_pointcloud_1': src_pcd,
+                'noisy_pointcloud_2': tgt_pcd,
+                'chosen_points_1': corres[0],
+                'chosen_points_2': corres[1],
+                'rotation_matrix': rot,
+                'best_rotation': best_rotation
+            })
+    return worst_losses, losses_rot, losses_trans, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence
+
+def test_predator_data():
+    partial_p_keep= [0.7, 0.7]
+    # partial_p_keep= [0.5, 0.5]
+    rot_mag = 45.0
+    trans_mag = 0.5
+    num_points = 1024
+    overlap_radius = 0.04
+    train_transforms = [transforms.SplitSourceRef(),
+                        transforms.RandomCrop(partial_p_keep),
+                        transforms.RandomTransformSE3_euler(rot_mag=rot_mag, trans_mag=trans_mag),
+                        transforms.Resampler(num_points),
+                        transforms.RandomJitter(),
+                        transforms.ShufflePoints()]
+    test_dataset = ModelNetHdf(overlap_radius=overlap_radius, root=r'C:\\Users\\benjy\\Desktop\\curvTrans\\DeepBBS\\modelnet40_ply_hdf5_2048',
+                                subset='test', categories=None, transform=train_transforms)
+    return test_dataset

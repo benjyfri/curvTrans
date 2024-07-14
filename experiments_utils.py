@@ -1,6 +1,7 @@
 import numpy as np
 from plotting_functions import *
 from ransac import *
+import faiss
 def load_data(partition='test', divide_data=1):
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
     # DATA_DIR = r'/content/curvTrans/bbsWithShapes/data'
@@ -147,8 +148,8 @@ def checkSyntheticData():
     print(f'z diameter: {np.mean(diameter_list_z)}')
 def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_factor=None, rgb=False):
     pcls, label = load_data()
-    shapes = [86, 174, 51]
-    # shapes = [51, 54, 86, 174, 179]
+    # shapes = [86, 174, 51]
+    shapes = [51, 54, 86, 174, 179]
     # shapes = range(50,60)
     for k in shapes:
         pointcloud = pcls[k][:]
@@ -272,25 +273,33 @@ def plotWorst(worst_losses, model_name=""):
         count = count + 1
 
 def view_stabiity(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
-                                    num_of_ransac_iter=100, shapes=[86, 162, 174, 176, 179], plot_graphs=0, create_pcls_func=None):
+                                    num_of_ransac_iter=100, shapes=[86, 162, 174, 176, 179], plot_graphs=0, create_pcls_func=None, given_pcls=None):
     pcls, label = load_data()
     shapes = [51,54, 86, 174]
+    shapes = [51]
     for k in shapes:
-        pointcloud = pcls[k][:]
-        rotated_pcl, rotation_matrix, _ = random_rotation_translation(pointcloud)
-        chosen_point = [10,10]
-        if create_pcls_func is not None:
-            pcl1, pcl2, pcl1_indices, pcl2_indices, overlapping_indices = create_pcls_func(pointcloud)
-            chosen_overlapping_point = np.random.choice(overlapping_indices)
-            index_pcl_1 = np.where(pcl1_indices == chosen_overlapping_point)[0][0]
-            index_pcl_2 = np.where(pcl2_indices == chosen_overlapping_point)[0][0]
-            chosen_point = [index_pcl_1, index_pcl_2]
-            rotated_pcl, rotation_matrix, translation = random_rotation_translation(pcl2)
+        if given_pcls is None:
+            pointcloud = pcls[k][:]
+            rotated_pcl, rotation_matrix, _ = random_rotation_translation(pointcloud)
+            chosen_point = [10,10]
+            if create_pcls_func is not None:
+                pcl1, pcl2, pcl1_indices, pcl2_indices, overlapping_indices = create_pcls_func(pointcloud)
+                chosen_overlapping_point = np.random.choice(overlapping_indices)
+                index_pcl_1 = np.where(pcl1_indices == chosen_overlapping_point)[0][0]
+                index_pcl_2 = np.where(pcl2_indices == chosen_overlapping_point)[0][0]
+                chosen_point = [index_pcl_1, index_pcl_2]
+                rotated_pcl, rotation_matrix, translation = random_rotation_translation(pcl2)
 
-        noisy_pointcloud_1 = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
-        noisy_pointcloud_1 = noisy_pointcloud_1.astype(np.float32)
-        noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
-        noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
+            noisy_pointcloud_1 = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
+            noisy_pointcloud_1 = noisy_pointcloud_1.astype(np.float32)
+            noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
+            noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
+
+        else:
+            noisy_pointcloud_1 = given_pcls[0]
+            noisy_pointcloud_2 = given_pcls[1]
+            chosen_point = given_pcls[2].detach().cpu().numpy()
+
 
         emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1, args_shape=cls_args, scaling_factor=scaling_factor)
         emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2, args_shape=cls_args, scaling_factor=scaling_factor)
@@ -426,7 +435,7 @@ def read_bin_file(bin_file):
     # We only need the first three columns (x, y, z)
     return points[:, :3]
 
-def find_closest_points(embeddings1, embeddings2, num_neighbors=40, max_non_unique_correspondences=3):
+def find_closest_points(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3):
     classification_1 = np.argmax(embeddings1[:,:4], axis=1)
     classification_2 = np.argmax(embeddings2[:,:4], axis=1)
 
@@ -444,9 +453,35 @@ def find_closest_points(embeddings1, embeddings2, num_neighbors=40, max_non_uniq
     same_class = (classification_1==(classification_2[indices].squeeze()))
     distances[~same_class] = np.inf
 
-    smallest_distances_indices = np.argsort(distances.flatten())[:num_neighbors]
+    smallest_distances_indices = np.argsort(distances.flatten())[:num_of_pairs]
     emb1_indices = smallest_distances_indices.squeeze()
     emb2_indices = indices[smallest_distances_indices].squeeze()
+    return emb1_indices, emb2_indices
+
+
+def find_closest_points_torch(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3, topk=3):
+
+    distances = torch.cdist(embeddings1, embeddings2)
+    _, indices_in_emb2 = torch.topk(distances, topk, largest=False)
+    # Convert to float32 for faiss
+    distances = torch.gather(distances, dim=1, index=indices_in_emb2)
+
+    # duplicates = torch.zeros(len(embeddings2))
+
+    appearance_1_nn = torch.bincount(indices_in_emb2[:, 0], minlength=len(embeddings2))
+    (distances[:, 0])[(appearance_1_nn >= max_non_unique_correspondences)[indices_in_emb2[:,0]]] = float('inf')
+    # for i, neig_indices in enumerate(indices_in_emb2):
+    #     # first neighbor cant be best neighbor of too many points
+    #     if duplicates[neig_indices[0]] >= max_non_unique_correspondences:
+    #         distances[i,0] = float('inf')
+    #     duplicates[neig_indices[0]] += 1
+
+    distances_flat = torch.reshape(distances.transpose(0,1), (len(embeddings1) * topk,1))
+
+    smallest_distances_indices = torch.argsort(distances_flat.squeeze())[:num_of_pairs]
+    emb1_indices = smallest_distances_indices % len(embeddings1)
+    emb2_indices = indices_in_emb2[emb1_indices,(smallest_distances_indices / len(embeddings2)).type(torch.int)]
+
     return emb1_indices, emb2_indices
 
 def find_closest_points_best_buddy(embeddings1, embeddings2, num_neighbors=40, max_non_unique_correspondences=3):
@@ -532,12 +567,17 @@ def calcDist(src_knn_pcl, scaling_mode):
         scale = 2.22 / d_min
         scale = scale * scaling_mode
     return scale
-def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None):
+def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None, device='cpu'):
     model = shapeClassifier(args_shape)
     model.load_state_dict(torch.load(f'models_weights/{model_name}.pt'))
+    model.to(device)
     model.eval()
-    neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
-    src_knn_pcl = torch.tensor(neighbors_centered)
+    if isinstance(pcl_src, torch.Tensor):
+        neighbors_centered = get_k_nearest_neighbors_diff_pcls_torch(pcl_src, pcl_interest, k=41)
+        src_knn_pcl = neighbors_centered
+    else:
+        neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
+        src_knn_pcl = torch.tensor(neighbors_centered)
 
     scaling_factor_final = calcDist(src_knn_pcl, scaling_factor)
 
@@ -570,6 +610,34 @@ def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):
 
     return neighbors_centered
 
+def get_k_nearest_neighbors_diff_pcls_torch(pcl_src, pcl_interest, k):
+    """
+    Returns the k nearest neighbors for each point in the point cloud.
+
+    Args:
+        pcl_src (torch.Tensor): Source point cloud of shape (pcl_size_src, 3)
+        pcl_interest (torch.Tensor): Interest point cloud of shape (pcl_size_interest, 3)
+        k (int): Number of nearest neighbors to return
+
+    Returns:
+        torch.Tensor: Tensor of shape (1, 3, pcl_size_interest, k) containing the k nearest neighbors for each point
+    """
+    pcl_size = pcl_interest.shape[0]
+
+    # Calculate distances using torch.cdist and get the k nearest neighbors
+    distances = torch.cdist(pcl_interest, pcl_src)
+    _, indices = torch.topk(distances, k, largest=False)
+
+    neighbors_centered = torch.empty((1, 3, pcl_size, k), dtype=pcl_src.dtype, device=pcl_src.device)
+
+    # Each point cloud should be centered around the first point which is at the origin
+    for i in range(pcl_size):
+        orig = pcl_src[indices[i]] - pcl_interest[i]
+        if not torch.equal(orig[0], torch.tensor([0, 0, 0], dtype=orig.dtype, device=orig.device)):
+            orig = torch.cat([torch.zeros((1, 3), dtype=orig.dtype, device=orig.device), orig])[:-1]
+        neighbors_centered[0, :, i, :] = orig.T
+
+    return neighbors_centered
 def find_mean_diameter_for_specific_coordinate(specific_coordinates):
     pairwise_distances = torch.cdist(specific_coordinates.unsqueeze(2), specific_coordinates.unsqueeze(2))
     largest_dist = pairwise_distances.view(specific_coordinates.shape[0], -1).max(dim=1).values

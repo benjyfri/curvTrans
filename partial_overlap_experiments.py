@@ -1,5 +1,7 @@
 import cProfile
 import pstats
+
+import torch
 from plotting_functions import *
 from ransac import *
 from experiments_utils import *
@@ -117,11 +119,17 @@ def split_pointcloud_overlap(point_cloud, overlap_ratio):
 
     return pcl1, pcl2, pcl1_indices, pcl2_indices, overlapping_indices
 if __name__ == '__main__':
-    # cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36_1')
+    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36_1')
     # cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36_std035')
-    a = checkPred()
+    # a = checkPred()
+    worst_losses, losses_rot, losses_trans, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence = (
+        test_multi_scale_using_embedding_predator(cls_args=cls_args, num_worst_losses=3, scaling_factor=1,
+                                           num_of_ransac_iter=50, pct_of_points_2_take=1, scales=5, receptive_field=[1,5, 10],))
+    plot_losses(losses=losses, inliers=num_of_inliers, filename=f'{scaling_factor}_{max_non_unique_correspondences}_{pct_of_points_2_take}_{amount_of_interest_points}_loss_{scales}_scales_emb.png', dir="junk")
+    plotWorst(worst_losses=worst_losses, model_name=f'{scaling_factor}_{amount_of_interest_points}_{scales}_scales_emb')
 
-    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36_std001')
+    exit(0)
+    # cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36_std001')
     # scaling_factors = [15,20,25]
     # scaling_factors = ["90pct"]
     scaling_factors = ["max" , "mean", "median", "min", "d_90"]

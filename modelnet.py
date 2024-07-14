@@ -199,7 +199,7 @@ class ModelNetHdf(Dataset):
         matching_inds = get_correspondences(to_o3d_pcd(src_pcd), to_o3d_pcd(tgt_pcd),to_tsfm(rot,trans),self.overlap_radius)
 
 
-        return src_pcd,tgt_pcd,rot,trans, matching_inds, src_pcd, tgt_pcd, sample
+        return {"src_pcd":src_pcd, "tgt_pcd":tgt_pcd, "rot":rot, "trans":trans, "matching_inds":matching_inds, "sample":sample}
 
     def __len__(self):
         return self._data.shape[0]
