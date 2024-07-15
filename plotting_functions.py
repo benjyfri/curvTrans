@@ -143,8 +143,18 @@ def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
       point_cloud3 (np.ndarray): Third point cloud of shape (41, 3)
       point_cloud4 (np.ndarray): Fourth point cloud of shape (41, 3)
   """
+  if isinstance(point_cloud1, torch.Tensor):
+      point_cloud1 = point_cloud1.cpu().detach().numpy()
+  if isinstance(point_cloud2, torch.Tensor):
+      point_cloud2 = point_cloud2.cpu().detach().numpy()
+  if isinstance(point_cloud3, torch.Tensor):
+      point_cloud3 = point_cloud3.cpu().detach().numpy()
+  if isinstance(point_cloud4, torch.Tensor):
+      point_cloud4 = point_cloud4.cpu().detach().numpy()
   fig = go.Figure()
   if rotation is not None:
+      if isinstance(rotation, torch.Tensor):
+          rotation = rotation.cpu().detach().numpy()
       center = np.mean(point_cloud1, axis=0)
       point_cloud1 = np.matmul((point_cloud1 - center), rotation.T)
       point_cloud3 = np.matmul((point_cloud3 - center), rotation.T)
@@ -280,6 +290,10 @@ def save_point_clouds(point_cloud1, point_cloud2, title="", filename="plot.html"
     fig.write_html(filename)
 
 def plot_point_clouds(point_cloud1, point_cloud2, title=""):
+    if isinstance(point_cloud1, torch.Tensor):
+        point_cloud1 = point_cloud1.cpu().detach().numpy()
+    if isinstance(point_cloud2, torch.Tensor):
+        point_cloud2 = point_cloud2.cpu().detach().numpy()
     fig = go.Figure()
 
     fig.add_trace(go.Scatter3d(
@@ -339,11 +353,12 @@ def plot_and_save_with_stats(numbers, name):
     # Save the plot
     plt.savefig(f'{name}_plot.png')
     plt.show()
-def plot_losses(losses, inliers, filename="loss_plot.png"):
+def plot_losses(losses, inliers, filename="loss_plot.png", dir=r"./"):
     """
     Plots the given list of losses and corresponding number of inliers,
     and saves the plot as an image
     """
+    os.makedirs(dir, exist_ok=True)
     mean_loss = np.mean(losses)
     median_loss = np.median(losses)
 
@@ -362,7 +377,7 @@ def plot_losses(losses, inliers, filename="loss_plot.png"):
     plt.title(f'mean loss = {mean_loss:.5f}, median loss = {median_loss:.5f}')
 
     # Save the plot as an image
-    plt.savefig(filename)
+    plt.savefig(os.path.join(dir, filename))
 
     # You can optionally remove the following line if you don't want to display the plot as well
     plt.show()

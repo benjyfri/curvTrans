@@ -43,7 +43,7 @@ def load_data(partition='test', divide_data=1):
     size = len(all_label)
     return all_data[:(int)(size/divide_data),:,:], all_label[:(int)(size/divide_data),:]
 
-def farthest_point_sampling_torch(point_cloud, k):
+def farthest_point_sampling_torch_old(point_cloud, k):
     N, _ = point_cloud.shape
 
     # Array to hold indices of sampled points
@@ -68,6 +68,32 @@ def farthest_point_sampling_torch(point_cloud, k):
 
     return sampled_indices
 
+def farthest_point_sampling_torch(point_cloud_batch, k):
+    batch_size, N, _ = point_cloud_batch.shape
+
+    # Array to hold indices of sampled points for each batch
+    sampled_indices = torch.zeros((batch_size, k), dtype=torch.long, device=point_cloud_batch.device)
+
+    # Initialize distances to a large value
+    distances = torch.full((batch_size, N), float('inf'), device=point_cloud_batch.device)
+
+    # Randomly select the first point for each batch
+    current_indices = torch.randint(N, (batch_size,), device=point_cloud_batch.device)
+    sampled_indices[:, 0] = current_indices
+
+    batch_indices = torch.arange(batch_size, device=point_cloud_batch.device)
+
+    for i in range(1, k):
+        # Update distances to the farthest point selected so far
+        current_points = point_cloud_batch[batch_indices, current_indices]
+        new_distances = torch.norm(point_cloud_batch - current_points[:, None, :], dim=2)
+        distances = torch.minimum(distances, new_distances)
+
+        # Select the point that has the maximum distance to the sampled points
+        current_indices = torch.argmax(distances, dim=1)
+        sampled_indices[:, i] = current_indices
+
+    return sampled_indices
 def farthest_point_sampling(point_cloud, k):
     N, _ = point_cloud.shape
 
@@ -721,18 +747,30 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
     final_inliers_list = []
     iter_2_ransac_convergence = []
     test_dataset = test_predator_data()
-    test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    batch_size = 7
+    batch_size = 1
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     for batch_idx, data in enumerate(test_dataloader):
         if batch_idx%10 ==0:
             print(f'------------{batch_idx}------------')
 
-        src_pcd, tgt_pcd, rot, trans, matching_inds, sample = (data['src_pcd'].squeeze().to(device), data['tgt_pcd'].squeeze().to(device), data['rot'].squeeze().to(device),
-                                                               data['trans'].squeeze().to(device), data['matching_inds'].squeeze().to(device), data['sample'])
+        src_pcd, tgt_pcd, rot, trans, sample = (data['src_pcd'].squeeze().to(device), data['tgt_pcd'].squeeze().to(device), data['rot'].squeeze().to(device),
+                                                               data['trans'].squeeze().to(device), data['sample'])
+        # src_pcd, tgt_pcd, rot, trans, matching_inds, sample = (data['src_pcd'].squeeze().to(device), data['tgt_pcd'].squeeze().to(device), data['rot'].squeeze().to(device),
+        #                                                        data['trans'].squeeze().to(device), data['matching_inds'].squeeze().to(device), data['sample'])
+        if batch_size == 1:
+            src_pcd = src_pcd.unsqueeze(0)
+            tgt_pcd = tgt_pcd.unsqueeze(0)
+            rot = rot.unsqueeze(0)
+            trans = trans.unsqueeze(0)
+
+
         chosen_fps_indices_1 = farthest_point_sampling_torch(src_pcd, k=amount_of_interest_points)
-        chosen_pcl_1 = src_pcd[chosen_fps_indices_1, :]
+        chosen_pcl_1 = src_pcd[torch.arange(batch_size).unsqueeze(1).expand(batch_size, amount_of_interest_points), chosen_fps_indices_1]
         chosen_fps_indices_2 = farthest_point_sampling_torch(tgt_pcd, k=amount_of_interest_points)
-        chosen_pcl_2 = tgt_pcd[chosen_fps_indices_2, :]
+        chosen_pcl_2 = tgt_pcd[torch.arange(batch_size).unsqueeze(1).expand(batch_size, amount_of_interest_points), chosen_fps_indices_2]
+
 
         emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor, device=device)
 
@@ -741,19 +779,26 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
         # multiscale embeddings
         if scales > 1:
             for scale in receptive_field[1:]:
-                fps_indices_1 = farthest_point_sampling_torch(src_pcd, k=(int)(len(src_pcd)//scale))
-                fps_indices_2 = farthest_point_sampling_torch(tgt_pcd, k=(int)(len(tgt_pcd)//scale))
+                fps_indices_1 = farthest_point_sampling_torch(src_pcd, k=(int)(src_pcd.shape[1]//scale))
+                fps_indices_2 = farthest_point_sampling_torch(tgt_pcd, k=(int)(tgt_pcd.shape[1]//scale))
+
+                downsampled_pcl_1 = src_pcd[torch.arange(batch_size).unsqueeze(1).expand(batch_size,
+                                                                                    (int)(src_pcd.shape[1]//scale)), fps_indices_1]
+
+                downsampled_pcl_2 = tgt_pcd[torch.arange(batch_size).unsqueeze(1).expand(batch_size,
+                                                                                    (int)(tgt_pcd.shape[1]//scale)), fps_indices_2]
 
                 global_emb_1 = classifyPoints(model_name=cls_args.exp,
-                                            pcl_src=src_pcd[fps_indices_1,:], pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor, device=device)
+                                            pcl_src=downsampled_pcl_1, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor, device=device)
 
                 global_emb_2 = classifyPoints(model_name=cls_args.exp,
-                                            pcl_src=tgt_pcd[fps_indices_2,:], pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor, device=device)
+                                            pcl_src=downsampled_pcl_2, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor, device=device)
 
-                emb_1 = torch.hstack((emb_1, global_emb_1))
-                emb_2 = torch.hstack((emb_2, global_emb_2))
+                emb_1 = torch.cat((emb_1, global_emb_1), dim=-1)
+                emb_2 = torch.cat((emb_2, global_emb_2), dim=-1)
 
-        emb1_indices, emb2_indices = find_closest_points_torch(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+
+        emb1_indices, emb2_indices = find_closest_points_torch(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences,topk=1)
         # emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_neighbors=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
@@ -761,7 +806,7 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
         best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac_torch(centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
                                                    threshold=0.1,
                                                    min_inliers=(int)((amount_of_interest_points*pct_of_points_2_take) // 10))
-        plot_4_point_clouds(src_pcd, tgt_pcd, corres[0], corres[1])
+
         final_inliers_list.append(best_num_of_inliers)
         iter_2_ransac_convergence.append(best_iter)
 

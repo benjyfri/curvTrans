@@ -1,7 +1,8 @@
 import numpy as np
 from plotting_functions import *
 from ransac import *
-import faiss
+# from benchmark_modelnet import compute_metrics
+
 def load_data(partition='test', divide_data=1):
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
     # DATA_DIR = r'/content/curvTrans/bbsWithShapes/data'
@@ -444,32 +445,28 @@ def find_closest_points(embeddings1, embeddings2, num_of_pairs=40, max_non_uniqu
 
     # Find the indices and distances of the closest points in embeddings2 for each point in embeddings1
     distances, indices = nbrs.kneighbors(embeddings1)
-
     duplicates = np.zeros(len(embeddings1))
     for i,index in enumerate(indices):
-        if duplicates[index] >= max_non_unique_correspondences:
-            distances[i]= np.inf
         duplicates[index] += 1
+    distances[((duplicates >= max_non_unique_correspondences)[indices])] = np.inf
     same_class = (classification_1==(classification_2[indices].squeeze()))
     distances[~same_class] = np.inf
-
     smallest_distances_indices = np.argsort(distances.flatten())[:num_of_pairs]
     emb1_indices = smallest_distances_indices.squeeze()
     emb2_indices = indices[smallest_distances_indices].squeeze()
     return emb1_indices, emb2_indices
 
 
-def find_closest_points_torch(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3, topk=3):
-
+def find_closest_points_torch_orig(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3, topk=3):
     distances = torch.cdist(embeddings1, embeddings2)
     _, indices_in_emb2 = torch.topk(distances, topk, largest=False)
-    # Convert to float32 for faiss
     distances = torch.gather(distances, dim=1, index=indices_in_emb2)
-
     # duplicates = torch.zeros(len(embeddings2))
 
     appearance_1_nn = torch.bincount(indices_in_emb2[:, 0], minlength=len(embeddings2))
-    (distances[:, 0])[(appearance_1_nn >= max_non_unique_correspondences)[indices_in_emb2[:,0]]] = float('inf')
+
+    mask = (appearance_1_nn >= max_non_unique_correspondences)
+    (distances[:, 0])[mask[indices_in_emb2[:,0]]] = float('inf')
     # for i, neig_indices in enumerate(indices_in_emb2):
     #     # first neighbor cant be best neighbor of too many points
     #     if duplicates[neig_indices[0]] >= max_non_unique_correspondences:
@@ -477,13 +474,50 @@ def find_closest_points_torch(embeddings1, embeddings2, num_of_pairs=40, max_non
     #     duplicates[neig_indices[0]] += 1
 
     distances_flat = torch.reshape(distances.transpose(0,1), (len(embeddings1) * topk,1))
-
     smallest_distances_indices = torch.argsort(distances_flat.squeeze())[:num_of_pairs]
+
     emb1_indices = smallest_distances_indices % len(embeddings1)
     emb2_indices = indices_in_emb2[emb1_indices,(smallest_distances_indices / len(embeddings2)).type(torch.int)]
-
     return emb1_indices, emb2_indices
 
+
+def find_closest_points_torch(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3, topk=3):
+    batch_size, num_of_points1, emb_dim = embeddings1.shape
+    _, num_of_points2, _ = embeddings2.shape
+
+    # Calculate pairwise distances
+    distances = torch.cdist(embeddings1, embeddings2)
+
+    # Get top-k nearest neighbors
+    _, indices_in_emb2 = torch.topk(distances, topk, largest=False, dim=2)
+
+    # Gather the corresponding distances
+    gathered_distances = torch.gather(distances, dim=2, index=indices_in_emb2)
+
+    # Create a zero tensor for tracking duplicates
+    appearance_1_nn = torch.zeros((batch_size, num_of_points2), device=embeddings1.device, dtype=torch.long)
+
+
+    # Count occurrences of each point in embeddings2 being the nearest neighbor
+    appearance_1_nn.scatter_add_(1, indices_in_emb2[:,:,0],
+                                 torch.ones_like(indices_in_emb2[:,:,0]))
+
+    # Mask out points with too many non-unique correspondences
+    mask = (appearance_1_nn >= max_non_unique_correspondences)
+    new_mask  = torch.gather(mask, 1, indices_in_emb2[:,:,0])
+    (gathered_distances[:, :, 0])[new_mask] = float('inf')
+
+    # Flatten distances and find smallest ones
+    distances_flat = torch.reshape(gathered_distances.transpose(1, 2), (batch_size, -1))
+    smallest_distances_indices = torch.argsort(distances_flat, dim=1)[:, :num_of_pairs]
+
+
+    # Calculate indices in original embeddings
+    emb1_indices = smallest_distances_indices % num_of_points1
+    batch_indices = torch.arange(batch_size).unsqueeze(1).expand(-1, num_of_points2)
+    emb2_indices = indices_in_emb2[batch_indices, emb1_indices, (smallest_distances_indices / num_of_points2).type(torch.int)]
+
+    return emb1_indices, emb2_indices
 def find_closest_points_best_buddy(embeddings1, embeddings2, num_neighbors=40, max_non_unique_correspondences=3):
     classification_1 = np.argmax(embeddings1[:, :4], axis=1)
     classification_2 = np.argmax(embeddings2[:, :4], axis=1)
@@ -567,6 +601,50 @@ def calcDist(src_knn_pcl, scaling_mode):
         scale = 2.22 / d_min
         scale = scale * scaling_mode
     return scale
+
+def calcDistTorch(src_knn_pcl, scaling_mode):
+    """
+    Calculate the scaling factor based on the pairwise distances in the point clouds for a batch of point clouds.
+
+    Args:
+        src_knn_pcl (torch.Tensor): Source k-nearest neighbors point clouds of shape (batch_size, 1, 3, num_points, k)
+        scaling_mode (str or float): Scaling mode to use ('mean', 'median', 'max', 'min', 'd_90', or a float scaling factor)
+
+    Returns:
+        torch.Tensor: Tensor of shape (batch_size,) containing the scaling factor for each batch.
+    """
+    batch_size = src_knn_pcl.shape[0]
+    pcl = src_knn_pcl.permute(0, 2, 3, 1)  # Shape: (batch_size, num_points, k, 3)
+    pairwise_distances = torch.cdist(pcl, pcl, p=2)  # Shape:
+
+    diam = torch.max(pairwise_distances[:, :, 0, :], dim=2)[0]  # Shape: (batch_size, num_points)
+
+    if scaling_mode == "mean":
+        d_mean = torch.mean(diam, dim=1)
+        scale = 13.23 / d_mean
+
+    elif scaling_mode == "median":
+        d_median = torch.median(diam, dim=1)[0]
+        scale = 12.75 / d_median
+
+    elif scaling_mode == "max":
+        d_max = torch.max(diam, dim=1)[0]
+        scale = 37.06 / d_max
+
+    elif scaling_mode == "min":
+        d_min = torch.min(diam, dim=1)[0]
+        scale = 2.22 / d_min
+
+    elif scaling_mode == "d_90":
+        d_90 = torch.quantile(diam, 0.9, dim=1)
+        scale = 19.13 / d_90
+
+    else:
+        d_min = torch.min(diam, dim=1)[0]
+        scale = 2.22 / d_min
+        scale = scale * scaling_mode
+
+    return scale
 def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None, device='cpu'):
     model = shapeClassifier(args_shape)
     model.load_state_dict(torch.load(f'models_weights/{model_name}.pt'))
@@ -575,14 +653,15 @@ def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=N
     if isinstance(pcl_src, torch.Tensor):
         neighbors_centered = get_k_nearest_neighbors_diff_pcls_torch(pcl_src, pcl_interest, k=41)
         src_knn_pcl = neighbors_centered
+        scaling_factor_final = calcDistTorch(src_knn_pcl, scaling_factor)
+        scaling_factor_final.to(device)
     else:
         neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
         src_knn_pcl = torch.tensor(neighbors_centered)
+        scaling_factor_final = calcDist(src_knn_pcl, scaling_factor)
 
-    scaling_factor_final = calcDist(src_knn_pcl, scaling_factor)
-
-    src_knn_pcl = scaling_factor_final * src_knn_pcl
-    output = model(src_knn_pcl.permute(2,1,0,3))
+    src_knn_pcl = ( scaling_factor_final.view(scaling_factor_final.shape[0], 1, 1, 1) ) * src_knn_pcl
+    output = model(src_knn_pcl)
     return output
 def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):
     """
@@ -622,20 +701,21 @@ def get_k_nearest_neighbors_diff_pcls_torch(pcl_src, pcl_interest, k):
     Returns:
         torch.Tensor: Tensor of shape (1, 3, pcl_size_interest, k) containing the k nearest neighbors for each point
     """
-    pcl_size = pcl_interest.shape[0]
+    batch_size, pcl_size_interest, _ = pcl_interest.shape
 
     # Calculate distances using torch.cdist and get the k nearest neighbors
     distances = torch.cdist(pcl_interest, pcl_src)
-    _, indices = torch.topk(distances, k, largest=False)
+    _, indices = torch.topk(distances, k, dim=-1, largest=False)
 
-    neighbors_centered = torch.empty((1, 3, pcl_size, k), dtype=pcl_src.dtype, device=pcl_src.device)
+    # Gather the nearest neighbors
+    neighbors = torch.gather(pcl_src.unsqueeze(1).expand(-1, pcl_size_interest, -1, -1), 2,
+                             indices.unsqueeze(-1).expand(-1, -1, -1, 3))
 
-    # Each point cloud should be centered around the first point which is at the origin
-    for i in range(pcl_size):
-        orig = pcl_src[indices[i]] - pcl_interest[i]
-        if not torch.equal(orig[0], torch.tensor([0, 0, 0], dtype=orig.dtype, device=orig.device)):
-            orig = torch.cat([torch.zeros((1, 3), dtype=orig.dtype, device=orig.device), orig])[:-1]
-        neighbors_centered[0, :, i, :] = orig.T
+    # Center the neighbors around the interest points
+    neighbors_centered = neighbors - pcl_interest.unsqueeze(2).expand(-1, -1, k, -1)
+
+    # Reshape to match the output shape (batch_size, 3, pcl_size_interest, k)
+    neighbors_centered = neighbors_centered.permute(0, 3, 1, 2)
 
     return neighbors_centered
 def find_mean_diameter_for_specific_coordinate(specific_coordinates):
