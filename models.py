@@ -53,6 +53,7 @@ class shapeClassifier(nn.Module):
             output = self.classifier(data)
         else:
             output = self.classifier(data, eigenvals[:, 1 : 1 + self.lap_eigenvalues_dim])
+        output = output.view(batch_size, num_of_pcl_centroids, -1)
         return output
 
     def createLap(self, point_cloud, normalized):

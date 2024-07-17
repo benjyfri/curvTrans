@@ -133,7 +133,7 @@ def plot_8_point_clouds(cls1_1, cls1_2, cls1_3, cls1_4, cls2_1, cls2_2, cls2_3, 
 
     fig.show()
 
-def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, rotation=None, title=""):
+def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, rotation=None, translation=None, title=""):
   """
   Plot four point clouds in an interactive 3D plot with Plotly.
 
@@ -155,11 +155,8 @@ def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
   if rotation is not None:
       if isinstance(rotation, torch.Tensor):
           rotation = rotation.cpu().detach().numpy()
-      center = np.mean(point_cloud1, axis=0)
-      point_cloud1 = np.matmul((point_cloud1 - center), rotation.T)
-      point_cloud3 = np.matmul((point_cloud3 - center), rotation.T)
-      point_cloud1 += center
-      point_cloud3 += center
+      point_cloud1 = np.matmul((point_cloud1), rotation.T) + translation
+      point_cloud3 = np.matmul((point_cloud3), rotation.T) + translation
       axis = np.argmin(np.max(point_cloud1, axis=0))
 
       point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
@@ -317,8 +314,9 @@ def plot_point_clouds(point_cloud1, point_cloud2, title=""):
     fig.show()
 
 
-def plotWorst(worst_losses, model_name=""):
+def plotWorst(worst_losses, model_name="", dir=r"./"):
     count = 0
+    os.makedirs(dir, exist_ok=True)
     for (loss,worst_loss_variables) in worst_losses:
         noisy_pointcloud_1 = worst_loss_variables['noisy_pointcloud_1']
         noisy_pointcloud_2 = worst_loss_variables['noisy_pointcloud_2']
@@ -341,11 +339,11 @@ def plotWorst(worst_losses, model_name=""):
             best_rotation = best_rotation.detach().cpu().numpy()
         if isinstance(best_translation, torch.Tensor):
             best_translation = best_translation.detach().cpu().numpy()
-        save_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, title="", filename=model_name+f"_{loss:.3f}_orig_{count}_loss.html")
-        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=model_name+f"_{loss:.3f}_correspondence_{count}_loss.html", rotation=rotation_matrix, translation=best_translation)
+        save_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, title="", filename=os.path.join(dir, model_name+f"_{loss:.3f}_orig_{count}_loss.html"))
+        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=os.path.join(dir, model_name+f"_{loss:.3f}_correspondence_{count}_loss.html"), rotation=rotation_matrix, translation=best_translation)
 
         transformed_points1 = np.matmul((noisy_pointcloud_1), best_rotation.T) + best_translation
-        save_point_clouds(transformed_points1, noisy_pointcloud_2, title="", filename=model_name+f"_{loss:.3f}_{count}_loss.html")
+        save_point_clouds(transformed_points1, noisy_pointcloud_2, title="", filename=os.path.join(dir, model_name+f"_{loss:.3f}_{count}_loss.html"))
         count = count + 1
 
 
@@ -392,7 +390,7 @@ def plot_losses(losses, inliers, filename="loss_plot.png", dir=r"./"):
     plt.savefig(os.path.join(dir, filename))
 
     # You can optionally remove the following line if you don't want to display the plot as well
-    plt.show()
+    # plt.show()
 
 
 
@@ -494,13 +492,14 @@ def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embe
     fig.show()
 
 
-def plot_metrics(dictionary, run_name=""):
+def plot_metrics(dictionary, dir=r"./",run_name=""):
     """
     Function to plot each array in a dictionary as a separate plot.
 
     Parameters:
     - dictionary: Dictionary where each value is a 1D numpy array.
     """
+    os.makedirs(dir, exist_ok=True)
     # Iterate through each key-value pair in the dictionary
     for key, array in dictionary.items():
         # Calculate mean and median of the array
@@ -520,5 +519,5 @@ def plot_metrics(dictionary, run_name=""):
 
         # Show plot
         plt.grid(True)
-        plt.savefig(run_name + f'{key}_{mean_val:.2f}_Median_{median_val:.2f}_plot.png')
-        plt.show()
+        plt.savefig(os.path.join(dir, run_name + f'{key}_Mean_{mean_val:.2f}_Median_{median_val:.2f}_plot.png'))
+        # plt.show()

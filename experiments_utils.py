@@ -497,7 +497,7 @@ def find_closest_points_torch(embeddings1, embeddings2, num_of_pairs=40, max_non
 
     # Calculate indices in original embeddings
     emb1_indices = smallest_distances_indices % num_of_points1
-    batch_indices = torch.arange(batch_size).unsqueeze(1).expand(-1, num_of_points2)
+    batch_indices = torch.arange(batch_size).unsqueeze(1).expand(-1, num_of_pairs)
     emb2_indices = indices_in_emb2[batch_indices, emb1_indices, (smallest_distances_indices / num_of_points2).type(torch.int)]
 
     return emb1_indices, emb2_indices
@@ -638,12 +638,13 @@ def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=N
         src_knn_pcl = neighbors_centered
         scaling_factor_final = calcDistTorch(src_knn_pcl, scaling_factor)
         scaling_factor_final.to(device)
+        src_knn_pcl = (scaling_factor_final.view(scaling_factor_final.shape[0], 1, 1, 1)) * src_knn_pcl
     else:
         neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
         src_knn_pcl = torch.tensor(neighbors_centered)
         scaling_factor_final = calcDist(src_knn_pcl, scaling_factor)
+        src_knn_pcl = scaling_factor_final * src_knn_pcl
 
-    src_knn_pcl = ( scaling_factor_final.view(scaling_factor_final.shape[0], 1, 1, 1) ) * src_knn_pcl
     output = model(src_knn_pcl)
     return output
 def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):

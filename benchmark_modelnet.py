@@ -39,11 +39,17 @@ def compute_metrics(data: Dict, pred_transforms) -> Dict:
 
     with torch.no_grad():
         pred_transforms = pred_transforms
-        device = pred_transforms.device
-        gt_transforms = data['transform_gt'].to(device)
-        points_src = data['points_src'][..., :3].to(device)
-        points_ref = data['points_ref'][..., :3].to(device)
-        points_raw = data['points_raw'][..., :3].to(device)
+        if isinstance(pred_transforms, torch.Tensor):
+            device = pred_transforms.device
+            gt_transforms = data['transform_gt'].to(device)
+            points_src = data['points_src'][..., :3].to(device)
+            points_ref = data['points_ref'][..., :3].to(device)
+            points_raw = data['points_raw'][..., :3].to(device)
+        else:
+            gt_transforms = data['transform_gt']
+            points_src = data['points_src'][..., :3]
+            points_ref = data['points_ref'][..., :3]
+            points_raw = data['points_raw'][..., :3]
 
         # Euler angles, Individual translation errors (Deep Closest Point convention)
         r_gt_euler_deg = dcm2euler(gt_transforms[:, :3, :3].detach().cpu().numpy(), seq='xyz')
