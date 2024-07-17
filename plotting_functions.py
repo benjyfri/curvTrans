@@ -198,7 +198,7 @@ def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
 
   fig.show()
 
-def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, filename="plot.html", rotation=None, title=""):
+def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, filename="plot.html", rotation=None, translation=None, title=""):
   """
   Plot four point clouds in an interactive 3D plot with Plotly and save it.
 
@@ -215,9 +215,8 @@ def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
   colors = ['blue', 'orange', 'brown', 'red']
 
   if rotation is not None:
-      center = np.mean(point_cloud1, axis=0)
-      point_cloud1 = np.matmul((point_cloud1 - center), rotation.T)
-      point_cloud3 = np.matmul((point_cloud3 - center), rotation.T)
+      point_cloud1 = np.matmul((point_cloud1), rotation.T) + translation
+      point_cloud3 = np.matmul((point_cloud3), rotation.T) + translation
       axis = np.argmin(np.max(point_cloud1, axis=0))
 
       point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
@@ -327,13 +326,26 @@ def plotWorst(worst_losses, model_name=""):
         chosen_points_2 = worst_loss_variables['chosen_points_2']
         rotation_matrix = worst_loss_variables['rotation_matrix']
         best_rotation = worst_loss_variables['best_rotation']
+        best_translation = worst_loss_variables['best_translation']
+        if isinstance(noisy_pointcloud_1, torch.Tensor):
+            noisy_pointcloud_1 = noisy_pointcloud_1.detach().cpu().numpy()
+        if isinstance(noisy_pointcloud_2, torch.Tensor):
+            noisy_pointcloud_2 = noisy_pointcloud_2.detach().cpu().numpy()
+        if isinstance(chosen_points_1, torch.Tensor):
+            chosen_points_1 = chosen_points_1.detach().cpu().numpy()
+        if isinstance(chosen_points_2, torch.Tensor):
+            chosen_points_2 = chosen_points_2.detach().cpu().numpy()
+        if isinstance(rotation_matrix, torch.Tensor):
+            rotation_matrix = rotation_matrix.detach().cpu().numpy()
+        if isinstance(best_rotation, torch.Tensor):
+            best_rotation = best_rotation.detach().cpu().numpy()
+        if isinstance(best_translation, torch.Tensor):
+            best_translation = best_translation.detach().cpu().numpy()
         save_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, title="", filename=model_name+f"_{loss:.3f}_orig_{count}_loss.html")
-        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=model_name+f"_{loss:.3f}_correspondence_{count}_loss.html", rotation=rotation_matrix)
+        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=model_name+f"_{loss:.3f}_correspondence_{count}_loss.html", rotation=rotation_matrix, translation=best_translation)
 
-        center = np.mean(noisy_pointcloud_1, axis=0)
-        center2 = np.mean(noisy_pointcloud_2, axis=0)
-        transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
-        save_point_clouds(transformed_points1, noisy_pointcloud_2 - center2, title="", filename=model_name+f"_{loss:.3f}_{count}_loss.html")
+        transformed_points1 = np.matmul((noisy_pointcloud_1), best_rotation.T) + best_translation
+        save_point_clouds(transformed_points1, noisy_pointcloud_2, title="", filename=model_name+f"_{loss:.3f}_{count}_loss.html")
         count = count + 1
 
 
@@ -480,3 +492,33 @@ def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embe
     ))
 
     fig.show()
+
+
+def plot_metrics(dictionary, run_name=""):
+    """
+    Function to plot each array in a dictionary as a separate plot.
+
+    Parameters:
+    - dictionary: Dictionary where each value is a 1D numpy array.
+    """
+    # Iterate through each key-value pair in the dictionary
+    for key, array in dictionary.items():
+        # Calculate mean and median of the array
+        mean_val = np.mean(array)
+        median_val = np.median(array)
+
+        # Plot the array
+        plt.figure()
+        plt.plot(array)
+
+        # Set title with key, mean, and median
+        plt.title(f"Array: {key}\nMean: {mean_val:.2f}, Median: {median_val:.2f}")
+
+        # Set labels
+        plt.xlabel('Index')
+        plt.ylabel('Value')
+
+        # Show plot
+        plt.grid(True)
+        plt.savefig(run_name + f'{key}_{mean_val:.2f}_Median_{median_val:.2f}_plot.png')
+        plt.show()

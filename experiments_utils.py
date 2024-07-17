@@ -255,23 +255,6 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_fact
         #     )
         # fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
         # fig_max_embedding.show()
-def plotWorst(worst_losses, model_name=""):
-    count = 0
-    for (loss,worst_loss_variables) in worst_losses:
-        noisy_pointcloud_1 = worst_loss_variables['noisy_pointcloud_1']
-        noisy_pointcloud_2 = worst_loss_variables['noisy_pointcloud_2']
-        chosen_points_1 = worst_loss_variables['chosen_points_1']
-        chosen_points_2 = worst_loss_variables['chosen_points_2']
-        rotation_matrix = worst_loss_variables['rotation_matrix']
-        best_rotation = worst_loss_variables['best_rotation']
-        save_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, title="", filename=model_name+f"_{loss:.3f}_orig_{count}_loss.html")
-        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=model_name+f"_{loss:.3f}_correspondence_{count}_loss.html", rotation=rotation_matrix)
-
-        center = np.mean(noisy_pointcloud_1, axis=0)
-        center2 = np.mean(noisy_pointcloud_2, axis=0)
-        transformed_points1 = np.matmul((noisy_pointcloud_1 - center), best_rotation.T)
-        save_point_clouds(transformed_points1, noisy_pointcloud_2 - center2, title="", filename=model_name+f"_{loss:.3f}_{count}_loss.html")
-        count = count + 1
 
 def view_stabiity(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
                                     num_of_ransac_iter=100, shapes=[86, 162, 174, 176, 179], plot_graphs=0, create_pcls_func=None, given_pcls=None):

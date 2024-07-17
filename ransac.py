@@ -20,6 +20,7 @@ import pstats
 from scipy.spatial import cKDTree
 from plotting_functions import *
 from experiments_utils import *
+from benchmark_modelnet import *
 import platform
 from modelnet import ModelNetHdf
 import transforms
@@ -740,20 +741,23 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
 def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
                                     num_of_ransac_iter=100, max_non_unique_correspondences=3, pct_of_points_2_take=0.75):
     worst_losses = [(0, None)] * num_worst_losses
-    losses_rot = []
-    losses_trans = []
+    losses_rot_list = []
+    losses_trans_list = []
     point_distance_list = []
     final_thresh_list = []
     final_inliers_list = []
     iter_2_ransac_convergence = []
+    combined_dict = {}
     test_dataset = test_predator_data()
-    batch_size = 7
-    batch_size = 1
+    batch_size = 20
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     for batch_idx, data in enumerate(test_dataloader):
-        if batch_idx%10 ==0:
-            print(f'------------{batch_idx}------------')
+        # if batch_idx%10 ==0:
+        #     print(f'------------{batch_idx}------------')
+        if (batch_idx * batch_size) > 100:
+            break
+        print(f'------------{batch_idx * batch_size}------------')
 
         src_pcd, tgt_pcd, rot, trans, sample = (data['src_pcd'].squeeze().to(device), data['tgt_pcd'].squeeze().to(device), data['rot'].squeeze().to(device),
                                                                data['trans'].squeeze().to(device), data['sample'])
@@ -800,36 +804,49 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
 
         emb1_indices, emb2_indices = find_closest_points_torch(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences,topk=1)
         # emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_neighbors=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-        centered_points_1 = chosen_pcl_1[emb1_indices, :]
-        centered_points_2 = chosen_pcl_2[emb2_indices, :]
+        batch_size, num_points = emb1_indices.shape
+        batch_indices = torch.arange(batch_size).unsqueeze(1).expand(-1, num_points)
+        centered_points_1 = chosen_pcl_1[batch_indices, emb1_indices]
+        centered_points_2 = chosen_pcl_2[batch_indices, emb2_indices]
+        rot_trans_list = []
+        for b in range(batch_size):
+            best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac_torch(centered_points_1[b], centered_points_2[b], max_iterations=num_of_ransac_iter,
+                                                       threshold=0.1,
+                                                       min_inliers=(int)((amount_of_interest_points*pct_of_points_2_take) // 10))
 
-        best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac_torch(centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
-                                                   threshold=0.1,
-                                                   min_inliers=(int)((amount_of_interest_points*pct_of_points_2_take) // 10))
+            best_rot_trans = torch.cat((best_rotation, best_translation.unsqueeze(1)), dim=1)
+            rot_trans_list.append(best_rot_trans)
+            final_inliers_list.append(best_num_of_inliers)
+            iter_2_ransac_convergence.append(best_iter)
 
-        final_inliers_list.append(best_num_of_inliers)
-        iter_2_ransac_convergence.append(best_iter)
+            # transformed_points1 = torch.matmul(src_pcd, best_rotation.T) + best_translation
+            loss_rot = torch.mean(((rot[b] @ best_rotation.T) - torch.eye(3, device=device)) ** 2)
+            criterion = torch.nn.MSELoss()
+            loss_trans = criterion(trans[b], best_translation)
+            losses_rot_list.append(loss_rot.item())
+            losses_trans_list.append(loss_trans.item())
 
-        # transformed_points1 = torch.matmul(src_pcd, best_rotation.T) + best_translation
-        loss_rot = torch.mean(((rot @ best_rotation.T) - torch.eye(3, device=device)) ** 2)
-        criterion = torch.nn.MSELoss()
-        loss_trans = criterion(trans, best_translation)
-        losses_rot.append(loss_rot)
-        losses_trans.append(loss_trans)
-
-        # Update the worst losses list
-        index_of_smallest_loss = torch.argmin(torch.tensor([worst_losses[i][0] for i in range(len(worst_losses))]))
-        smallest_loss = worst_losses[index_of_smallest_loss][0]
-        if loss_rot > smallest_loss:
-            worst_losses[index_of_smallest_loss] = (loss_rot, {
-                'noisy_pointcloud_1': src_pcd,
-                'noisy_pointcloud_2': tgt_pcd,
-                'chosen_points_1': corres[0],
-                'chosen_points_2': corres[1],
-                'rotation_matrix': rot,
-                'best_rotation': best_rotation
-            })
-    return worst_losses, losses_rot, losses_trans, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence
+            # Update the worst losses list
+            index_of_smallest_loss = torch.argmin(torch.tensor([worst_losses[i][0] for i in range(len(worst_losses))]))
+            smallest_loss = worst_losses[index_of_smallest_loss][0]
+            if loss_rot > smallest_loss:
+                worst_losses[index_of_smallest_loss] = (loss_rot, {
+                    'noisy_pointcloud_1': src_pcd[b],
+                    'noisy_pointcloud_2': tgt_pcd[b],
+                    'chosen_points_1': corres[0],
+                    'chosen_points_2': corres[1],
+                    'rotation_matrix': rot[b],
+                    'best_rotation': best_rotation,
+                    'best_translation': best_translation
+                })
+        rot_trans_tensor = torch.stack(rot_trans_list, dim=0)
+        metrics = compute_metrics(sample, rot_trans_tensor)
+        if len(combined_dict) > 0:
+            for key in metrics.keys():
+                combined_dict[key] = np.concatenate(( combined_dict[key] , metrics[key]))
+        else:
+            combined_dict = metrics
+    return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
 
 def test_predator_data():
     partial_p_keep= [0.7, 0.7]
