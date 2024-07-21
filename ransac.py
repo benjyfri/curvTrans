@@ -24,6 +24,7 @@ from benchmark_modelnet import *
 import platform
 from modelnet import ModelNetHdf
 import transforms
+from scipy.spatial import distance_matrix
 
 def load_data(partition='test', divide_data=1):
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
@@ -195,7 +196,7 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
             best_rotation = rotation
             best_translation = translation
             best_iter = iteration
-    if best_inliers == None:
+    if best_inliers is None:
         return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold + 0.1, min_inliers=min_inliers)
 
     # improve registration with LS
@@ -204,6 +205,62 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
         best_rotation, best_translation = estimate_rigid_transform(corres[0], corres[1])
         inliers1, inliers2 = find_inliers(src_centered, dst_centered, best_rotation, best_translation,
                                                 threshold)
+        best_inliers = inliers1
+        corres = [src_centered[inliers1], dst_centered[inliers2]]
+        if len(best_inliers) > highest_consensus:
+            highest_consensus = len(best_inliers)
+        else:
+            break
+    return best_rotation, best_translation, len(best_inliers), best_iter, corres, threshold
+
+def rand_ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, rot=None, trans=None):
+    N = data1.shape[0]
+    best_inliers = None
+    best_rotation = None
+    corres = None
+    best_translation = None
+
+    src_centered = data1
+    dst_centered = data2
+    best_iter = 0
+    neighbors = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(data2)
+    if rot is None:
+        for iteration in range(max_iterations):
+            # Randomly sample 3 corresponding points
+            indices_src = np.random.choice(N, size=3, replace=False)
+            indices_dst = np.random.choice(N, size=3, replace=False)
+            src_points = src_centered[indices_src]
+            dst_points = dst_centered[indices_dst]
+
+            # Estimate rotation and translation
+            rotation, translation = estimate_rigid_transform(src_points, dst_points)
+            # Find inliers
+            inliers1, inliers2 = find_inliers_no_correspondence(src_centered, dst_centered, rotation,translation, threshold, nbrs=neighbors)
+
+            # Update best model if we have enough inliers
+            if len(inliers1) >= min_inliers and (best_inliers is None or len(inliers1) > len(best_inliers)):
+                best_inliers = inliers1
+                corres = [src_centered[inliers1], dst_centered[inliers2]]
+                best_rotation = rotation
+                best_translation = translation
+                best_iter = iteration
+        if best_inliers is None:
+            return rand_ransac(data1, data2, max_iterations=max_iterations, threshold=threshold + 0.1, min_inliers=min_inliers)
+    else:
+        inliers1, inliers2 = find_inliers_no_correspondence(src_centered, dst_centered, rot, trans.squeeze(), threshold)
+        best_inliers = inliers1
+        best_rotation = rot
+        best_translation = trans
+        corres = [src_centered[inliers1], dst_centered[inliers2]]
+        best_iter = 1
+        return best_rotation, best_translation, len(best_inliers), best_iter, corres, threshold
+    # improve registration with LS
+    highest_consensus = len(best_inliers)
+    while (True):
+        best_rotation, best_translation = estimate_rigid_transform(corres[0], corres[1])
+        inliers1, inliers2 = find_inliers_no_correspondence(src_centered, dst_centered, best_rotation, best_translation,
+                                                            threshold, nbrs=neighbors)
+
         best_inliers = inliers1
         corres = [src_centered[inliers1], dst_centered[inliers2]]
         if len(best_inliers) > highest_consensus:
@@ -417,18 +474,27 @@ def find_inliers(data1, data2, rotation, translation, threshold):
     """
     Finds the inliers in two sets of 3D points given a rotation and translation.
     """
-    inliers1 = []
-    inliers2 = []
-    for i in range(data1.shape[0]):
-        point1 = data1[i]
-        point2 = data2[i]
-        transformed = np.matmul(point1, rotation.T) + translation
-        distance = np.linalg.norm(transformed - point2)
-        if distance < threshold:
-            inliers1.append(i)
-            inliers2.append(i)
 
+    transformed = np.matmul(data1, rotation.T) + translation.squeeze()
+    dist = np.linalg.norm(transformed - data2, axis=1)
+    mask = dist < threshold
+    inliers1_new = (np.arange(len(data1)))[mask.squeeze()]
+    inliers2_new = inliers1_new
+
+    return inliers1_new, inliers2_new
+def find_inliers_no_correspondence(data1, data2, rotation, translation, threshold, nbrs=None):
+    """
+    Finds the inliers in two sets of 3D points given a rotation and translation.
+    """
+    transformed_src = np.matmul(data1, rotation.T) + translation.squeeze()
+    if nbrs is None:
+        nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(data2)
+    distances, indices = nbrs.kneighbors(transformed_src)
+    mask = distances < threshold
+    inliers1 = (np.arange(len(data1)))[mask.squeeze()]
+    inliers2 = indices.squeeze()[mask.squeeze()]
     return inliers1, inliers2
+
 def find_inliers_torch(data1, data2, rotation, translation, threshold):
     """
     Finds the inliers in two sets of 3D points given a rotation and translation.
@@ -750,6 +816,44 @@ def test_multi_scale_using_embedding(cls_args=None,num_worst_losses = 3, scaling
     return worst_losses, losses, final_thresh_list, final_inliers_list, point_distance_list, worst_point_losses, iter_2_ransac_convergence
 
 
+def test_random_ransac(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
+                                    num_of_ransac_iter=100, shapes=[86, 162, 174, 176, 179], create_pcls_func=None, max_non_unique_correspondences=3, pct_of_points_2_take=0.75):
+    pcls, label = load_data()
+    worst_losses = [(0, None)] * num_worst_losses
+    worst_point_losses = [(0, None)] * num_worst_losses
+    losses = []
+    point_distance_list = []
+    final_thresh_list = []
+    final_inliers_list = []
+    iter_2_ransac_convergence = []
+    for k in shapes:
+        if k%10 ==0:
+            print(f'------------{k}------------')
+        pcl1 = pcls[k][:]
+        # rotated_pcl, rotation_matrix, translation = random_rotation_translation(pcl1, np.array([0.1,0.4, 0.2]))
+        rotated_pcl, rotation_matrix, translation = random_rotation_translation(pcl1)
+
+        noisy_pointcloud_1 = pcl1 + np.random.normal(0, 0.01, pcl1.shape)
+        noisy_pointcloud_1 = noisy_pointcloud_1.astype(np.float32)
+        noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
+        noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
+
+        best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = rand_ransac(
+            noisy_pointcloud_1, noisy_pointcloud_2, max_iterations=num_of_ransac_iter,
+            threshold=0.1,
+            min_inliers=(int)((amount_of_interest_points * pct_of_points_2_take) // 10))
+        iter_2_ransac_convergence.append(best_iter)
+
+        transformed_points1 = np.matmul(noisy_pointcloud_1, best_rotation.T) + best_translation
+        loss = np.mean(((rotation_matrix @ best_rotation.T) - np.eye(3)) ** 2)
+        losses.append(loss)
+
+        point_distance = np.mean(0)
+        point_distance_list.append(0)
+
+    return worst_losses, losses, final_thresh_list, final_inliers_list, point_distance_list, worst_point_losses, iter_2_ransac_convergence
+
+
 def test_multi_scale_using_embedding_predator_old(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
                                     num_of_ransac_iter=100, max_non_unique_correspondences=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4):
     worst_losses = [(0, None)] * num_worst_losses
@@ -912,8 +1016,8 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
 
-        emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-        # emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_neighbors=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+        # emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
 
@@ -922,10 +1026,16 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
             threshold=0.1,
             min_inliers=(int)((amount_of_interest_points * pct_of_points_2_take) // 10))
 
+
+        # best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = rand_ransac(
+        #     src_pcd, tgt_pcd, max_iterations=num_of_ransac_iter,
+        #     threshold=0.1,
+        #     min_inliers=(int)((amount_of_interest_points * pct_of_points_2_take) // 10), rot=rot, trans=trans)
+
         final_inliers_list.append(best_num_of_inliers)
         iter_2_ransac_convergence.append(best_iter)
 
-        transformed_points1 = np.matmul(src_pcd, best_rotation.T) + best_translation
+        # transformed_points1 = np.matmul(src_pcd, best_rotation.T) + best_translation.squeeze()
         loss = np.mean(((rot @ best_rotation.T) - np.eye(3)) ** 2)
         losses_rot_list.append(loss)
         losses_trans_list.append(np.linalg.norm(trans - best_translation))
@@ -953,7 +1063,159 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
 
     return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
 
-def test_predator_data():
+def test_embedding_dist_predator(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
+                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4):
+    mean_dist_list = []
+    median_dist_list = []
+    mean_distance_list = []
+    median_distance_list = []
+    mean_closest_neighbor_dist_list = []
+    median_closest_neighbor_dist_list = []
+    max_distance_list = []
+    ten_pct_mean_dist_list = []
+    twenty_pct_mean_dist_list = []
+    thirty_pct_mean_dist_list = []
+    fifty_pct_mean_dist_list = []
+    ten_pct_median_dist_list = []
+
+    test_dataset = test_predator_data(matching=True)
+    size = len(test_dataset)
+    for i in range(size):
+        # if i > 3:
+        #     break
+        if i%10 ==0:
+            print(f'------------{i}------------')
+
+        data = test_dataset.__getitem__(i)
+        src_pcd, tgt_pcd, rot, trans, sample, matching_inds = data['src_pcd'], data['tgt_pcd'], data['rot'], data['trans'], data['sample'], data['matching_inds']
+        matching_inds = matching_inds.detach().cpu().numpy()
+
+        chosen_fps_indices_1 = farthest_point_sampling(src_pcd, k=amount_of_interest_points)
+        chosen_pcl_1 = src_pcd[chosen_fps_indices_1, :]
+        chosen_fps_indices_2 = farthest_point_sampling(tgt_pcd, k=amount_of_interest_points)
+        chosen_pcl_2 = tgt_pcd[chosen_fps_indices_2, :]
+
+        emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
+
+        emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_1 = emb_1.detach().cpu().numpy()[0]
+        emb_2 = emb_2.detach().cpu().numpy()[0]
+        # multiscale embeddings
+        if scales > 1:
+            for scale in receptive_field[1:]:
+                fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
+                fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
+
+                global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                                              pcl_src=src_pcd[fps_indices_1, :], pcl_interest=chosen_pcl_1,
+                                              args_shape=cls_args, scaling_factor=scaling_factor)
+
+                global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                                              pcl_src=tgt_pcd[fps_indices_2, :], pcl_interest=chosen_pcl_2,
+                                              args_shape=cls_args, scaling_factor=scaling_factor)
+
+                global_emb_1 = global_emb_1.detach().cpu().numpy()[0]
+                global_emb_2 = global_emb_2.detach().cpu().numpy()[0]
+
+                emb_1 = np.hstack((emb_1, global_emb_1))
+                emb_2 = np.hstack((emb_2, global_emb_2))
+
+        chosen_rotated_1 = (chosen_pcl_1 @ rot.T) + trans.squeeze()
+        xyz1_indices, xyz2_indices = find_closest_points_best_buddy(chosen_rotated_1, chosen_pcl_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+
+
+        emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        # emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_neighbors=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+
+        overlapping_chosen_1, ind1, ind2 = np.intersect1d(xyz1_indices, emb1_indices, return_indices=True)
+        bbudies_pairings = np.vstack((xyz1_indices[ind1], xyz2_indices[ind1])).T
+        overlap_emb_pairings = np.vstack((emb1_indices[ind2],emb2_indices[ind2])).T
+        # plot_4_point_clouds(chosen_pcl_1, chosen_pcl_2, chosen_pcl_1[bbudies_pairings[:, 0]],
+        #                     chosen_pcl_2[bbudies_pairings[:, 1]], rot, trans[:, 0], "real pairings")
+        # plot_4_point_clouds(chosen_pcl_1, chosen_pcl_2, chosen_pcl_1[overlap_emb_pairings[:, 0]],
+        #                     chosen_pcl_2[overlap_emb_pairings[:, 1]], rot, trans[:, 0], "emb pairings")
+        exact_match = [((x[0]==y[0]) and (x[1]==y[1])) for x,y in zip(bbudies_pairings[bbudies_pairings[:,0].argsort()], overlap_emb_pairings[overlap_emb_pairings[:,0].argsort()])]
+        num_exact_matches = np.count_nonzero(exact_match)
+        distance_2_real_pairing = np.array([(np.linalg.norm(chosen_pcl_2[x[1]]-chosen_pcl_2[y[1]])) for x,y in zip(bbudies_pairings[bbudies_pairings[:,0].argsort()], overlap_emb_pairings[overlap_emb_pairings[:,0].argsort()])])
+        mean_dist = np.mean(distance_2_real_pairing)
+        # median_dist = np.median(distance_2_real_pairing)
+        ten_pct_smallest_dist = distance_2_real_pairing[(distance_2_real_pairing <= np.percentile(distance_2_real_pairing, 10))]
+        twenty_pct_smallest_dist = distance_2_real_pairing[(distance_2_real_pairing <= np.percentile(distance_2_real_pairing, 20))]
+        thirty_pct_smallest_dist = distance_2_real_pairing[(distance_2_real_pairing <= np.percentile(distance_2_real_pairing, 30))]
+        fifty_pct_smallest_dist = distance_2_real_pairing[(distance_2_real_pairing <= np.percentile(distance_2_real_pairing, 50))]
+        twenty_pct_mean_dist = np.mean(twenty_pct_smallest_dist)
+        thirty_pct_mean_dist = np.mean(thirty_pct_smallest_dist)
+        fifty_pct_mean_dist =  np.mean(fifty_pct_smallest_dist)
+        ten_pct_mean_dist = np.mean(ten_pct_smallest_dist)
+        # ten_pct_median_dist = np.median(ten_pct_smallest_dist)
+        dist_matrix = distance_matrix(chosen_pcl_2, chosen_pcl_2)
+        lower_triangle_indices = np.tril_indices(dist_matrix.shape[0], k=-1)
+        lower_triangle = dist_matrix[lower_triangle_indices]
+        mean_distance = np.mean(lower_triangle)
+        # median_distance = np.median(lower_triangle)
+        max_distance = np.max(lower_triangle)
+        nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(chosen_pcl_2)
+        closest_neighbor_dist = nbrs.kneighbors(chosen_pcl_2)[0][:,1]
+        mean_closest_neighbor_dist = np.mean(closest_neighbor_dist)
+        median_closest_neighbor_dist = np.median(closest_neighbor_dist)
+
+        mean_dist_list.append(mean_dist)
+        # median_dist_list.append(median_dist)
+        mean_distance_list.append(mean_distance)
+        # median_distance_list.append(median_distance)
+        max_distance_list.append(max_distance)
+        ten_pct_mean_dist_list.append(ten_pct_mean_dist)
+        twenty_pct_mean_dist_list.append(twenty_pct_mean_dist)
+        thirty_pct_mean_dist_list.append(thirty_pct_mean_dist)
+        fifty_pct_mean_dist_list.append(fifty_pct_mean_dist)
+        # ten_pct_median_dist_list.append(ten_pct_median_dist)
+        mean_closest_neighbor_dist_list.append(mean_closest_neighbor_dist)
+        # median_closest_neighbor_dist_list.append(median_closest_neighbor_dist)
+        # Create the plots
+
+    plt.figure(figsize=(12, 8))
+
+    plt.plot(mean_dist_list, label='mean_dist_2_real_pairing')
+    # plt.plot(median_dist_list, label='median_dist')
+    # plt.plot(mean_distance_list, label='mean_dist_orig')
+    # plt.plot(median_distance_list, label='median_distance')
+    plt.plot(max_distance_list, label='shape size')
+    plt.plot(ten_pct_mean_dist_list, label='10%_mean_dist')
+    plt.plot(twenty_pct_mean_dist_list, label='20%_mean_dist')
+    plt.plot(thirty_pct_mean_dist_list, label='30%_mean_dist')
+    plt.plot(fifty_pct_mean_dist_list, label='50%_mean_dist')
+    # plt.plot(ten_pct_median_dist_list, label='10%_median_dist')
+    plt.plot(mean_closest_neighbor_dist_list, label='mean_1NN_dist')
+    # plt.plot(median_closest_neighbor_dist_list, label='median_closest_neighbor_dist')
+
+    plt.title(f'Distances Over Samples; mean_10% = {np.mean(ten_pct_mean_dist_list):.2f}')
+    plt.xlabel('Sample Index')
+    plt.ylabel('Distance')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+    # # Create a single plot with all data
+    # plt.figure(figsize=(12, 8))
+    #
+    # plt.plot(mean_dist_list, label='mean_dist', marker='o')
+    # plt.plot(median_dist_list, label='median_dist', marker='v')
+    # plt.plot(mean_distance_list, label='mean_distance', marker='s')
+    # plt.plot(median_distance_list, label='median_distance', marker='P')
+    # plt.plot(max_distance_list, label='max_distance', marker='*')
+    # plt.plot(ten_pct_mean_dist_list, label='ten_pct_mean_dist', marker='D')
+    # plt.plot(ten_pct_median_dist_list, label='ten_pct_median_dist', marker='x')
+    # plt.plot(mean_closest_neighbor_dist_list, label='mean_closest_neighbor_dist', marker='>')
+    # plt.plot(median_closest_neighbor_dist_list, label='median_closest_neighbor_dist', marker='<')
+    #
+    # plt.title(f'Distances Over Samples; mean_10% = {np.mean(ten_pct_mean_dist_list):.2f}')
+    # plt.xlabel('Sample Index')
+    # plt.ylabel('Distance')
+    # plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    # plt.grid(True)
+    # plt.tight_layout()
+    # plt.show()
+def test_predator_data(matching=False):
     partial_p_keep= [0.7, 0.7]
     # partial_p_keep= [0.5, 0.5]
     rot_mag = 45.0
@@ -967,5 +1229,5 @@ def test_predator_data():
                         transforms.RandomJitter(),
                         transforms.ShufflePoints()]
     test_dataset = ModelNetHdf(overlap_radius=overlap_radius, root=r'C:\\Users\\benjy\\Desktop\\curvTrans\\DeepBBS\\modelnet40_ply_hdf5_2048',
-                                subset='test', categories=None, transform=train_transforms)
+                                subset='test', categories=None, transform=train_transforms, matching=matching)
     return test_dataset
