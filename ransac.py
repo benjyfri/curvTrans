@@ -132,7 +132,28 @@ def find_max_difference_indices(array, k=200):
     if len(good_class_indices) != k:
         raise Exception(f'Wrong size! k = {k}, actual size = {len(good_class_indices)}')
     return max_values, max_indices, diff_from_max, good_class_indices
-
+def find_triangles(data1, data2, first_index, remaining_indices, dist_threshold):
+    found_second_ind = False
+    found_third_ind = False
+    for ind in remaining_indices:
+        if abs(np.linalg.norm(data1[first_index] - data1[ind]) - np.linalg.norm(
+                data2[first_index] - data2[ind])) < dist_threshold:
+            second_index = ind
+            remaining_indices = remaining_indices[remaining_indices != second_index]
+            found_second_ind = True
+            break
+    if not found_second_ind:
+        return None
+    for ind in remaining_indices:
+        if abs(np.linalg.norm(data1[first_index] - data1[ind]) - np.linalg.norm(
+                data2[first_index] - data2[ind])) < dist_threshold:
+            if abs(np.linalg.norm(data1[second_index] - data1[ind]) - np.linalg.norm(
+                    data2[second_index] - data2[ind])) < dist_threshold:
+                last_index = ind
+                found_third_ind = True
+    if not found_third_ind:
+        return None
+    return [second_index, last_index]
 def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
     """
     Performs RANSAC to find the best rotation and translation between two sets of 3D points.
@@ -150,42 +171,41 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
         inliers1 (np.ndarray): Array containing the indices of the inliers in data1.
         inliers2 (np.ndarray): Array containing the indices of the inliers in data2.
     """
+    # failing badly....
+    if threshold > 0.5:
+        return None, None, 0, 1000, [np.array([[1,1,1]]),np.array([[1,1,1]])], threshold
     N = data1.shape[0]
     best_inliers = None
-    best_rotation = None
     corres = None
-    best_translation = None
 
-    src_centered = data1 #- src_mean
-    dst_centered = data2 #- dst_mean
-    dists = np.linalg.norm((src_centered-dst_centered), axis=1)
+    src_centered = data1
+    dst_centered = data2
     best_iter = 0
     for iteration in range(max_iterations):
         # Randomly sample 3 corresponding points
-        counter = 0
-        smallest_diff = np.inf
-        best_src_points = None
-        best_dst_points = None
-        while True:
-            counter += 1
-            indices = np.random.choice(N, size=3, replace=False)
-            src_points = src_centered[indices]
-            dst_points = dst_centered[indices]
-            dist_1, dist_2, dist_3 = dists[indices]
-            largest_diff = max(dist_1, dist_2, dist_2) - min(dist_1, dist_2, dist_2)
-            if largest_diff < smallest_diff:
-                smallest_diff = largest_diff
-                best_src_points = src_points
-                best_dst_points = dst_points
+        indices = np.arange(N)
+        dist_threshold = 0.05
+        first_index = np.random.choice(indices)
+        remaining_indices = indices[indices != first_index]
+        remaining_indices = np.random.permutation(remaining_indices)
+        tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
+        while tri_indices is None:
+            dist_threshold = dist_threshold + dist_threshold
+            tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
+        [second_index, last_index] = tri_indices
+        indices = np.array([first_index, second_index, last_index])
+        src_points = data1[indices]
+        dst_points = data2[indices]
 
-            if largest_diff < 0.05 or counter > 50:
-                # print(counter)
-                src_points = best_src_points
-                dst_points = best_dst_points
-                break
-
+        # indices = np.random.choice(N, size=3, replace=False)
+        # src_points = src_centered[indices]
+        # dst_points = dst_centered[indices]
         # Estimate rotation and translation
         rotation, translation = estimate_rigid_transform(src_points, dst_points)
+        r_pred_euler_deg = dcm2euler(np.array([rotation]), seq='xyz')
+        # check if magnitude of movement is too big for current setup
+        if np.max(np.abs(r_pred_euler_deg)) > 45 or np.max(np.abs(translation)) > 0.5:
+            continue
         # Find inliers
         inliers1, inliers2 = find_inliers(src_centered, dst_centered, rotation,translation, threshold)
 
@@ -193,8 +213,6 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
         if len(inliers1) >= min_inliers and (best_inliers is None or len(inliers1) > len(best_inliers)):
             best_inliers = inliers1
             corres = [src_centered[inliers1], dst_centered[inliers2]]
-            best_rotation = rotation
-            best_translation = translation
             best_iter = iteration
     if best_inliers is None:
         return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold + 0.1, min_inliers=min_inliers)
@@ -1016,15 +1034,15 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
 
-        # emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-        emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+        emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        # emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
 
         best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(
             centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
             threshold=0.1,
-            min_inliers=(int)((amount_of_interest_points * pct_of_points_2_take) // 10))
+            min_inliers=5)
 
 
         # best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = rand_ransac(
@@ -1032,6 +1050,10 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
         #     threshold=0.1,
         #     min_inliers=(int)((amount_of_interest_points * pct_of_points_2_take) // 10), rot=rot, trans=trans)
 
+        # failed in Ransac
+        if best_rotation is None:
+            best_rotation = np.eye(3, dtype=np.float32)
+            best_translation = np.zeros((3,), dtype=np.float32)
         final_inliers_list.append(best_num_of_inliers)
         iter_2_ransac_convergence.append(best_iter)
 
