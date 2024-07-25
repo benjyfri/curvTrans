@@ -420,20 +420,20 @@ def read_bin_file(bin_file):
     return points[:, :3]
 
 def find_closest_points(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3):
-    classification_1 = np.argmax(embeddings1[:,:4], axis=1)
-    classification_2 = np.argmax(embeddings2[:,:4], axis=1)
+    # classification_1 = np.argmax(embeddings1[:,:4], axis=1)
+    # classification_2 = np.argmax(embeddings2[:,:4], axis=1)
 
     # Initialize NearestNeighbors instance
     nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
 
     # Find the indices and distances of the closest points in embeddings2 for each point in embeddings1
     distances, indices = nbrs.kneighbors(embeddings1)
-    duplicates = np.zeros(len(embeddings1))
-    for i,index in enumerate(indices):
-        duplicates[index] += 1
-    distances[((duplicates >= max_non_unique_correspondences)[indices])] = np.inf
-    same_class = (classification_1==(classification_2[indices].squeeze()))
-    distances[~same_class] = np.inf
+    # duplicates = np.zeros(len(embeddings1))
+    # for i,index in enumerate(indices):
+    #     duplicates[index] += 1
+    # distances[((duplicates >= max_non_unique_correspondences)[indices])] = np.inf
+    # same_class = (classification_1==(classification_2[indices].squeeze()))
+    # distances[~same_class] = np.inf
     smallest_distances_indices = np.argsort(distances.flatten())[:num_of_pairs]
     emb1_indices = smallest_distances_indices.squeeze()
     emb2_indices = indices[smallest_distances_indices].squeeze()
@@ -501,9 +501,9 @@ def find_closest_points_torch(embeddings1, embeddings2, num_of_pairs=40, max_non
     emb2_indices = indices_in_emb2[batch_indices, emb1_indices, (smallest_distances_indices / num_of_points2).type(torch.int)]
 
     return emb1_indices, emb2_indices
-def find_closest_points_best_buddy(embeddings1, embeddings2, num_neighbors=40, max_non_unique_correspondences=3):
-    classification_1 = np.argmax(embeddings1[:, :4], axis=1)
-    classification_2 = np.argmax(embeddings2[:, :4], axis=1)
+def find_closest_points_best_buddy(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3):
+    # classification_1 = np.argmax(embeddings1[:, :4], axis=1)
+    # classification_2 = np.argmax(embeddings2[:, :4], axis=1)
 
     # Initialize NearestNeighbors instance for embeddings1 and embeddings2
     nbrs1 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
@@ -518,12 +518,13 @@ def find_closest_points_best_buddy(embeddings1, embeddings2, num_neighbors=40, m
 
     for i, index in enumerate(indices1.squeeze()):
         # Check if the point is a best buddy
-        if ( i in indices2[index] ) and ( classification_1[i] == classification_2[index] ):
+        # if ( i in indices2[index] ) and ( classification_1[i] == classification_2[index] ):
+        if ( i in indices2[index] ):
             best_buddies.append((i, index))
 
     # Sort by distances and select the top num_neighbors
     best_buddies = sorted(best_buddies, key=lambda x: distances1[x[0]])
-    best_buddies = best_buddies[:num_neighbors]
+    best_buddies = best_buddies[:num_of_pairs]
 
     emb1_indices = np.array([x[0] for x in best_buddies])
     emb2_indices = np.array([x[1] for x in best_buddies])
