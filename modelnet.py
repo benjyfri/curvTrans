@@ -147,7 +147,7 @@ def get_transforms(noise_type: str,
 
 
 class ModelNetHdf(Dataset):
-    def __init__(self, overlap_radius, root: str, subset: str = 'train', categories: List = None, transform=None):
+    def __init__(self, overlap_radius, root: str, subset: str = 'train',matching=False, categories: List = None, transform=None):
         """ModelNet40 dataset from PointNet.
         Automatically downloads the dataset if not available
 
@@ -160,6 +160,7 @@ class ModelNetHdf(Dataset):
         """
         self._root = root
         self.overlap_radius = overlap_radius
+        self.matching = matching
 
 
         if not os.path.exists(os.path.join(root)):
@@ -196,11 +197,11 @@ class ModelNetHdf(Dataset):
         tgt_pcd = sample['points_ref'][:,:3]
         rot = sample['transform_gt'][:,:3]
         trans = sample['transform_gt'][:,3][:,None]
-        # matching_inds = get_correspondences(to_o3d_pcd(src_pcd), to_o3d_pcd(tgt_pcd),to_tsfm(rot,trans),self.overlap_radius)
-
+        if self.matching:
+            matching_inds = get_correspondences(to_o3d_pcd(src_pcd), to_o3d_pcd(tgt_pcd),to_tsfm(rot,trans),self.overlap_radius)
+            return {"src_pcd":src_pcd, "tgt_pcd":tgt_pcd, "rot":rot, "trans":trans, "matching_inds":matching_inds, "sample":sample}
 
         return {"src_pcd":src_pcd, "tgt_pcd":tgt_pcd, "rot":rot, "trans":trans, "sample":sample}
-        # return {"src_pcd":src_pcd, "tgt_pcd":tgt_pcd, "rot":rot, "trans":trans, "matching_inds":matching_inds, "sample":sample}
 
     def __len__(self):
         return self._data.shape[0]

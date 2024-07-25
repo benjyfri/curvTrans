@@ -459,38 +459,3 @@ class SetDeterministic:
     def __call__(self, sample):
         sample['deterministic'] = True
         return sample
-
-
-class Dict2DcpList:
-    """Converts dictionary of tensors into a list of tensors compatible with Deep Closest Point"""
-    def __call__(self, sample):
-
-        target = sample['points_src'][:, :3].transpose().copy()
-        src = sample['points_ref'][:, :3].transpose().copy()
-
-        rotation_ab = sample['transform_gt'][:3, :3].transpose().copy()
-        translation_ab = -rotation_ab @ sample['transform_gt'][:3, 3].copy()
-
-        rotation_ba = sample['transform_gt'][:3, :3].copy()
-        translation_ba = sample['transform_gt'][:3, 3].copy()
-
-        euler_ab = Rotation.from_dcm(rotation_ab).as_euler('zyx').copy()
-        euler_ba = Rotation.from_dcm(rotation_ba).as_euler('xyz').copy()
-
-        return src, target, \
-               rotation_ab, translation_ab, rotation_ba, translation_ba, \
-               euler_ab, euler_ba
-
-
-class Dict2PointnetLKList:
-    """Converts dictionary of tensors into a list of tensors compatible with PointNet LK"""
-    def __call__(self, sample):
-
-        if 'points' in sample:
-            # Train Classifier (pretraining)
-            return sample['points'][:, :3], sample['label']
-        else:
-            # Train PointNetLK
-            transform_gt_4x4 = np.concatenate([sample['transform_gt'],
-                                               np.array([[0.0, 0.0, 0.0, 1.0]], dtype=np.float32)], axis=0)
-            return sample['points_src'][:, :3], sample['points_ref'][:, :3], transform_gt_4x4

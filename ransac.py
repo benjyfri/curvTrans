@@ -1,6 +1,7 @@
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
+import open3d as o3d
 import torch
 from models import shapeClassifier
 from data import BasicPointCloudDataset
@@ -132,66 +133,75 @@ def find_max_difference_indices(array, k=200):
     if len(good_class_indices) != k:
         raise Exception(f'Wrong size! k = {k}, actual size = {len(good_class_indices)}')
     return max_values, max_indices, diff_from_max, good_class_indices
+
 def find_triangles(data1, data2, first_index, remaining_indices, dist_threshold):
-    found_second_ind = False
-    found_third_ind = False
-    for ind in remaining_indices:
-        if abs(np.linalg.norm(data1[first_index] - data1[ind]) - np.linalg.norm(
-                data2[first_index] - data2[ind])) < dist_threshold:
-            second_index = ind
-            remaining_indices = remaining_indices[remaining_indices != second_index]
-            found_second_ind = True
-            break
-    if not found_second_ind:
+    dist_diff = np.abs(np.linalg.norm(data1[first_index] - data1[remaining_indices], axis=1) -
+                       np.linalg.norm(data2[first_index] - data2[remaining_indices], axis=1))
+
+    valid_indices = remaining_indices[dist_diff < dist_threshold]
+
+    if len(valid_indices) < 2:
         return None
-    for ind in remaining_indices:
-        if abs(np.linalg.norm(data1[first_index] - data1[ind]) - np.linalg.norm(
-                data2[first_index] - data2[ind])) < dist_threshold:
-            if abs(np.linalg.norm(data1[second_index] - data1[ind]) - np.linalg.norm(
-                    data2[second_index] - data2[ind])) < dist_threshold:
-                last_index = ind
-                found_third_ind = True
-    if not found_third_ind:
+
+    second_index = valid_indices[0]
+    last_index_candidates = valid_indices[1:]
+
+    # Calculate distances for the second point
+    dist_diff_second = np.abs(np.linalg.norm(data1[second_index] - data1[last_index_candidates], axis=1) -
+                              np.linalg.norm(data2[second_index] - data2[last_index_candidates], axis=1))
+
+    valid_last_indices = last_index_candidates[dist_diff_second < dist_threshold]
+
+    if len(valid_last_indices) == 0:
         return None
+    last_index = np.random.choice(valid_last_indices)
     return [second_index, last_index]
-def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
-    """
-    Performs RANSAC to find the best rotation and translation between two sets of 3D points.
+def ransac_o3d(pos_s, pos_t, feat_s, feat_t, distance_threshold=0.1):
+  pcd_s = o3d.geometry.PointCloud()
+  pcd_s.points = o3d.utility.Vector3dVector(pos_s.numpy())
+  pcd_t = o3d.geometry.PointCloud()
+  pcd_t.points = o3d.utility.Vector3dVector(pos_t.numpy())
 
-    Args:
-        data1 (np.ndarray): Array of shape (N, 3) containing the first set of 3D points.
-        data2 (np.ndarray): Array of shape (N, 3) containing the second set of 3D points.
-        max_iterations (int): Maximum number of RANSAC iterations.
-        threshold (float): Maximum distance for a point to be considered an inlier.
-        min_inliers (int): Minimum number of inliers required to consider a model valid.
-
-    Returns:
-        rotation (np.ndarray): Array of shape (3, 3) representing the rotation matrix.
-        translation (np.ndarray): Array of shape (3,) representing the translation vector.
-        inliers1 (np.ndarray): Array containing the indices of the inliers in data1.
-        inliers2 (np.ndarray): Array containing the indices of the inliers in data2.
-    """
+  f_s = o3d.pipelines.registration.Feature()
+  f_s.data = feat_s.T.numpy()
+  f_t = o3d.pipelines.registration.Feature()
+  f_t.data = feat_t.T.numpy()
+  result = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
+      source=pcd_s, target=pcd_t, source_feature=f_s, target_feature=f_t,
+      mutual_filter=True,
+      max_correspondence_distance=distance_threshold,
+      estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
+      ransac_n=4,
+      checkers=[o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
+       o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold)],
+      criteria=o3d.pipelines.registration.RANSACConvergenceCriteria(4000000, 500))
+  return torch.from_numpy(result.transformation).float()
+def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_dist=0.05, max_thresh=1):
     # failing badly....
-    if threshold > 0.5:
+    if threshold > max_thresh:
+        print(f'RANSAC FAIL!')
         return None, None, 0, 1000, [np.array([[1,1,1]]),np.array([[1,1,1]])], threshold
     N = data1.shape[0]
     best_inliers = None
     corres = None
+    best_rotation = None
+    best_translation = None
 
     src_centered = data1
     dst_centered = data2
     best_iter = 0
+    # print(f'++++++++++++RNASAC with threshold: {threshold} ++++++++++++')
     for iteration in range(max_iterations):
         # Randomly sample 3 corresponding points
         indices = np.arange(N)
-        dist_threshold = 0.05
+        dist_threshold = nn1_dist
         first_index = np.random.choice(indices)
         remaining_indices = indices[indices != first_index]
         remaining_indices = np.random.permutation(remaining_indices)
         tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
-        while tri_indices is None:
-            dist_threshold = dist_threshold + dist_threshold
-            tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
+        if tri_indices is None:
+            continue
+
         [second_index, last_index] = tri_indices
         indices = np.array([first_index, second_index, last_index])
         src_points = data1[indices]
@@ -200,11 +210,15 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
         # indices = np.random.choice(N, size=3, replace=False)
         # src_points = src_centered[indices]
         # dst_points = dst_centered[indices]
+
         # Estimate rotation and translation
         rotation, translation = estimate_rigid_transform(src_points, dst_points)
+
+        if np.max(np.abs(translation)) > 0.5:
+            continue
         r_pred_euler_deg = dcm2euler(np.array([rotation]), seq='xyz')
         # check if magnitude of movement is too big for current setup
-        if np.max(np.abs(r_pred_euler_deg)) > 45 or np.max(np.abs(translation)) > 0.5:
+        if np.max(np.abs(r_pred_euler_deg)) > 45:
             continue
         # Find inliers
         inliers1, inliers2 = find_inliers(src_centered, dst_centered, rotation,translation, threshold)
@@ -214,13 +228,20 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2):
             best_inliers = inliers1
             corres = [src_centered[inliers1], dst_centered[inliers2]]
             best_iter = iteration
+            best_rotation = rotation
+            best_translation = translation
     if best_inliers is None:
-        return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold + 0.1, min_inliers=min_inliers)
+        return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold * 2, min_inliers=min_inliers)
 
     # improve registration with LS
     highest_consensus = len(best_inliers)
     while (True):
-        best_rotation, best_translation = estimate_rigid_transform(corres[0], corres[1])
+        rotation, translation = estimate_rigid_transform(corres[0], corres[1])
+        #If LS smoothing results in very different registration which is out of range rerun
+        if (np.max(np.abs(translation)) > 0.5) or (np.max(np.abs(dcm2euler(np.array([rotation]), seq='xyz'))) > 45):
+            return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold * 2, min_inliers=min_inliers)
+        best_rotation = rotation
+        best_translation = translation
         inliers1, inliers2 = find_inliers(src_centered, dst_centered, best_rotation, best_translation,
                                                 threshold)
         best_inliers = inliers1
@@ -933,8 +954,8 @@ def test_multi_scale_using_embedding_predator_old(cls_args=None,num_worst_losses
                 emb_2 = torch.cat((emb_2, global_emb_2), dim=-1)
 
 
-        emb1_indices, emb2_indices = find_closest_points_torch(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences,topk=1)
-        # emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_neighbors=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        # emb1_indices, emb2_indices = find_closest_points_torch(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences,topk=1)
+        emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_neighbors=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         batch_size, num_points = emb1_indices.shape
         batch_indices = torch.arange(batch_size).unsqueeze(1).expand(-1, num_points)
         centered_points_1 = chosen_pcl_1[batch_indices, emb1_indices]
@@ -1039,10 +1060,14 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
 
+        nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(centered_points_1);
+        closest_neighbor_dist = nbrs.kneighbors(centered_points_1)[0][:, 1];
+        mean_closest_neighbor_dist = np.mean(closest_neighbor_dist)
+
         best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(
             centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
-            threshold=0.1,
-            min_inliers=5)
+            threshold=mean_closest_neighbor_dist,
+            min_inliers=3, nn1_dist=mean_closest_neighbor_dist, max_thresh=(16 * mean_closest_neighbor_dist))
 
 
         # best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = rand_ransac(
@@ -1051,7 +1076,9 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
         #     min_inliers=(int)((amount_of_interest_points * pct_of_points_2_take) // 10), rot=rot, trans=trans)
 
         # failed in Ransac
+        failed_ransac = False
         if best_rotation is None:
+            failed_ransac = True
             best_rotation = np.eye(3, dtype=np.float32)
             best_translation = np.zeros((3,), dtype=np.float32)
         final_inliers_list.append(best_num_of_inliers)
@@ -1071,6 +1098,10 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
                 'noisy_pointcloud_2': tgt_pcd,
                 'chosen_points_1': corres[0],
                 'chosen_points_2': corres[1],
+                'All_pairs_1': centered_points_1,
+                'All_pairs_2': centered_points_2,
+                'failed_ransac': failed_ransac,
+                'pcl_id': i,
                 'rotation_matrix': rot,
                 'best_rotation': best_rotation,
                 'best_translation': best_translation

@@ -18,6 +18,7 @@ from sklearn.neighbors import NearestNeighbors
 import cProfile
 import pstats
 from scipy.spatial import cKDTree
+from benchmark_modelnet import dcm2euler
 
 def plot_multiclass_point_clouds(point_clouds_1, point_clouds_2, rotation=None, title=""):
     """
@@ -278,8 +279,14 @@ def save_point_clouds(point_cloud1, point_cloud2, title="", filename="plot.html"
             yaxis=dict(title='Y'),
             zaxis=dict(title='Z'),
         ),
-        margin=dict(r=20, l=10, b=10, t=10),
-        title=title
+        margin=dict(r=20, l=20, b=20, t=60),  # Adjust top margin for title visibility
+        title=dict(
+            text=title,
+            y=0.9,  # Position title within the top margin
+            x=0.5,
+            xanchor='center',
+            yanchor='top'
+        )
     )
 
     # Save the figure as a png image
@@ -325,6 +332,11 @@ def plotWorst(worst_losses, model_name="", dir=r"./"):
         rotation_matrix = worst_loss_variables['rotation_matrix']
         best_rotation = worst_loss_variables['best_rotation']
         best_translation = worst_loss_variables['best_translation']
+        All_pairs_1 = worst_loss_variables['All_pairs_1']
+        All_pairs_2 = worst_loss_variables['All_pairs_2']
+        pcl_id = worst_loss_variables['pcl_id']
+        failed_ransac = worst_loss_variables['failed_ransac']
+        failed_ransac_str = "failed_ransac_" if failed_ransac else ""
         if isinstance(noisy_pointcloud_1, torch.Tensor):
             noisy_pointcloud_1 = noisy_pointcloud_1.detach().cpu().numpy()
         if isinstance(noisy_pointcloud_2, torch.Tensor):
@@ -339,11 +351,19 @@ def plotWorst(worst_losses, model_name="", dir=r"./"):
             best_rotation = best_rotation.detach().cpu().numpy()
         if isinstance(best_translation, torch.Tensor):
             best_translation = best_translation.detach().cpu().numpy()
-        save_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, title="", filename=os.path.join(dir, model_name+f"_{loss:.3f}_orig_{count}_loss.html"))
-        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=os.path.join(dir, model_name+f"_{loss:.3f}_correspondence_{count}_loss.html"), rotation=rotation_matrix, translation=best_translation)
+        if isinstance(All_pairs_1, torch.Tensor):
+            All_pairs_1 = All_pairs_1.detach().cpu().numpy()
+        if isinstance(All_pairs_2, torch.Tensor):
+            All_pairs_2 = All_pairs_2.detach().cpu().numpy()
+        if isinstance(pcl_id, torch.Tensor):
+            pcl_id = pcl_id.detach().cpu().numpy()
+        save_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, title="", filename=os.path.join(dir, model_name+f"_{failed_ransac_str}pcl_{pcl_id}_{loss:.3f}_orig_{count}_loss.html"))
+        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=os.path.join(dir, model_name+f"_{failed_ransac_str}pcl_{pcl_id}_{loss:.3f}_correspondence_{count}_loss.html"), rotation=rotation_matrix, translation=best_translation)
+        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, All_pairs_1, All_pairs_2, filename=os.path.join(dir, model_name+f"_{failed_ransac_str}pcl_{pcl_id}_{loss:.3f}_allpairs_{count}_loss.html"), rotation=rotation_matrix, translation=best_translation)
 
         transformed_points1 = np.matmul((noisy_pointcloud_1), best_rotation.T) + best_translation
-        save_point_clouds(transformed_points1, noisy_pointcloud_2, title="", filename=os.path.join(dir, model_name+f"_{loss:.3f}_{count}_loss.html"))
+        r_pred_euler_deg = dcm2euler(np.array([best_rotation]), seq='xyz')
+        save_point_clouds(transformed_points1, noisy_pointcloud_2, title=f'rot: {r_pred_euler_deg}; trans: {best_translation}', filename=os.path.join(dir, model_name+f"_{failed_ransac_str}pcl_{pcl_id}_{loss:.3f}_{count}_loss.html"))
         count = count + 1
 
 
