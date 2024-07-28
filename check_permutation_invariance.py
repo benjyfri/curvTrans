@@ -14,13 +14,28 @@ from scipy.linalg import eigh
 
 def createLap(point_cloud, normalized, graph_weight_mode):
     distances = cdist(point_cloud, point_cloud)
+    lower_triangle_indices = np.tril_indices(distances.shape[0], k=-1)
+    lower_triangle = distances[lower_triangle_indices]
     if graph_weight_mode == 0:
         weights = np.exp(-distances)
     elif graph_weight_mode == 1:
         weights = np.exp(-distances ** 2)
     elif graph_weight_mode == 2:
-        rbf_weight = distances / np.max(distances)
+        rbf_weight = (distances ** 2) / np.max(lower_triangle)
         weights = np.exp(-rbf_weight)
+    elif graph_weight_mode == 3:
+        rbf_weight = (distances ** 2) / np.min(lower_triangle)
+        weights = np.exp(-rbf_weight)
+    elif graph_weight_mode == 4:
+        rbf_weight = (distances ** 2) / np.mean(lower_triangle)
+        weights = np.exp(-rbf_weight)
+    elif graph_weight_mode == 5:
+        rbf_weight = (distances ** 2) / np.median(lower_triangle)
+        weights = np.exp(-rbf_weight)
+    elif graph_weight_mode == 6:
+        weights = distances
+    elif graph_weight_mode == 7:
+        weights = (distances ** 2)
 
     column_sums = weights.sum(axis=1)
     diag_matrix = np.diag(column_sums)
@@ -57,12 +72,12 @@ def plot_same_index_list(all_runs_same_index_list):
     plt.figure(figsize=(10, 6))
     colors = plt.get_cmap('tab10', len(all_runs_same_index_list))
 
-
+    idx = 0
     for run_name, same_index_list in all_runs_same_index_list.items():
         # Line plot for each run
-        plt.plot(same_index_list, label=run_name+f'; {np.mean(same_index_list):.2f}')
-        # plt.scatter(np.arange(len(same_index_list)), same_index_list, color=colors(idx), alpha=0.8, label=run_name,
-        #             s=20)
+        # plt.plot(same_index_list, label=run_name+f'; {np.mean(same_index_list):.2f}')
+        plt.scatter(np.arange(len(same_index_list)), same_index_list, color=colors(idx), alpha=0.8, label=run_name+f'; {np.mean(same_index_list):.2f}')
+        idx +=1
 
     plt.title("Same Index Amount Distribution for Different Runs")
     plt.xlabel("Index")
@@ -76,7 +91,7 @@ def check(graph_weight_mode=0):
     point_clouds_group = hdf5_file['point_clouds']
     num_point_clouds = len(point_clouds_group)
     normalize_lap = [True, False]
-    noise_size = [0.001, 0.01, 0.1, 1]
+    noise_size = [0, 0.001, 0.01, 0.1, 1]
     all_runs_same_index_list = {}
     for nlap in normalize_lap:
         for std in noise_size:
@@ -102,7 +117,8 @@ def check(graph_weight_mode=0):
                 pcl_size = len(point_cloud)
                 rot = R.random().as_matrix()
                 point_cloud1 = np.matmul(point_cloud, rot.T)
-                noise = np.random.normal(0, 0.001, point_cloud.shape)
+                noise = np.random.normal(0, std, point_cloud.shape)
+                # noise = np.random.normal(0, 0, point_cloud.shape)
                 noisy_point_cloud = point_cloud1 + noise
                 permuted_indices = np.concatenate(([0], (1 + np.random.permutation(pcl_size-1))))
                 noisy_point_cloud = noisy_point_cloud[permuted_indices]
@@ -129,4 +145,10 @@ if __name__ == '__main__':
     check(graph_weight_mode=0)
     check(graph_weight_mode=1)
     check(graph_weight_mode=2)
+    check(graph_weight_mode=3)
+    check(graph_weight_mode=4)
+    check(graph_weight_mode=5)
+    check(graph_weight_mode=3)
+    check(graph_weight_mode=6)
+    check(graph_weight_mode=7)
 
