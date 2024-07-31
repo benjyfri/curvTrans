@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.linalg import eigh
-from plotting_functions import *
+# from plotting_functions import *
 
 def createLap(point_cloud, normalized, graph_weight_mode):
     distances = cdist(point_cloud, point_cloud)
