@@ -36,8 +36,29 @@ def createLap(point_cloud, normalized, graph_weight_mode):
         weights = distances
     elif graph_weight_mode == 7:
         weights = (distances ** 2)
+    elif graph_weight_mode == 8:
+        rbf_weight = (distances ** 2) / 5
+        weights = np.exp(-rbf_weight)
+    elif graph_weight_mode == 9:
+        rbf_weight = (distances ** 2) / 10
+        weights = np.exp(-rbf_weight)
+    elif graph_weight_mode == 10:
+        rbf_weight = (distances ** 2) / 15
+        weights = np.exp(-rbf_weight)
+    elif graph_weight_mode == 11:
+        rbf_weight = (distances ** 2) / 20
+        weights = np.exp(-rbf_weight)
+    elif graph_weight_mode == 12:
+        weights = np.exp(-distances / 5)
+    elif graph_weight_mode == 13:
+        weights = np.exp(-distances / 10)
+    elif graph_weight_mode == 14:
+        weights = np.exp(-distances / 15)
+    elif graph_weight_mode == 15:
+        weights = np.exp(-distances / 20)
 
     column_sums = weights.sum(axis=1)
+    # print(column_sums)
     diag_matrix = np.diag(column_sums)
     laplacian = diag_matrix - weights
 
@@ -151,6 +172,15 @@ if __name__ == '__main__':
     check(graph_weight_mode=2)
     check(graph_weight_mode=3)
     check(graph_weight_mode=4)
+    check(graph_weight_mode=5)
     check(graph_weight_mode=6)
     check(graph_weight_mode=7)
+    check(graph_weight_mode=8)
+    check(graph_weight_mode=9)
+    check(graph_weight_mode=10)
+    check(graph_weight_mode=11)
+    check(graph_weight_mode=12)
+    check(graph_weight_mode=13)
+    check(graph_weight_mode=14)
+    check(graph_weight_mode=15)
 
