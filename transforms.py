@@ -205,8 +205,8 @@ class Resampler:
             elif len(sample['crop_proportion']) == 2:
                 src_size = math.ceil(sample['crop_proportion'][0] * self.num)
                 ref_size = math.ceil(sample['crop_proportion'][1] * self.num)
-                src_size = 717
-                ref_size = 717
+                # src_size = 717
+                # ref_size = 717
             else:
                 raise ValueError('Crop proportion must have 1 or 2 elements')
 
