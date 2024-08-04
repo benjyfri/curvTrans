@@ -10,7 +10,49 @@ from torch.utils.data import Dataset
 import open3d as o3d
 import os,re,sys,json,yaml,random, glob, argparse, torch, pickle
 
+def to_array(tensor):
+    """
+    Conver tensor to array
+    """
+    if(not isinstance(tensor,np.ndarray)):
+        if(tensor.device == torch.device('cpu')):
+            return tensor.numpy()
+        else:
+            return tensor.cpu().numpy()
+    else:
+        return tensor
+def to_o3d_pcd(xyz):
+    """
+    Convert tensor/array to open3d PointCloud
+    xyz:       [N, 3]
+    """
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(to_array(xyz))
+    return pcd
 
+
+def to_tsfm(rot, trans):
+    tsfm = np.eye(4)
+    tsfm[:3, :3] = rot
+    tsfm[:3, 3] = trans.flatten()
+    return tsfm
+
+
+def get_correspondences(src_pcd, tgt_pcd, trans, search_voxel_size, K=None):
+    src_pcd.transform(trans)
+    pcd_tree = o3d.geometry.KDTreeFlann(tgt_pcd)
+
+    correspondences = []
+    for i, point in enumerate(src_pcd.points):
+        [count, idx, _] = pcd_tree.search_radius_vector_3d(point, search_voxel_size)
+        if K is not None:
+            idx = idx[:K]
+        for j in idx:
+            correspondences.append([i, j])
+
+    correspondences = np.array(correspondences)
+    correspondences = torch.from_numpy(correspondences)
+    return correspondences
 def load_config(path):
     """
     Loads config file:
@@ -113,33 +155,3 @@ class IndoorDataset(Dataset):
         
         return src_pcd,tgt_pcd,src_feats,tgt_feats,rot,trans, correspondences, src_pcd, tgt_pcd, torch.ones(1)
 
-    def to_o3d_pcd(xyz):
-        """
-        Convert tensor/array to open3d PointCloud
-        xyz:       [N, 3]
-        """
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(to_array(xyz))
-        return pcd
-
-    def to_tsfm(rot, trans):
-        tsfm = np.eye(4)
-        tsfm[:3, :3] = rot
-        tsfm[:3, 3] = trans.flatten()
-        return tsfm
-
-    def get_correspondences(src_pcd, tgt_pcd, trans, search_voxel_size, K=None):
-        src_pcd.transform(trans)
-        pcd_tree = o3d.geometry.KDTreeFlann(tgt_pcd)
-
-        correspondences = []
-        for i, point in enumerate(src_pcd.points):
-            [count, idx, _] = pcd_tree.search_radius_vector_3d(point, search_voxel_size)
-            if K is not None:
-                idx = idx[:K]
-            for j in idx:
-                correspondences.append([i, j])
-
-        correspondences = np.array(correspondences)
-        correspondences = torch.from_numpy(correspondences)
-        return correspondences
