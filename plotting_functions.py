@@ -14,7 +14,6 @@ from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import cdist
 import random
-from sklearn.neighbors import NearestNeighbors
 import cProfile
 import pstats
 from scipy.spatial import cKDTree
@@ -160,8 +159,8 @@ def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
       point_cloud3 = np.matmul((point_cloud3), rotation.T) + translation
       axis = np.argmin(np.max(point_cloud1, axis=0))
 
-      point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
-      point_cloud3[:, axis] = point_cloud3[:, axis] + 1.5
+      # point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
+      # point_cloud3[:, axis] = point_cloud3[:, axis] + 1.5
 
   # Define a color list for four point clouds
   colors = ['blue', 'orange', 'brown', 'red']
@@ -196,7 +195,7 @@ def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
 
   fig.show()
 
-def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, filename="plot.html", rotation=None, translation=None, title=""):
+def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, filename="plot.html", rotation=None, translation=None, title="", dist_thresh=5):
   """
   Plot four point clouds in an interactive 3D plot with Plotly and save it.
 
@@ -211,14 +210,19 @@ def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
 
   # Define a color list for four point clouds
   colors = ['blue', 'orange', 'brown', 'red']
+  colors = ['blue', 'orange', 'green', 'red']
+
+  nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(point_cloud2);
+  closest_neighbor_dist = nbrs.kneighbors(point_cloud2)[0][:, 1];
+  mean_closest_neighbor_dist = np.mean(closest_neighbor_dist)
 
   if rotation is not None:
-      point_cloud1 = np.matmul((point_cloud1), rotation.T) + translation
-      point_cloud3 = np.matmul((point_cloud3), rotation.T) + translation
+      point_cloud1 = np.matmul((point_cloud1), rotation.T) + translation.squeeze()
+      point_cloud3 = np.matmul((point_cloud3), rotation.T) + translation.squeeze()
       axis = np.argmin(np.max(point_cloud1, axis=0))
 
-      point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
-      point_cloud3[:, axis] = point_cloud3[:, axis] + 1.5
+      # point_cloud1[:, axis] = point_cloud1[:, axis] + 1.5
+      # point_cloud3[:, axis] = point_cloud3[:, axis] + 1.5
 
   # Add traces for each point cloud with corresponding color
   for i, point_cloud in enumerate(
@@ -229,17 +233,25 @@ def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
         name=f'Point Cloud {i+1}'
     ))
 
+  amount_of_corr = len(point_cloud3)
+  count = 0
+  sum = 0
   for i in range(len(point_cloud3)):
-      fig.add_trace(go.Scatter3d(
-          x=[point_cloud3[i, 0], point_cloud4[i, 0]],
-          y=[point_cloud3[i, 1], point_cloud4[i, 1]],
-          z=[point_cloud3[i, 2], point_cloud4[i, 2]],
-          mode='lines', line=dict(color='black', width=2),
-          showlegend=False
-      ))
+      dist = np.linalg.norm(point_cloud3[i]-point_cloud4[i])
+      if dist <= (dist_thresh * mean_closest_neighbor_dist):
+          count+=1
+          sum += dist
+          fig.add_trace(go.Scatter3d(
+              x=[point_cloud3[i, 0], point_cloud4[i, 0]],
+              y=[point_cloud3[i, 1], point_cloud4[i, 1]],
+              z=[point_cloud3[i, 2], point_cloud4[i, 2]],
+              mode='lines', line=dict(color='black', width=2),
+              showlegend=False
+          ))
 
+  avg_dist = (sum / count) if sum>0 else 0
   fig.update_layout(
-      title=title,
+      title=title+f'#corr={amount_of_corr}; #good={count}; dis_threshold={dist_thresh * mean_closest_neighbor_dist:.2f}; avg_dist={avg_dist:.2f}',
       scene=dict(
           xaxis=dict(title='X'),
           yaxis=dict(title='Y'),
@@ -330,6 +342,7 @@ def plotWorst(worst_losses, model_name="", dir=r"./"):
         chosen_points_1 = worst_loss_variables['chosen_points_1']
         chosen_points_2 = worst_loss_variables['chosen_points_2']
         rotation_matrix = worst_loss_variables['rotation_matrix']
+        translation = worst_loss_variables['translation']
         best_rotation = worst_loss_variables['best_rotation']
         best_translation = worst_loss_variables['best_translation']
         All_pairs_1 = worst_loss_variables['All_pairs_1']
@@ -347,6 +360,8 @@ def plotWorst(worst_losses, model_name="", dir=r"./"):
             chosen_points_2 = chosen_points_2.detach().cpu().numpy()
         if isinstance(rotation_matrix, torch.Tensor):
             rotation_matrix = rotation_matrix.detach().cpu().numpy()
+        if isinstance(translation, torch.Tensor):
+            translation = translation.detach().cpu().numpy()
         if isinstance(best_rotation, torch.Tensor):
             best_rotation = best_rotation.detach().cpu().numpy()
         if isinstance(best_translation, torch.Tensor):
@@ -358,8 +373,8 @@ def plotWorst(worst_losses, model_name="", dir=r"./"):
         if isinstance(pcl_id, torch.Tensor):
             pcl_id = pcl_id.detach().cpu().numpy()
         save_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, title="", filename=os.path.join(dir, model_name+f"_{failed_ransac_str}pcl_{pcl_id}_{loss:.3f}_orig_{count}_loss.html"))
-        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=os.path.join(dir, model_name+f"_{failed_ransac_str}pcl_{pcl_id}_{loss:.3f}_correspondence_{count}_loss.html"), rotation=rotation_matrix, translation=best_translation)
-        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, All_pairs_1, All_pairs_2, filename=os.path.join(dir, model_name+f"_{failed_ransac_str}pcl_{pcl_id}_{loss:.3f}_allpairs_{count}_loss.html"), rotation=rotation_matrix, translation=best_translation)
+        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, chosen_points_1, chosen_points_2, filename=os.path.join(dir, model_name+f"_{failed_ransac_str}pcl_{pcl_id}_{loss:.3f}_correspondence_{count}_loss.html"), rotation=rotation_matrix, translation=translation, dist_thresh=100)
+        save_4_point_clouds(noisy_pointcloud_1, noisy_pointcloud_2, All_pairs_1, All_pairs_2, filename=os.path.join(dir, model_name+f"_{failed_ransac_str}pcl_{pcl_id}_{loss:.3f}_allpairs_{count}_loss.html"), rotation=rotation_matrix, translation=translation)
 
         transformed_points1 = np.matmul((noisy_pointcloud_1), best_rotation.T) + best_translation
         r_pred_euler_deg = dcm2euler(np.array([best_rotation]), seq='xyz')

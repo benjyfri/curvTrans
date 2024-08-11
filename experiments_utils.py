@@ -149,9 +149,9 @@ def checkSyntheticData():
     print(f'z diameter: {np.mean(diameter_list_z)}')
 def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_factor=None, rgb=False):
     pcls, label = load_data()
-    # shapes = [86, 174, 51]
-    shapes = [51, 54, 86, 174, 179]
-    # shapes = range(50,60)
+    shapes = [86, 174, 51]
+    shapes = [86, 162, 174, 176, 179]
+    # shapes = [51, 54, 86, 174, 179]
     for k in shapes:
         pointcloud = pcls[k][:]
         # bin_file = "000098.bin"
@@ -161,7 +161,7 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_fact
         colors = classifyPoints(model_name=model_name, pcl_src=pointcloud, pcl_interest=pointcloud,
                        args_shape=args_shape, scaling_factor=scaling_factor)
 
-        colors = colors.detach().cpu().numpy()
+        colors = colors.detach().cpu().numpy().squeeze()
         colors = colors[:,:4]
         layout = go.Layout(
             title=f"Point Cloud with Embedding-based Colors {k}",
@@ -260,7 +260,7 @@ def view_stabiity(cls_args=None,num_worst_losses = 3, scaling_factor=None, scale
                                     num_of_ransac_iter=100, shapes=[86, 162, 174, 176, 179], plot_graphs=0, create_pcls_func=None, given_pcls=None):
     pcls, label = load_data()
     shapes = [51,54, 86, 174]
-    shapes = [51]
+    # shapes = [51]
     for k in shapes:
         if given_pcls is None:
             pointcloud = pcls[k][:]
@@ -288,8 +288,8 @@ def view_stabiity(cls_args=None,num_worst_losses = 3, scaling_factor=None, scale
         emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1, args_shape=cls_args, scaling_factor=scaling_factor)
         emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2, args_shape=cls_args, scaling_factor=scaling_factor)
 
-        emb_1 = emb_1.detach().cpu().numpy()
-        emb_2 = emb_2.detach().cpu().numpy()
+        emb_1 = emb_1.detach().cpu().numpy().squeeze()
+        emb_2 = emb_2.detach().cpu().numpy().squeeze()
 
         plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2, chosen_point)
         # multiscale embeddings
@@ -308,8 +308,8 @@ def view_stabiity(cls_args=None,num_worst_losses = 3, scaling_factor=None, scale
                                               pcl_interest=noisy_pointcloud_2, args_shape=cls_args,
                                               scaling_factor=scaling_factor)
 
-                global_emb_1 = global_emb_1.detach().cpu().numpy()
-                global_emb_2 = global_emb_2.detach().cpu().numpy()
+                global_emb_1 = global_emb_1.detach().cpu().numpy().squeeze()
+                global_emb_2 = global_emb_2.detach().cpu().numpy().squeeze()
                 # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, global_emb_1, global_emb_2)
                 emb_1 = np.hstack((emb_1, global_emb_1))
                 emb_2 = np.hstack((emb_2, global_emb_2))
@@ -419,24 +419,134 @@ def read_bin_file(bin_file):
     # We only need the first three columns (x, y, z)
     return points[:, :3]
 
-def find_closest_points(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3):
+def find_closest_points(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3, n_neighbors=1):
     # classification_1 = np.argmax(embeddings1[:,:4], axis=1)
     # classification_2 = np.argmax(embeddings2[:,:4], axis=1)
+    size_1 = embeddings1.shape[0]
+    size_2 = embeddings2.shape[0]
+    # Initialize NearestNeighbors instance
+    nbrs = NearestNeighbors(n_neighbors=n_neighbors, algorithm='auto').fit(embeddings2)
 
+    # Find the indices and distances of the closest points in embeddings2 for each point in embeddings1
+    distances, indices = nbrs.kneighbors(embeddings1)
+    appearance_1_nn = np.bincount(indices[:, 0], minlength=len(embeddings2))
+
+    mask = (appearance_1_nn >= max_non_unique_correspondences)
+    distances[:, 0][mask[indices[:, 0]]] = np.inf
+    smallest_distances_indices = np.argsort(distances.flatten())
+    first_inf_index = np.where(distances.flatten()[smallest_distances_indices] == np.inf)[0][0]
+    num_of_pairs_2_take = min(num_of_pairs, first_inf_index)
+    smallest_distances_indices= smallest_distances_indices[:num_of_pairs_2_take]
+    emb1_indices = smallest_distances_indices.squeeze() % size_1
+    emb2_indices = (indices.flatten()[smallest_distances_indices].squeeze()) % size_2
+    return emb1_indices, emb2_indices
+def find_closest_points_with_dup(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3, n_neighbors=1):
+    size_1 = embeddings1.shape[0]
+    size_2 = embeddings2.shape[0]
     # Initialize NearestNeighbors instance
     nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
 
     # Find the indices and distances of the closest points in embeddings2 for each point in embeddings1
     distances, indices = nbrs.kneighbors(embeddings1)
-    # duplicates = np.zeros(len(embeddings1))
-    # for i,index in enumerate(indices):
-    #     duplicates[index] += 1
-    # distances[((duplicates >= max_non_unique_correspondences)[indices])] = np.inf
-    # same_class = (classification_1==(classification_2[indices].squeeze()))
-    # distances[~same_class] = np.inf
-    smallest_distances_indices = np.argsort(distances.flatten())[:num_of_pairs]
+
+    smallest_distances_indices = np.argsort(distances.flatten())
+    # dist_sorted = distances[smallest_distances_indices]
+    smallest_distances_indices= smallest_distances_indices[:num_of_pairs]
+    emb1_indices = smallest_distances_indices.squeeze() % size_1
+    emb2_indices = (indices.flatten()[smallest_distances_indices].squeeze()) % size_2
+    return emb1_indices, emb2_indices#, dist_sorted
+
+def min_max_scale(distances):
+    min_val = np.min(distances)
+    max_val = np.max(distances)
+    return (distances - min_val) / (max_val - min_val)
+def z_score_standardize(distances):
+    mean = np.mean(distances)
+    std = np.std(distances)
+    return (distances - mean) / std
+def find_closest_points_best_of_resolutions(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3):
+    # Initialize NearestNeighbors instances
+    nbrs_1 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, :4])
+    nbrs_5 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, 4:8])
+    nbrs_10 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, 8:12])
+    nbrs_15 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, 12:])
+    nbrs_1_5 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, :8])
+    nbrs_5_10 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, 4:12])
+    nbrs_5_15 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(np.column_stack((embeddings2[:, 4:8], embeddings2[:, 12:])))
+    nbrs_1_10 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(np.column_stack((embeddings2[:, :4], embeddings2[:, 8:12])))
+    nbrs_1_15 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(np.column_stack((embeddings2[:, :4], embeddings2[:, 12:])))
+    nbrs_10_15 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:,8:])
+    nbrs_1_5_10_15 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
+
+    # Find the distances and indices of the closest points in embeddings2 for each point in embeddings1
+    distances_1, indices_1 = nbrs_1.kneighbors(embeddings1[:, :4])
+    distances_5, indices_5 = nbrs_5.kneighbors(embeddings1[:, 4:8])
+    distances_10, indices_10 = nbrs_10.kneighbors(embeddings1[:, 8:12])
+    distances_15, indices_15 = nbrs_15.kneighbors(embeddings1[:, 12:])
+    distances_1_5, indices_1_5 = nbrs_1_5.kneighbors(embeddings1[:, :8])
+    distances_1_10, indices_1_10 = nbrs_1_10.kneighbors(np.column_stack((embeddings1[:, :4], embeddings1[:, 8:12])))
+    distances_5_15, indices_5_15 = nbrs_5_15.kneighbors(np.column_stack((embeddings1[:, 4:8], embeddings1[:, 12:])))
+    distances_5_10, indices_5_10 = nbrs_5_10.kneighbors(embeddings1[:, 4:12])
+    distances_1_15, indices_1_15 = nbrs_1_15.kneighbors(np.column_stack((embeddings1[:, :4], embeddings1[:, 12:])))
+    distances_1_5_10_15, indices_1_5_10_15 = nbrs_1_5_10_15.kneighbors(embeddings1)
+    distances_10_15, indices_10_15 = nbrs_10_15.kneighbors(embeddings1[:,8:])
+
+    # # Normalize the distances
+    # distances_5_15 /= np.sqrt(8)
+    # distances_5_10 /= np.sqrt(8)
+    # distances_1 /= np.sqrt(4)
+    # distances_5 /= np.sqrt(4)
+    # distances_10 /= np.sqrt(4)
+    # distances_15 /= np.sqrt(4)
+    # distances_1_5 /= np.sqrt(8)
+    # distances_1_10 /= np.sqrt(8)
+    # distances_1_15 /= np.sqrt(8)
+    # distances_1_5_10_15 /= np.sqrt(16)
+
+    # Normalize the distances
+    distances_5_15 = z_score_standardize(distances_5_15)
+    distances_5_10 = z_score_standardize(distances_5_10)
+    distances_1 = z_score_standardize(distances_1)
+    distances_5 = z_score_standardize(distances_5)
+    distances_10 = z_score_standardize(distances_10)
+    distances_15 = z_score_standardize(distances_15)
+    distances_1_5 = z_score_standardize(distances_1_5)
+    distances_1_10 = z_score_standardize(distances_1_10)
+    distances_1_15 = z_score_standardize(distances_1_15)
+    distances_10_15 = z_score_standardize(distances_10_15)
+    distances_1_5_10_15 = z_score_standardize(distances_1_5_10_15)
+
+    # # Normalize the distances
+    # distances_5_15 = min_max_scale(distances_5_15)
+    # distances_5_10 = min_max_scale(distances_5_10)
+    # distances_1 = min_max_scale(distances_1)
+    # distances_5 = min_max_scale(distances_5)
+    # distances_10 = min_max_scale(distances_10)
+    # distances_15 = min_max_scale(distances_15)
+    # distances_1_5 = min_max_scale(distances_1_5)
+    # distances_1_10 = min_max_scale(distances_1_10)
+    # distances_1_15 = min_max_scale(distances_1_15)
+    # distances_1_5_10_15 = min_max_scale(distances_1_5_10_15)
+
+    # Combine all distances and indices
+    # all_distances = np.concatenate([distances_1_5, distances_1_10, distances_1_15, distances_1_5_10_15, distances_5_10,distances_5_15], axis=1)
+    # all_indices = np.concatenate([indices_1_5, indices_1_10, indices_1_15, indices_1_5_10_15, indices_5_10, indices_5_15], axis=1)
+
+    # all_distances = np.concatenate([distances_1,distances_5,distances_10,distances_15, distances_1_5, distances_1_5_10_15], axis=1)
+    # all_indices = np.concatenate([indices_1,indices_5,indices_10,indices_15, indices_1_5, indices_1_5_10_15], axis=1)
+    all_distances = np.concatenate([distances_1_5, distances_10_15, distances_1_5_10_15], axis=1)
+    all_indices = np.concatenate([indices_1_5, indices_10_15, indices_1_5_10_15], axis=1)
+
+    # Find the minimum distances and their corresponding indices
+    min_distances = np.min(all_distances, axis=1)
+    min_indices = np.argmin(all_distances, axis=1)
+    final_indices = all_indices[np.arange(all_distances.shape[0]), min_indices]
+
+    # Get the indices of the smallest distances
+    smallest_distances_indices = np.argsort(min_distances.flatten())[:num_of_pairs]
     emb1_indices = smallest_distances_indices.squeeze()
-    emb2_indices = indices[smallest_distances_indices].squeeze()
+    emb2_indices = final_indices[smallest_distances_indices].squeeze()
+
     return emb1_indices, emb2_indices
 
 

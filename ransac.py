@@ -156,33 +156,86 @@ def find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
         return None
     last_index = np.random.choice(valid_last_indices)
     return [second_index, last_index]
-def ransac_o3d(pos_s, pos_t, feat_s, feat_t, distance_threshold=0.1):
-  pcd_s = o3d.geometry.PointCloud()
-  pcd_s.points = o3d.utility.Vector3dVector(pos_s.numpy())
-  pcd_t = o3d.geometry.PointCloud()
-  pcd_t.points = o3d.utility.Vector3dVector(pos_t.numpy())
+def to_o3d_pcd(pcd):
+    '''
+    Transfer a point cloud of numpy.ndarray to open3d point cloud
+    :param pcd: point cloud of numpy.ndarray in shape[N, 3]
+    :return: open3d.geometry.PointCloud()
+    '''
+    pcd_ = o3d.geometry.PointCloud()
+    pcd_.points = o3d.utility.Vector3dVector(pcd)
+    return pcd_
+def ransac_pose_estimation_correspondences(src_pcd, tgt_pcd, correspondences, mutual=False, distance_threshold=0.05,
+                                           ransac_n=3):
+    '''
+    Run RANSAC estimation based on input correspondences
+    :param src_pcd:
+    :param tgt_pcd:
+    :param correspondences:
+    :param mutual:
+    :param distance_threshold:
+    :param ransac_n:
+    :return:
+    '''
 
-  f_s = o3d.pipelines.registration.Feature()
-  f_s.data = feat_s.T.numpy()
-  f_t = o3d.pipelines.registration.Feature()
-  f_t.data = feat_t.T.numpy()
-  result = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
-      source=pcd_s, target=pcd_t, source_feature=f_s, target_feature=f_t,
-      mutual_filter=True,
-      max_correspondence_distance=distance_threshold,
-      estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
-      ransac_n=4,
-      checkers=[o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
-       o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold)],
-      criteria=o3d.pipelines.registration.RANSACConvergenceCriteria(4000000, 500))
-  return torch.from_numpy(result.transformation).float()
-def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_dist=0.05, max_thresh=1):
+    # ransac_n = correspondences.shape[0]
+
+    if mutual:
+        raise NotImplementedError
+    else:
+        # src_pcd = src_pcd.cuda()
+        # tgt_pcd = tgt_pcd.cuda()
+        # correspondences = correspondences.cuda()
+        src_pcd = to_o3d_pcd((src_pcd))
+        tgt_pcd = to_o3d_pcd((tgt_pcd))
+        correspondences = o3d.utility.Vector2iVector((correspondences))
+
+        result_ransac = o3d.pipelines.registration.registration_ransac_based_on_correspondence(src_pcd, tgt_pcd,
+                                                                                               correspondences,
+                                                                                               distance_threshold,
+                                                                                               o3d.pipelines.registration.TransformationEstimationPointToPoint(
+                                                                                                   False), ransac_n, [
+                                                                                                   o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(
+                                                                                                       0.9),
+                                                                                                   o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(
+                                                                                                       distance_threshold)],
+                                                                                               o3d.pipelines.registration.RANSACConvergenceCriteria(
+                                                                                                   50000, 1000))
+    return result_ransac.transformation,[np.array(result_ransac.correspondence_set)[:,0], np.array(result_ransac.correspondence_set)[:,1]]
+
+def ransac_pose_estimation_features(src_pcd, tgt_pcd, source_feature, tgt_feature, mutual=False, distance_threshold=0.05,
+                                           ransac_n=3):
+
+    if mutual:
+        raise NotImplementedError
+    else:
+        src_pcd = to_o3d_pcd((src_pcd))
+        tgt_pcd = to_o3d_pcd((tgt_pcd))
+        reg_module = o3d.pipelines.registration
+        pcd1_feat = reg_module.Feature()
+        pcd1_feat.data = source_feature
+        pcd2_feat = reg_module.Feature()
+        pcd2_feat.data = tgt_feature
+
+        result_ransac = reg_module.registration_ransac_based_on_feature_matching(
+            src_pcd, tgt_pcd, pcd1_feat, pcd2_feat, mutual, distance_threshold,
+            reg_module.TransformationEstimationPointToPoint(False), ransac_n, [
+                reg_module.CorrespondenceCheckerBasedOnEdgeLength(0.9),
+                reg_module.CorrespondenceCheckerBasedOnDistance(distance_threshold)],
+            reg_module.RANSACConvergenceCriteria(50000, 1000)
+        )
+
+    return result_ransac.transformation,[np.array(result_ransac.correspondence_set)[:,0], np.array(result_ransac.correspondence_set)[:,1]]
+
+def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_dist=0.05, max_thresh=1, sample=None):
     # failing badly....
     if threshold > max_thresh:
         print(f'RANSAC FAIL!')
+        print(f'threshold: {threshold}; max_thresh: {max_thresh}')
         return None, None, 0, 1000, [np.array([[1,1,1]]),np.array([[1,1,1]])], threshold
     N = data1.shape[0]
     best_inliers = None
+    inliers1 = None
     corres = None
     best_rotation = None
     best_translation = None
@@ -195,15 +248,25 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_
         # Randomly sample 3 corresponding points
         indices = np.arange(N)
         dist_threshold = nn1_dist
-        first_index = np.random.choice(indices)
-        remaining_indices = indices[indices != first_index]
-        remaining_indices = np.random.permutation(remaining_indices)
-        tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
+        for i in range(100):
+            # first_index = np.random.choice(indices)
+            # remaining_indices = indices[indices != first_index]
+            # remaining_indices = np.random.permutation(remaining_indices)
+            # tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
+            # if tri_indices is not None and len(set([first_index, tri_indices[0], tri_indices[1]]))==3:
+            #     break
+            tri_indices = np.random.choice(N, size=3, replace=False)
+            first_index = tri_indices[0]
+            tri_indices = tri_indices[1:]
+            if tri_indices is not None and len(set(tri_indices))==3:
+                break
         if tri_indices is None:
             continue
 
         [second_index, last_index] = tri_indices
         indices = np.array([first_index, second_index, last_index])
+
+        # indices = np.random.choice(indices,3 )
         src_points = data1[indices]
         dst_points = data2[indices]
 
@@ -214,32 +277,55 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_
         # Estimate rotation and translation
         rotation, translation = estimate_rigid_transform(src_points, dst_points)
 
-        if np.max(np.abs(translation)) > 0.5:
+        if np.max(np.abs(translation)) > 0.75:
             continue
         r_pred_euler_deg = dcm2euler(np.array([rotation]), seq='xyz')
         # check if magnitude of movement is too big for current setup
+        if np.max((r_pred_euler_deg)) > 0 :
+            continue
         if np.max(np.abs(r_pred_euler_deg)) > 45:
             continue
         # Find inliers
         inliers1, inliers2 = find_inliers(src_centered, dst_centered, rotation,translation, threshold)
 
+        if sample is not None:
+            best_rot_trans = np.hstack((rotation, translation.reshape(3, 1)))
+            metrics = compute_metrics({key: torch.tensor(np.expand_dims(val, axis=0)) for key, val in sample.items()},
+                                      torch.tensor(np.expand_dims(best_rot_trans, axis=0), dtype=torch.float32))
+            rot_loss = metrics['err_r_deg']
+            if rot_loss < 5:
+                print(f'YAY!! rot loss is: {rot_loss}; inliers={len(inliers1)}')
+
         # Update best model if we have enough inliers
-        if len(inliers1) >= min_inliers and (best_inliers is None or len(inliers1) > len(best_inliers)):
+        if len(inliers1) >= min_inliers and ((best_inliers is None) or (len(inliers1) > len(best_inliers))):
             best_inliers = inliers1
             corres = [src_centered[inliers1], dst_centered[inliers2]]
             best_iter = iteration
             best_rotation = rotation
             best_translation = translation
     if best_inliers is None:
-        return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold * 2, min_inliers=min_inliers)
+        res = ransac(data1, data2, max_iterations=max_iterations, threshold=threshold * 2, min_inliers=min_inliers, max_thresh=max_thresh)
+        if res[0] is None:
+            if inliers1 is not None:
+                return best_rotation, best_translation, 3, best_iter, [src_centered[inliers1], dst_centered[inliers2]], threshold
+            return None, None, 3, 1, [np.array([[1,1,1]]),np.array([[1,1,1]])], threshold
+        return res
 
     # improve registration with LS
     highest_consensus = len(best_inliers)
     while (True):
         rotation, translation = estimate_rigid_transform(corres[0], corres[1])
         #If LS smoothing results in very different registration which is out of range rerun
-        if (np.max(np.abs(translation)) > 0.5) or (np.max(np.abs(dcm2euler(np.array([rotation]), seq='xyz'))) > 45):
-            return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold * 2, min_inliers=min_inliers)
+        r_pred_euler_deg = dcm2euler(np.array([rotation]), seq='xyz')
+        # check if magnitude of movement is too big for current setup
+        if (np.max(np.abs(translation)) > 0.75) or (np.max((r_pred_euler_deg)) > 0) or (np.max(np.abs(r_pred_euler_deg)) > 45):
+            # return best_rotation, best_translation, len(best_inliers), best_iter, corres, threshold
+            res =  ransac(data1, data2, max_iterations=max_iterations, threshold=threshold * 2, min_inliers=min_inliers, max_thresh=max_thresh)
+            if res[0] is None:
+                return best_rotation, best_translation, len(best_inliers), best_iter, corres, threshold
+            return res
+        # if (np.max(np.abs(translation)) > 0.5) or (np.max(np.abs(dcm2euler(np.array([rotation]), seq='xyz'))) > 45):
+        #     return ransac(data1, data2, max_iterations=max_iterations, threshold=threshold * 2, min_inliers=min_inliers)
         best_rotation = rotation
         best_translation = translation
         inliers1, inliers2 = find_inliers(src_centered, dst_centered, best_rotation, best_translation,
@@ -1004,7 +1090,7 @@ def test_multi_scale_using_embedding_predator_old(cls_args=None,num_worst_losses
     return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
 
 def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
-                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4):
+                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4):
     worst_losses = [(0, None)] * num_worst_losses
     losses_rot_list = []
     losses_trans_list = []
@@ -1013,6 +1099,7 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
     final_inliers_list = []
     iter_2_ransac_convergence = []
     combined_dict = {}
+    # test_dataset = test_predator_data(partial_p_keep= [0.5, 0.5])
     test_dataset = test_predator_data()
     size = len(test_dataset)
     for i in range(size):
@@ -1054,46 +1141,92 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
                 emb_1 = np.hstack((emb_1, global_emb_1))
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
-
-        emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-        # emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+        if nn_mode==1:
+            emb1_indices, emb2_indices = find_closest_points_best_of_resolutions(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        if nn_mode == 2:
+            emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        if nn_mode == 3:
+            emb1_indices, emb2_indices = find_closest_points_with_dup(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take))
+        if nn_mode == 4:
+            emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
 
-        nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(centered_points_1);
-        closest_neighbor_dist = nbrs.kneighbors(centered_points_1)[0][:, 1];
+        nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(chosen_pcl_1);
+        closest_neighbor_dist = nbrs.kneighbors(chosen_pcl_1)[0][:, 1];
         mean_closest_neighbor_dist = np.mean(closest_neighbor_dist)
-
-        best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(
-            centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
-            threshold=mean_closest_neighbor_dist,
-            min_inliers=3, nn1_dist=mean_closest_neighbor_dist, max_thresh=(16 * mean_closest_neighbor_dist))
+        # mean_closest_neighbor_dist *= 5
 
 
-        # best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = rand_ransac(
-        #     src_pcd, tgt_pcd, max_iterations=num_of_ransac_iter,
-        #     threshold=0.1,
-        #     min_inliers=(int)((amount_of_interest_points * pct_of_points_2_take) // 10), rot=rot, trans=trans)
+        # o3d_ransace_corres_with_feats_transformation, corres = ransac_pose_estimation_features(chosen_pcl_1, chosen_pcl_2, emb_1, emb_2, mutual=False, distance_threshold=mean_closest_neighbor_dist, ransac_n=3)
 
-        # failed in Ransac
         failed_ransac = False
-        if best_rotation is None:
-            failed_ransac = True
-            best_rotation = np.eye(3, dtype=np.float32)
-            best_translation = np.zeros((3,), dtype=np.float32)
-        final_inliers_list.append(best_num_of_inliers)
-        iter_2_ransac_convergence.append(best_iter)
+        o3d_successful = False
+        # o3d_successful = True
+        # for _ in range(5):
+        #     o3d_ransace_corres_with_paris_transformation, corres = ransac_pose_estimation_correspondences(chosen_pcl_1,
+        #                                                                                                   chosen_pcl_2,
+        #                                                                                                   (np.vstack((
+        #                                                                                                              emb1_indices,
+        #                                                                                                              emb2_indices))).T,
+        #                                                                                                   mutual=False,
+        #                                                                                                   distance_threshold=mean_closest_neighbor_dist,
+        #                                                                                                   ransac_n=3)
+        #     corres[0] = chosen_pcl_1[corres[0]]
+        #     corres[1] = chosen_pcl_2[corres[1]]
+        #     o3d_successful = True
+        #     best_translation = o3d_ransace_corres_with_paris_transformation[:3, 3]
+        #     if np.max(np.abs(best_translation)) > 0.75:
+        #         o3d_successful = False
+        #     if o3d_successful == True:
+        #         best_rotation = o3d_ransace_corres_with_paris_transformation[:3, :3]
+        #         r_pred_euler_deg = dcm2euler(np.array([best_rotation]), seq='xyz')
+        #         # check if magnitude of movement is too big for current setup
+        #         if np.max((r_pred_euler_deg)) >= 0 :
+        #             o3d_successful = False
+        #         if np.max(np.abs(r_pred_euler_deg)) > 45:
+        #             o3d_successful = False
+        #     if o3d_successful == True:
+        #         break
+        print(o3d_successful)
+        # print(o3d_successful)
+        if o3d_successful == False:
+            best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(
+                centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
+                threshold=mean_closest_neighbor_dist, sample=sample,
+                min_inliers=3, nn1_dist=mean_closest_neighbor_dist, max_thresh=(8 * mean_closest_neighbor_dist))
+            # failed in Ransac
+            if best_rotation is None:
+                failed_ransac = True
+                best_rotation = np.eye(3, dtype=np.float32)
+                best_translation = np.zeros((3,), dtype=np.float32)
+
+        # final_inliers_list.append(best_num_of_inliers)
+        # iter_2_ransac_convergence.append(best_iter)
 
         # transformed_points1 = np.matmul(src_pcd, best_rotation.T) + best_translation.squeeze()
         loss = np.mean(((rot @ best_rotation.T) - np.eye(3)) ** 2)
         losses_rot_list.append(loss)
         losses_trans_list.append(np.linalg.norm(trans - best_translation))
 
+        best_rot_trans = np.hstack((best_rotation, best_translation.reshape(3, 1)))
+        metrics = compute_metrics({key: torch.tensor(np.expand_dims(val, axis=0)) for key, val in sample.items()},
+                                  torch.tensor(np.expand_dims(best_rot_trans, axis=0), dtype=torch.float32))
+        if len(combined_dict) > 0:
+            for key in metrics.keys():
+                combined_dict[key] = np.concatenate((combined_dict[key], metrics[key]))
+        else:
+            combined_dict = metrics
+
+        print(final_threshold)
+        print(metrics['err_r_deg'][0])
+        print(best_num_of_inliers)
+        print(f'++++')
         # Update the worst losses list
         index_of_smallest_loss = np.argmin([worst_losses[i][0] for i in range(len(worst_losses))])
         smallest_loss = worst_losses[index_of_smallest_loss][0]
-        if loss > smallest_loss:
-            worst_losses[index_of_smallest_loss] = (loss, {
+        if metrics['err_r_deg'][0] > smallest_loss:
+            worst_losses[index_of_smallest_loss] = (metrics['err_r_deg'][0], {
                 'noisy_pointcloud_1': src_pcd,
                 'noisy_pointcloud_2': tgt_pcd,
                 'chosen_points_1': corres[0],
@@ -1103,16 +1236,11 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
                 'failed_ransac': failed_ransac,
                 'pcl_id': i,
                 'rotation_matrix': rot,
+                'translation': trans,
                 'best_rotation': best_rotation,
                 'best_translation': best_translation
             })
-        best_rot_trans = np.hstack((best_rotation, best_translation.reshape(3, 1)))
-        metrics = compute_metrics({key: torch.tensor(np.expand_dims(val, axis=0)) for key,val in sample.items()}, torch.tensor(np.expand_dims(best_rot_trans, axis=0)))
-        if len(combined_dict) > 0:
-            for key in metrics.keys():
-                combined_dict[key] = np.concatenate(( combined_dict[key] , metrics[key]))
-        else:
-            combined_dict = metrics
+
 
     return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
 
@@ -1131,15 +1259,15 @@ def test_embedding_dist_predator(cls_args=None,num_worst_losses = 3, scaling_fac
     fifty_pct_mean_dist_list = []
     ten_pct_median_dist_list = []
 
-    test_dataset = test_predator_data(matching=True)
+    test_dataset = test_predator_data(matching=True, partial_p_keep=[1.0, 1.0])
     size = len(test_dataset)
     for i in range(size):
-        # if i > 3:
-        #     break
+        if i > 1:
+            break
         if i%10 ==0:
             print(f'------------{i}------------')
 
-        data = test_dataset.__getitem__(i)
+        data = test_dataset.__getitem__(162)
         src_pcd, tgt_pcd, rot, trans, sample, matching_inds = data['src_pcd'], data['tgt_pcd'], data['rot'], data['trans'], data['sample'], data['matching_inds']
         matching_inds = matching_inds.detach().cpu().numpy()
 
@@ -1176,20 +1304,34 @@ def test_embedding_dist_predator(cls_args=None,num_worst_losses = 3, scaling_fac
         chosen_rotated_1 = (chosen_pcl_1 @ rot.T) + trans.squeeze()
         xyz1_indices, xyz2_indices = find_closest_points_best_buddy(chosen_rotated_1, chosen_pcl_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
 
-
-        emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-        # emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_neighbors=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+        # emb1_indices, emb2_indices = find_closest_points_best_of_resolutions(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), n_neighbors=1)
+        # emb1_indices, emb2_indices, dist_emb = find_closest_points_with_dup(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take))
+        # emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points))
 
         overlapping_chosen_1, ind1, ind2 = np.intersect1d(xyz1_indices, emb1_indices, return_indices=True)
         bbudies_pairings = np.vstack((xyz1_indices[ind1], xyz2_indices[ind1])).T
         overlap_emb_pairings = np.vstack((emb1_indices[ind2],emb2_indices[ind2])).T
-        # plot_4_point_clouds(chosen_pcl_1, chosen_pcl_2, chosen_pcl_1[bbudies_pairings[:, 0]],
-        #                     chosen_pcl_2[bbudies_pairings[:, 1]], rot, trans[:, 0], "real pairings")
-        # plot_4_point_clouds(chosen_pcl_1, chosen_pcl_2, chosen_pcl_1[overlap_emb_pairings[:, 0]],
-        #                     chosen_pcl_2[overlap_emb_pairings[:, 1]], rot, trans[:, 0], "emb pairings")
+        plot_4_point_clouds(chosen_pcl_1, chosen_pcl_2, chosen_pcl_1[bbudies_pairings[:, 0]],
+                            chosen_pcl_2[bbudies_pairings[:, 1]], rot, trans[:, 0], "real pairings")
+        plot_4_point_clouds(chosen_pcl_1, chosen_pcl_2, chosen_pcl_1[overlap_emb_pairings[:, 0]],
+                            chosen_pcl_2[overlap_emb_pairings[:, 1]], rot, trans[:, 0], "emb pairings")
         exact_match = [((x[0]==y[0]) and (x[1]==y[1])) for x,y in zip(bbudies_pairings[bbudies_pairings[:,0].argsort()], overlap_emb_pairings[overlap_emb_pairings[:,0].argsort()])]
         num_exact_matches = np.count_nonzero(exact_match)
         distance_2_real_pairing = np.array([(np.linalg.norm(chosen_pcl_2[x[1]]-chosen_pcl_2[y[1]])) for x,y in zip(bbudies_pairings[bbudies_pairings[:,0].argsort()], overlap_emb_pairings[overlap_emb_pairings[:,0].argsort()])])
+
+
+        emb_dist_emb = np.linalg.norm(emb_1[emb1_indices[ind2]] - emb_2[emb2_indices[ind2]], axis=1)
+        # Create scatter plot
+        plt.scatter(emb_dist_emb, distance_2_real_pairing)
+
+        # Add title and labels
+        plt.title('Scatter Plot Example')
+        plt.xlabel('emb dist')
+        plt.ylabel('geo dist')
+
+        # Show plot
+        plt.show()
         mean_dist = np.mean(distance_2_real_pairing)
         # median_dist = np.median(distance_2_real_pairing)
         ten_pct_smallest_dist = distance_2_real_pairing[(distance_2_real_pairing <= np.percentile(distance_2_real_pairing, 10))]
@@ -1228,17 +1370,17 @@ def test_embedding_dist_predator(cls_args=None,num_worst_losses = 3, scaling_fac
 
     plt.figure(figsize=(12, 8))
 
-    plt.plot(mean_dist_list, label='mean_dist_2_real_pairing')
+    plt.plot(mean_dist_list, label=f'mean_dist_2_real_pairing {np.mean(mean_dist_list):.2f}')
     # plt.plot(median_dist_list, label='median_dist')
     # plt.plot(mean_distance_list, label='mean_dist_orig')
     # plt.plot(median_distance_list, label='median_distance')
-    plt.plot(max_distance_list, label='shape size')
-    plt.plot(ten_pct_mean_dist_list, label='10%_mean_dist')
-    plt.plot(twenty_pct_mean_dist_list, label='20%_mean_dist')
-    plt.plot(thirty_pct_mean_dist_list, label='30%_mean_dist')
-    plt.plot(fifty_pct_mean_dist_list, label='50%_mean_dist')
+    plt.plot(max_distance_list, label=f'shape size {np.mean(max_distance_list):.2f}')
+    plt.plot(ten_pct_mean_dist_list, label=f'10%_mean_dist {np.mean(ten_pct_mean_dist_list):.2f}')
+    plt.plot(twenty_pct_mean_dist_list, label=f'20%_mean_dist {np.mean(twenty_pct_mean_dist_list):.2f}')
+    plt.plot(thirty_pct_mean_dist_list, label=f'30%_mean_dist {np.mean(thirty_pct_mean_dist_list):.2f}')
+    plt.plot(fifty_pct_mean_dist_list, label=f'50%_mean_dist {np.mean(fifty_pct_mean_dist_list):.2f}')
     # plt.plot(ten_pct_median_dist_list, label='10%_median_dist')
-    plt.plot(mean_closest_neighbor_dist_list, label='mean_1NN_dist')
+    plt.plot(mean_closest_neighbor_dist_list, label=f'mean_1NN_dist {np.mean(mean_closest_neighbor_dist_list):.2f}')
     # plt.plot(median_closest_neighbor_dist_list, label='median_closest_neighbor_dist')
 
     plt.title(f'Distances Over Samples; mean_10% = {np.mean(ten_pct_mean_dist_list):.2f}')
@@ -1248,28 +1390,7 @@ def test_embedding_dist_predator(cls_args=None,num_worst_losses = 3, scaling_fac
     plt.grid(True)
     plt.tight_layout()
     plt.show()
-    # # Create a single plot with all data
-    # plt.figure(figsize=(12, 8))
-    #
-    # plt.plot(mean_dist_list, label='mean_dist', marker='o')
-    # plt.plot(median_dist_list, label='median_dist', marker='v')
-    # plt.plot(mean_distance_list, label='mean_distance', marker='s')
-    # plt.plot(median_distance_list, label='median_distance', marker='P')
-    # plt.plot(max_distance_list, label='max_distance', marker='*')
-    # plt.plot(ten_pct_mean_dist_list, label='ten_pct_mean_dist', marker='D')
-    # plt.plot(ten_pct_median_dist_list, label='ten_pct_median_dist', marker='x')
-    # plt.plot(mean_closest_neighbor_dist_list, label='mean_closest_neighbor_dist', marker='>')
-    # plt.plot(median_closest_neighbor_dist_list, label='median_closest_neighbor_dist', marker='<')
-    #
-    # plt.title(f'Distances Over Samples; mean_10% = {np.mean(ten_pct_mean_dist_list):.2f}')
-    # plt.xlabel('Sample Index')
-    # plt.ylabel('Distance')
-    # plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    # plt.grid(True)
-    # plt.tight_layout()
-    # plt.show()
-def test_predator_data(matching=False):
-    partial_p_keep= [0.7, 0.7]
+def test_predator_data(matching=False, partial_p_keep=[0.7, 0.7]):
     # partial_p_keep= [0.5, 0.5]
     rot_mag = 45.0
     trans_mag = 0.5
@@ -1284,3 +1405,13 @@ def test_predator_data(matching=False):
     test_dataset = ModelNetHdf(overlap_radius=overlap_radius, root=r'C:\\Users\\benjy\\Desktop\\curvTrans\\DeepBBS\\modelnet40_ply_hdf5_2048',
                                 subset='test', categories=None, transform=train_transforms, matching=matching)
     return test_dataset
+from threedmatch import *
+from indoor import *
+import torchvision
+
+import yaml
+def test_3dmatch_data(matching=False, partial_p_keep=[0.7, 0.7]):
+    # partial_p_keep= [0.5, 0.5]
+    train_set = IndoorDataset(data_augmentation=True)
+    d = 10
+    return train_set
