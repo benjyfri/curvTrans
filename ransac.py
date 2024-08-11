@@ -1404,7 +1404,11 @@ def test_predator_data(matching=False, partial_p_keep=[0.7, 0.7]):
                         transforms.Resampler(num_points),
                         transforms.RandomJitter(),
                         transforms.ShufflePoints()]
-    test_dataset = ModelNetHdf(overlap_radius=overlap_radius, root=r'C:\\Users\\benjy\\Desktop\\curvTrans\\DeepBBS\\modelnet40_ply_hdf5_2048',
+    if os.name == 'nt':
+        root = r'C:\\Users\\benjy\\Desktop\\curvTrans\\DeepBBS\\modelnet40_ply_hdf5_2048'
+    else:
+        root = r'/content/curvTrans/DeepBBS/modelnet40_ply_hdf5_2048'
+    test_dataset = ModelNetHdf(overlap_radius=overlap_radius, root=root,
                                 subset='test', categories=None, transform=train_transforms, matching=matching)
     return test_dataset
 from threedmatch import *
