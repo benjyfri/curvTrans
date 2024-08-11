@@ -154,7 +154,7 @@ def plot_means(means, subdir_names):
     combined.sort(key=lambda x: x[0])
 
     # Select the top 10% with the lowest err_r_deg_mean
-    top_10_percent = combined[:max(1, len(combined) // 10)]
+    top_10_percent = combined[:max(1, len(combined) // 5)]
 
     # Unpack the filtered means and names
     err_r_deg_means, err_t_means, subdir_names = zip(*top_10_percent)
@@ -171,12 +171,35 @@ def plot_means(means, subdir_names):
     plt.legend(loc='best', fontsize='small')
     plt.grid(True)
     plt.show()
+def check_pairings():
+    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36_1')
+    nn_modes = [2, 3, 4]
+    tri_modes = [True, False]
+    for nn_mode in nn_modes:
+        for tri in tri_modes:
+            run_name = f'mode_{nn_mode}_tri_{tri}'
+            print(run_name)
+
+            worst_losses, losses_rot, losses_trans, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict = (
+                test_multi_scale_using_embedding_predator(cls_args=cls_args, num_worst_losses=3,
+                                                          scaling_factor="min",
+                                                          amount_of_interest_points=500,
+                                                          num_of_ransac_iter=20000,
+                                                          pct_of_points_2_take=1,
+                                                          max_non_unique_correspondences=3,
+                                                          nn_mode=nn_mode, scales=4,
+                                                          receptive_field=[1, 5, 10, 15],
+                                                          amount_of_samples=50, tri=tri))
 
 if __name__ == '__main__':
-    base_dir = "./runs_yay"  # Replace with the path to your base directory
-    means, subdir_names = load_data_and_compute_means(base_dir)
-    plot_means(means, subdir_names)
+    check_pairings()
     exit(0)
+    # test_3dmatch_data()
+    # exit(0)
+    # base_dir = "./better_dups_partial"  # Replace with the path to your base directory
+    # means, subdir_names = load_data_and_compute_means(base_dir)
+    # plot_means(means, subdir_names)
+    # exit(0)
 
     faulthandler.enable()
     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36_1')
@@ -186,6 +209,7 @@ if __name__ == '__main__':
     # scaling_factors = [15,20,25]
     # scaling_factors = ["90pct"]
     # scaling_factors = ["max" , "mean", "median", "min", "d_90"]
+    # scaling_factors = ["min", "mean"]
     scaling_factors = ["min"]
     # scaling_factors = ["min", "median"]
     # scaling_factors = ["median"]
@@ -197,29 +221,39 @@ if __name__ == '__main__':
     # subsamples = [50, 150, 300]
     # subsamples = [300 ,450]
     # subsamples = [100, 300, 500]
-    subsamples = [100, 300, 500]
+    # subsamples = [100, 300, 500]
+    # subsamples = [300, 500, 700]
+    subsamples = [500]
     # subsamples = [300]
+    # subsamples = [700]
     # receptive_fields_list = [ [1, 20, 40] , [1, 10, 20, 30, 40]]
-    receptive_fields_list = [ [1, 5] ,[1, 10] , [1, 5, 10, 15]]
+    # receptive_fields_list = [ [1, 5] ,[1, 10] , [1, 5, 10, 15]]
+    # receptive_fields_list = [ [1, 5, 10, 15], [1, 5] ,[1, 10]]
+    # receptive_fields_list = [[1, 5] ,[1, 10]]
     # receptive_fields_list = [[1, 5]]
-    # receptive_fields_list = [[1, 5, 10, 15]]
+    # receptive_fields_list = [[1]]
+    receptive_fields_list = [[1, 5, 10, 15]]
     # receptive_fields_list = [[1, 10, 20, 30, 40]]
     # receptive_fields_list = [[1, 20, 40] ]
     # receptive_fields_list = [[1, 20, 30] ]
-    scales_list = [2, 2, 4]
+    # scales_list = [2, 2, 4]
     # scales_list = [2]
-    # scales_list = [4]
+    # scales_list = [1]
+    scales_list = [4]
     # scales_list = [3]
     # bbuddies = [1, 3 ,5]
-    bbuddies = [1]
-    # bbuddies = [3]
+    # bbuddies = [1, 3]
+    nn_modes = [2]
+    # nn_modes = [2,3,4,5]
     # pcts = [0.5, 0.75]
-    # pcts = [1, 0.75, 0.5]
-    pcts = [1, 0.75, 0.5]
-    # pcts = [0.75]
+    # pcts = [1, 0.75]
+    # pcts = [1, 0.75, 0.5, 0.2, 0.1]
+    pcts = [1]
+    # pcts = [0.5]
     # runsac_iterations = [200, 300, 500, 1000]
     # runsac_iterations = [300,500]
-    runsac_iterations = [1000,2000]
+    # runsac_iterations = [1000,2000]
+    runsac_iterations = [20000]
     # runsac_iterations = [100]
     # runsac_iterations = [100]
     # runsac_iterations = [200]
@@ -227,10 +261,10 @@ if __name__ == '__main__':
         for amount_of_interest_points in subsamples:
             for scaling_factor in scaling_factors:
                 for pct_of_points_2_take in pcts:
-                    for max_non_unique_correspondences in bbuddies:
+                    for nn_mode in nn_modes:
                         for num_of_ransac_iter in runsac_iterations:
                             rfield = "_".join(map(str, receptive_field))
-                            run_name = f'lim_mag_realNN_Tri_rfield_{rfield}_scales_{scales}_keypoints_{amount_of_interest_points}_pct_{pct_of_points_2_take}_bbudies_{max_non_unique_correspondences}_rsac_iter_{num_of_ransac_iter}'
+                            run_name = f'rfield_{rfield}_keypoints_{amount_of_interest_points}_pct_{pct_of_points_2_take}_mode_{nn_mode}_rsac_iter_{num_of_ransac_iter}_{scaling_factor}'
                             # run_name = f'with_dup_lim_mag_realNN_Tri_rfield_{rfield}_scales_{scales}_keypoints_{amount_of_interest_points}_pct_{pct_of_points_2_take}_bbudies_{max_non_unique_correspondences}_rsac_iter_{num_of_ransac_iter}'
                             print(run_name)
                             # run_name = f'dummy_without_500_rsac_iter'
@@ -257,7 +291,8 @@ if __name__ == '__main__':
                             # plotWorst(worst_losses=worst_losses, model_name=f'{scaling_factor}_{amount_of_interest_points}_{scales}_scales_emb')
                             # visualizeShapesWithEmbeddings(model_name='3MLP32N2deg_lpe0eig36_1', args_shape=cls_args,
                             #                               scaling_factor=scaling_factor, rgb=False)
-                            # view_stabiity(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=5, receptive_field=[1, 10, 20, 30], amount_of_interest_points=300,
+                            # exit(0)
+                            # view_stabiity(cls_args=cls_args,num_worst_losses = 3, scaling_factor=scaling_factor, scales=5, receptive_field=[1, 5, 10, 15], amount_of_interest_points=300,
                             #                             num_of_ransac_iter=50, plot_graphs=1,create_pcls_func=partial(split_pointcloud_overlap, overlap_ratio=0.3))
                             # exit(0)
                             # cProfile.runctx('test_multi_scale_using_embedding_predator(cls_args=cls_args, num_worst_losses=3, scaling_factor=scaling_factor, amount_of_interest_points=amount_of_interest_points, num_of_ransac_iter=num_of_ransac_iter, pct_of_points_2_take=pct_of_points_2_take, max_non_unique_correspondences=max_non_unique_correspondences, scales=scales, receptive_field=receptive_field,  amount_of_samples=20, batch_size=16 )', globals(), locals())
@@ -268,11 +303,19 @@ if __name__ == '__main__':
                             # stats.sort_stats(pstats.SortKey.TIME)
                             # stats.print_stats()
                             # exit(0)
+                            # amount_of_interest_points = 1024
+                            # pct_of_points_2_take = 0.5
+                            # # receptive_field = [1,5,10,15]
+                            # test_embedding_dist_predator(cls_args=cls_args, num_worst_losses=3,
+                            #                              scaling_factor=scaling_factor, amount_of_interest_points=amount_of_interest_points,
+                            #                              num_of_ransac_iter=num_of_ransac_iter, pct_of_points_2_take=pct_of_points_2_take, max_non_unique_correspondences=max_non_unique_correspondences,
+                            #                              scales=scales, receptive_field=receptive_field,  amount_of_samples=5)
+
                             worst_losses, losses_rot, losses_trans, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict = (
                                 test_multi_scale_using_embedding_predator(cls_args=cls_args, num_worst_losses=3,
                                                                           scaling_factor=scaling_factor, amount_of_interest_points=amount_of_interest_points,
-                                                                          num_of_ransac_iter=num_of_ransac_iter, pct_of_points_2_take=pct_of_points_2_take, max_non_unique_correspondences=max_non_unique_correspondences,
-                                                                          scales=scales, receptive_field=receptive_field,  amount_of_samples=50))
+                                                                          num_of_ransac_iter=num_of_ransac_iter, pct_of_points_2_take=pct_of_points_2_take,max_non_unique_correspondences=3,
+                                                                          nn_mode=nn_mode, scales=scales, receptive_field=receptive_field,  amount_of_samples=50))
                             os.makedirs(run_name, exist_ok=True)
                             file_path = os.path.join(run_name, 'combined_dict.pkl')
                             with open(file_path, 'wb') as pickle_file:
@@ -283,4 +326,4 @@ if __name__ == '__main__':
                             plot_losses(losses=losses_rot, inliers=final_inliers_list, filename=f'rot_loss_scales_emb.png', dir=run_name)
                             plotWorst(worst_losses=worst_losses, dir=run_name)
                             # exit(0)
-                        # exit(0)
+                # exit(0)

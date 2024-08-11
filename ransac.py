@@ -227,7 +227,7 @@ def ransac_pose_estimation_features(src_pcd, tgt_pcd, source_feature, tgt_featur
 
     return result_ransac.transformation,[np.array(result_ransac.correspondence_set)[:,0], np.array(result_ransac.correspondence_set)[:,1]]
 
-def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_dist=0.05, max_thresh=1, sample=None):
+def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_dist=0.05, max_thresh=1, sample=None, tri=False):
     # failing badly....
     if threshold > max_thresh:
         print(f'RANSAC FAIL!')
@@ -249,17 +249,19 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_
         indices = np.arange(N)
         dist_threshold = nn1_dist
         for i in range(100):
-            # first_index = np.random.choice(indices)
-            # remaining_indices = indices[indices != first_index]
-            # remaining_indices = np.random.permutation(remaining_indices)
-            # tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
-            # if tri_indices is not None and len(set([first_index, tri_indices[0], tri_indices[1]]))==3:
-            #     break
-            tri_indices = np.random.choice(N, size=3, replace=False)
-            first_index = tri_indices[0]
-            tri_indices = tri_indices[1:]
-            if tri_indices is not None and len(set(tri_indices))==3:
-                break
+            if tri==True:
+                first_index = np.random.choice(indices)
+                remaining_indices = indices[indices != first_index]
+                remaining_indices = np.random.permutation(remaining_indices)
+                tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
+                if tri_indices is not None and len(set([first_index, tri_indices[0], tri_indices[1]]))==3:
+                    break
+            else:
+                tri_indices = np.random.choice(N, size=3, replace=False)
+                first_index = tri_indices[0]
+                tri_indices = tri_indices[1:]
+                if tri_indices is not None and len(set(tri_indices))==3:
+                    break
         if tri_indices is None:
             continue
 
@@ -1090,7 +1092,7 @@ def test_multi_scale_using_embedding_predator_old(cls_args=None,num_worst_losses
     return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
 
 def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
-                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4):
+                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4,tri=False):
     worst_losses = [(0, None)] * num_worst_losses
     losses_rot_list = []
     losses_trans_list = []
@@ -1193,7 +1195,7 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
         if o3d_successful == False:
             best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(
                 centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
-                threshold=mean_closest_neighbor_dist, sample=sample,
+                threshold=mean_closest_neighbor_dist, sample=sample, tri=tri,
                 min_inliers=3, nn1_dist=mean_closest_neighbor_dist, max_thresh=(8 * mean_closest_neighbor_dist))
             # failed in Ransac
             if best_rotation is None:
