@@ -340,6 +340,91 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_
             break
     return best_rotation, best_translation, len(best_inliers), best_iter, corres, threshold
 
+def ransac_3dmatch(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_dist=0.05, max_thresh=1, sample=None, tri=False):
+    # failing badly....
+    if threshold > max_thresh:
+        print(f'RANSAC FAIL!')
+        print(f'threshold: {threshold}; max_thresh: {max_thresh}')
+        return None, None, 0, 1000, [np.array([[1,1,1]]),np.array([[1,1,1]])], threshold
+    N = data1.shape[0]
+    best_inliers = None
+    inliers1 = None
+    corres = None
+    best_rotation = None
+    best_translation = None
+
+    src_centered = data1
+    dst_centered = data2
+    best_iter = 0
+    # print(f'++++++++++++RNASAC with threshold: {threshold} ++++++++++++')
+    for iteration in range(max_iterations):
+        # Randomly sample 3 corresponding points
+        indices = np.arange(N)
+        dist_threshold = nn1_dist
+        for i in range(100):
+            if tri==True:
+                first_index = np.random.choice(indices)
+                remaining_indices = indices[indices != first_index]
+                remaining_indices = np.random.permutation(remaining_indices)
+                tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
+                if tri_indices is not None and len(set([first_index, tri_indices[0], tri_indices[1]]))==3:
+                    break
+            else:
+                tri_indices = np.random.choice(N, size=3, replace=False)
+                first_index = tri_indices[0]
+                tri_indices = tri_indices[1:]
+                if tri_indices is not None and len(set(tri_indices))==3:
+                    break
+        if tri_indices is None:
+            continue
+
+        [second_index, last_index] = tri_indices
+        indices = np.array([first_index, second_index, last_index])
+
+        # indices = np.random.choice(indices,3 )
+        src_points = data1[indices]
+        dst_points = data2[indices]
+
+        # indices = np.random.choice(N, size=3, replace=False)
+        # src_points = src_centered[indices]
+        # dst_points = dst_centered[indices]
+
+        # Estimate rotation and translation
+        rotation, translation = estimate_rigid_transform(src_points, dst_points)
+        # Find inliers
+        inliers1, inliers2 = find_inliers(src_centered, dst_centered, rotation,translation, threshold)
+
+        # Update best model if we have enough inliers
+        if len(inliers1) >= min_inliers and ((best_inliers is None) or (len(inliers1) > len(best_inliers))):
+            best_inliers = inliers1
+            corres = [src_centered[inliers1], dst_centered[inliers2]]
+            best_iter = iteration
+            best_rotation = rotation
+            best_translation = translation
+    if best_inliers is None:
+        res = ransac(data1, data2, max_iterations=max_iterations, threshold=threshold * 2, min_inliers=min_inliers, max_thresh=max_thresh)
+        if res[0] is None:
+            if inliers1 is not None:
+                return best_rotation, best_translation, 3, best_iter, [src_centered[inliers1], dst_centered[inliers2]], threshold
+            return None, None, 3, 1, [np.array([[1,1,1]]),np.array([[1,1,1]])], threshold
+        return res
+
+    # improve registration with LS
+    highest_consensus = len(best_inliers)
+    while (True):
+        rotation, translation = estimate_rigid_transform(corres[0], corres[1])
+        best_rotation = rotation
+        best_translation = translation
+        inliers1, inliers2 = find_inliers(src_centered, dst_centered, best_rotation, best_translation,
+                                                threshold)
+        best_inliers = inliers1
+        corres = [src_centered[inliers1], dst_centered[inliers2]]
+        if len(best_inliers) > highest_consensus:
+            highest_consensus = len(best_inliers)
+        else:
+            break
+    return best_rotation, best_translation, len(best_inliers), best_iter, corres, threshold
+
 def rand_ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, rot=None, trans=None):
     N = data1.shape[0]
     best_inliers = None
@@ -1091,7 +1176,7 @@ def test_multi_scale_using_embedding_predator_old(cls_args=None,num_worst_losses
             break
     return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
 
-def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
+def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
                                     num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4,tri=False):
     worst_losses = [(0, None)] * num_worst_losses
     losses_rot_list = []
@@ -1246,6 +1331,130 @@ def test_multi_scale_using_embedding_predator(cls_args=None,num_worst_losses = 3
 
     return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
 
+def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
+                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4,tri=False):
+    worst_losses = [(0, None)] * num_worst_losses
+    losses_rot_list = []
+    losses_trans_list = []
+    point_distance_list = []
+    final_thresh_list = []
+    final_inliers_list = []
+    iter_2_ransac_convergence = []
+    combined_dict = {}
+    train_dataset = IndoorDataset(data_augmentation=False)
+    size = len(train_dataset)
+    for i in range(size):
+        if i > amount_of_samples:
+            break
+        if i%10 ==0:
+            print(f'------------{i}------------')
+
+        data = train_dataset.__getitem__(i)
+        src_pcd, tgt_pcd, GT_rot, GT_trans = data[0].astype(np.float32), data[1].astype(np.float32), data[4], data[5]
+
+        chosen_fps_indices_1 = farthest_point_sampling(src_pcd, k=amount_of_interest_points)
+        chosen_pcl_1 = src_pcd[chosen_fps_indices_1, :]
+        chosen_fps_indices_2 = farthest_point_sampling(tgt_pcd, k=amount_of_interest_points)
+        chosen_pcl_2 = tgt_pcd[chosen_fps_indices_2, :]
+
+        emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
+
+        emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_1 = emb_1.detach().cpu().numpy()[0]
+        emb_2 = emb_2.detach().cpu().numpy()[0]
+        # multiscale embeddings
+        if scales > 1:
+            for scale in receptive_field[1:]:
+                fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
+                fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
+
+                global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                                              pcl_src=src_pcd[fps_indices_1, :], pcl_interest=chosen_pcl_1,
+                                              args_shape=cls_args, scaling_factor=scaling_factor)
+
+                global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                                              pcl_src=tgt_pcd[fps_indices_2, :], pcl_interest=chosen_pcl_2,
+                                              args_shape=cls_args, scaling_factor=scaling_factor)
+
+                global_emb_1 = global_emb_1.detach().cpu().numpy()[0]
+                global_emb_2 = global_emb_2.detach().cpu().numpy()[0]
+
+                emb_1 = np.hstack((emb_1, global_emb_1))
+                emb_2 = np.hstack((emb_2, global_emb_2))
+
+        if nn_mode==1:
+            emb1_indices, emb2_indices = find_closest_points_best_of_resolutions(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        if nn_mode == 2:
+            emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        if nn_mode == 3:
+            emb1_indices, emb2_indices = find_closest_points_with_dup(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take))
+        if nn_mode == 4:
+            emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+        centered_points_1 = chosen_pcl_1[emb1_indices, :]
+        centered_points_2 = chosen_pcl_2[emb2_indices, :]
+
+        nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(chosen_pcl_1);
+        closest_neighbor_dist = nbrs.kneighbors(chosen_pcl_1)[0][:, 1];
+        mean_closest_neighbor_dist = np.mean(closest_neighbor_dist)
+
+        failed_ransac = False
+        o3d_successful = False
+        # o3d_ransace_corres_with_paris_transformation, corres = ransac_pose_estimation_correspondences(chosen_pcl_1,
+        #                                                                                               chosen_pcl_2,
+        #                                                                                               (np.vstack((
+        #                                                                                                   emb1_indices,
+        #                                                                                                   emb2_indices))).T,
+        #                                                                                               mutual=False,
+        #                                                                                               distance_threshold=mean_closest_neighbor_dist,
+        #                                                                                               ransac_n=3)
+        # corres[0] = chosen_pcl_1[corres[0]]
+        # corres[1] = chosen_pcl_2[corres[1]]
+        # o3d_successful = True
+        # best_translation = o3d_ransace_corres_with_paris_transformation[:3, 3]
+        # best_rotation = o3d_ransace_corres_with_paris_transformation[:3, :3]
+
+        if o3d_successful == False:
+            best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac_3dmatch(
+                centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
+                threshold=mean_closest_neighbor_dist, tri=tri,
+                min_inliers=3, nn1_dist=mean_closest_neighbor_dist, max_thresh=(8 * mean_closest_neighbor_dist))
+            # failed in Ransac
+            if best_rotation is None:
+                failed_ransac = True
+                best_rotation = np.eye(3, dtype=np.float32)
+                best_translation = np.zeros((3,), dtype=np.float32)
+
+        # final_inliers_list.append(best_num_of_inliers)
+        # iter_2_ransac_convergence.append(best_iter)
+
+        rot_trace = np.trace(GT_rot @ best_rotation.T)
+        residual_rotdeg = np.arccos(np.clip(0.5 * (rot_trace - 1), -1.0, 1.0)) * 180.0 / np.pi
+        losses_rot_list.append(residual_rotdeg)
+        translation_loss = np.linalg.norm(GT_trans - best_translation)
+        losses_trans_list.append(translation_loss)
+
+        # Update the worst losses list
+        index_of_smallest_loss = np.argmin([worst_losses[i][0] for i in range(len(worst_losses))])
+        smallest_loss = worst_losses[index_of_smallest_loss][0]
+        if residual_rotdeg > smallest_loss:
+            worst_losses[index_of_smallest_loss] = (residual_rotdeg, {
+                'noisy_pointcloud_1': src_pcd,
+                'noisy_pointcloud_2': tgt_pcd,
+                'chosen_points_1': corres[0],
+                'chosen_points_2': corres[1],
+                'All_pairs_1': centered_points_1,
+                'All_pairs_2': centered_points_2,
+                'failed_ransac': failed_ransac,
+                'pcl_id': i,
+                'rotation_matrix': GT_rot,
+                'translation': GT_trans,
+                'best_rotation': best_rotation,
+                'best_translation': best_translation
+            })
+
+
+    return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
+
 def test_embedding_dist_predator(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
                                     num_of_ransac_iter=100, max_non_unique_correspondences=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4):
     mean_dist_list = []
@@ -1392,6 +1601,7 @@ def test_embedding_dist_predator(cls_args=None,num_worst_losses = 3, scaling_fac
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
 def test_predator_data(matching=False, partial_p_keep=[0.7, 0.7]):
     # partial_p_keep= [0.5, 0.5]
     rot_mag = 45.0
@@ -1416,8 +1626,65 @@ from indoor import *
 import torchvision
 
 import yaml
-def test_3dmatch_data(matching=False, partial_p_keep=[0.7, 0.7]):
-    # partial_p_keep= [0.5, 0.5]
-    train_set = IndoorDataset(data_augmentation=True)
-    d = 10
+def test_3dmatch_data():
+    train_set = IndoorDataset(data_augmentation=False)
+    # sample = train_set.__getitem__(10)
+    # pcd_1 = sample[0]
+    # pcd_1_sub = pcd_1[farthest_point_sampling(pcd_1, 500)]
+    # pcd_2 = sample[1]
+    # pcd_2_sub = pcd_2[farthest_point_sampling(pcd_2, 500)]
+    # rot = sample[4]
+    # trans = sample[5]
+    #
+    # plot_point_clouds(pcd_1_sub @ rot.T + trans.squeeze(),pcd_2_sub)
+    x_deg = []
+    y_deg = []
+    z_deg = []
+    x_tr = []
+    y_tr = []
+    z_tr = []
+    for idx in range(len(train_set)):
+        print(f'+++++++++++{idx}+++++++++++')
+        if idx >1000:
+            break
+        sample = train_set.__getitem__(idx)
+        rot = sample[4]
+        r_pred_euler_deg = (dcm2euler(np.array([rot]), seq='xyz')).squeeze()
+        trans = (sample[5]).squeeze()
+        x_deg.append(r_pred_euler_deg[0])
+        y_deg.append(r_pred_euler_deg[1])
+        z_deg.append(r_pred_euler_deg[2])
+        x_tr.append(trans[0])
+        y_tr.append(trans[1])
+        z_tr.append(trans[2])
+    print(f'------------------')
+    print(f'x_deg mean: {np.mean(x_deg)}')
+    print(f'x_deg max: {np.max(x_deg)}')
+    print(f'x_deg min: {np.min(x_deg)}')
+    print(f'------------------')
+    print(f'------------------')
+    print(f'y_deg mean: {np.mean(y_deg)}')
+    print(f'y_deg max: {np.max(y_deg)}')
+    print(f'y_deg min: {np.min(y_deg)}')
+    print(f'------------------')
+    print(f'------------------')
+    print(f'z_deg mean: {np.mean(z_deg)}')
+    print(f'z_deg max: {np.max(z_deg)}')
+    print(f'z_deg min: {np.min(z_deg)}')
+    print(f'------------------')
+    print(f'------------------')
+    print(f'x_tr mean: {np.mean(x_tr)}')
+    print(f'x_tr max: {np.max(x_tr)}')
+    print(f'x_tr min: {np.min(x_tr)}')
+    print(f'------------------')
+    print(f'------------------')
+    print(f'y_tr mean: {np.mean(y_tr)}')
+    print(f'y_tr max: {np.max(y_tr)}')
+    print(f'y_tr min: {np.min(y_tr)}')
+    print(f'------------------')
+    print(f'------------------')
+    print(f'z_tr mean: {np.mean(z_tr)}')
+    print(f'z_tr max: {np.max(z_tr)}')
+    print(f'z_tr min: {np.min(z_tr)}')
+    print(f'------------------')
     return train_set
