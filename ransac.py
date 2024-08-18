@@ -97,6 +97,7 @@ def farthest_point_sampling_torch(point_cloud_batch, k):
         sampled_indices[:, i] = current_indices
 
     return sampled_indices
+
 def farthest_point_sampling(point_cloud, k):
     N, _ = point_cloud.shape
 
@@ -1211,15 +1212,17 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         # multiscale embeddings
         if scales > 1:
             for scale in receptive_field[1:]:
-                fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
-                fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
+                subsampled_1 = farthest_point_sampling_o3d(src_pcd, k=(int)(len(src_pcd) // scale))
+                subsampled_2 = farthest_point_sampling_o3d(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
+                # fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
+                # fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
 
                 global_emb_1 = classifyPoints(model_name=cls_args.exp,
-                                              pcl_src=src_pcd[fps_indices_1, :], pcl_interest=chosen_pcl_1,
+                                              pcl_src=subsampled_1, pcl_interest=chosen_pcl_1,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
                 global_emb_2 = classifyPoints(model_name=cls_args.exp,
-                                              pcl_src=tgt_pcd[fps_indices_2, :], pcl_interest=chosen_pcl_2,
+                                              pcl_src=subsampled_2, pcl_interest=chosen_pcl_2,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
                 global_emb_1 = global_emb_1.detach().cpu().numpy()[0]
@@ -1330,9 +1333,9 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
 
 
     return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
-
+import timeit
 def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
-                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4,tri=False):
+                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, use_o3d_ransac=False,tri=False):
     worst_losses = [(0, None)] * num_worst_losses
     losses_rot_list = []
     losses_trans_list = []
@@ -1365,15 +1368,19 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
         # multiscale embeddings
         if scales > 1:
             for scale in receptive_field[1:]:
-                fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
-                fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
+                if ((int)(len(src_pcd) // scale)<41) or ((int)(len(tgt_pcd) // scale)<41):
+                    break
+                subsampled_1 = farthest_point_sampling_o3d(src_pcd, k=(int)(len(src_pcd) // scale))
+                subsampled_2 = farthest_point_sampling_o3d(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
+                # fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
+                # fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
 
                 global_emb_1 = classifyPoints(model_name=cls_args.exp,
-                                              pcl_src=src_pcd[fps_indices_1, :], pcl_interest=chosen_pcl_1,
+                                              pcl_src=subsampled_1, pcl_interest=chosen_pcl_1,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
                 global_emb_2 = classifyPoints(model_name=cls_args.exp,
-                                              pcl_src=tgt_pcd[fps_indices_2, :], pcl_interest=chosen_pcl_2,
+                                              pcl_src=subsampled_2, pcl_interest=chosen_pcl_2,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
                 global_emb_1 = global_emb_1.detach().cpu().numpy()[0]
@@ -1398,22 +1405,22 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
         mean_closest_neighbor_dist = np.mean(closest_neighbor_dist)
 
         failed_ransac = False
-        o3d_successful = False
-        # o3d_ransace_corres_with_paris_transformation, corres = ransac_pose_estimation_correspondences(chosen_pcl_1,
-        #                                                                                               chosen_pcl_2,
-        #                                                                                               (np.vstack((
-        #                                                                                                   emb1_indices,
-        #                                                                                                   emb2_indices))).T,
-        #                                                                                               mutual=False,
-        #                                                                                               distance_threshold=mean_closest_neighbor_dist,
-        #                                                                                               ransac_n=3)
-        # corres[0] = chosen_pcl_1[corres[0]]
-        # corres[1] = chosen_pcl_2[corres[1]]
-        # o3d_successful = True
-        # best_translation = o3d_ransace_corres_with_paris_transformation[:3, 3]
-        # best_rotation = o3d_ransace_corres_with_paris_transformation[:3, :3]
+        if use_o3d_ransac:
+            o3d_ransace_corres_with_paris_transformation, corres = ransac_pose_estimation_correspondences(chosen_pcl_1,
+                                                                                                          chosen_pcl_2,
+                                                                                                          (np.vstack((
+                                                                                                              emb1_indices,
+                                                                                                              emb2_indices))).T,
+                                                                                                          mutual=False,
+                                                                                                          distance_threshold=mean_closest_neighbor_dist,
+                                                                                                          ransac_n=3)
+            corres[0] = chosen_pcl_1[corres[0]]
+            corres[1] = chosen_pcl_2[corres[1]]
+            o3d_successful = True
+            best_translation = o3d_ransace_corres_with_paris_transformation[:3, 3]
+            best_rotation = o3d_ransace_corres_with_paris_transformation[:3, :3]
 
-        if o3d_successful == False:
+        else:
             best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac_3dmatch(
                 centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
                 threshold=mean_closest_neighbor_dist, tri=tri,
@@ -1495,15 +1502,17 @@ def test_embedding_dist_predator(cls_args=None,num_worst_losses = 3, scaling_fac
         # multiscale embeddings
         if scales > 1:
             for scale in receptive_field[1:]:
-                fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
-                fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
+                subsampled_1 = farthest_point_sampling_o3d(src_pcd, k=(int)(len(src_pcd) // scale))
+                subsampled_2 = farthest_point_sampling_o3d(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
+                # fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
+                # fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
 
                 global_emb_1 = classifyPoints(model_name=cls_args.exp,
-                                              pcl_src=src_pcd[fps_indices_1, :], pcl_interest=chosen_pcl_1,
+                                              pcl_src=subsampled_1, pcl_interest=chosen_pcl_1,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
                 global_emb_2 = classifyPoints(model_name=cls_args.exp,
-                                              pcl_src=tgt_pcd[fps_indices_2, :], pcl_interest=chosen_pcl_2,
+                                              pcl_src=subsampled_2, pcl_interest=chosen_pcl_2,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
                 global_emb_1 = global_emb_1.detach().cpu().numpy()[0]
