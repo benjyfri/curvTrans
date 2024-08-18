@@ -1,7 +1,8 @@
 import numpy as np
 from plotting_functions import *
 from ransac import *
-# from benchmark_modelnet import compute_metrics
+from threedmatch import *
+from indoor import *
 
 def load_data(partition='test', divide_data=1):
     DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
@@ -157,6 +158,113 @@ def visualizeShapesWithEmbeddings(model_name=None, args_shape=None, scaling_fact
         # bin_file = "000098.bin"
         # pointcloud = read_bin_file(bin_file)
         noisy_pointcloud = pointcloud + np.random.normal(0, 0.01, pointcloud.shape)
+        pointcloud = noisy_pointcloud.astype(np.float32)
+        colors = classifyPoints(model_name=model_name, pcl_src=pointcloud, pcl_interest=pointcloud,
+                       args_shape=args_shape, scaling_factor=scaling_factor)
+
+        colors = colors.detach().cpu().numpy().squeeze()
+        colors = colors[:,:4]
+        layout = go.Layout(
+            title=f"Point Cloud with Embedding-based Colors {k}",
+            scene=dict(
+                xaxis_title='X',
+                yaxis_title='Y',
+                zaxis_title='Z'
+            )
+        )
+        if rgb:
+            colors_normalized = colors.copy()
+            colors_normalized[:, 0] = ((colors[:, 0] - colors[:, 0].min()) / (
+                        colors[:, 0].max() - colors[:, 0].min())) * 255
+            colors_normalized[:, 1] = ((colors[:, 1] - colors[:, 1].min()) / (
+                        colors[:, 1].max() - colors[:, 1].min())) * 255
+            colors_normalized[:, 2] = ((colors[:, 2] - colors[:, 2].min()) / (
+                        colors[:, 2].max() - colors[:, 2].min())) * 255
+            colors_normalized[:, 3] = ((colors[:, 3] - colors[:, 3].min()) / (
+                        colors[:, 3].max() - colors[:, 3].min())) * 255
+            colors_normalized = np.clip(colors_normalized, 0, 255).astype(np.uint8)
+
+            data_rgb = [
+                go.Scatter3d(
+                    x=pointcloud[:, 0],
+                    y=pointcloud[:, 1],
+                    z=pointcloud[:, 2],
+                    mode='markers',
+                    marker=dict(
+                        size=2,
+                        opacity=0.8,
+                        color=['rgb(' + ', '.join(map(str, rgb)) + ')' for rgb in colors_normalized],  # Set RGB values
+                    ),
+                    name='RGB Embeddings'
+                )
+            ]
+
+            # Your existing code
+
+            # Plotting the RGB embeddings separately
+            fig_rgb = go.Figure(data=data_rgb, layout=layout)
+            fig_rgb.show()
+
+        # Plot the maximum value embedding with specified colors
+        max_embedding_index = np.argmax(colors, axis=1)
+        max_embedding_colors = np.array(['red', 'blue', 'green', 'pink'])[max_embedding_index]
+
+        data_max_embedding = []
+        colors_shape = ['red', 'blue', 'green', 'pink']
+        names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
+        for color, name in zip(colors_shape, names):
+            indices = np.where(max_embedding_colors == color)[0]
+            data_max_embedding.append(
+                go.Scatter3d(
+                    x=pointcloud[indices, 0],
+                    y=pointcloud[indices, 1],
+                    z=pointcloud[indices, 2],
+                    mode='markers',
+                    marker=dict(
+                        size=2,
+                        opacity=0.8,
+                        color=color
+                    ),
+                    name=f'Max Value Embedding - {name}'
+                )
+            )
+        fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
+        fig_max_embedding.show()
+
+        # # Plot the maximum value embedding with specified colors
+        # max_embedding_index = surface_labels
+        # max_embedding_colors = np.array(['red', 'blue', 'green', 'pink'])[max_embedding_index]
+        #
+        # data_max_embedding = []
+        # colors_shape = ['red', 'blue', 'green', 'pink']
+        # names = ['plane', 'peak/pit', 'valley/ridge', 'saddle']
+        # for color, name in zip(colors_shape, names):
+        #     indices = np.where(max_embedding_colors == color)[0]
+        #     data_max_embedding.append(
+        #         go.Scatter3d(
+        #             x=pointcloud[indices, 0],
+        #             y=pointcloud[indices, 1],
+        #             z=pointcloud[indices, 2],
+        #             mode='markers',
+        #             marker=dict(
+        #                 size=2,
+        #                 opacity=0.8,
+        #                 color=color
+        #             ),
+        #             name=f'Max Value Embedding - {name}'
+        #         )
+        #     )
+        # fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
+        # fig_max_embedding.show()
+
+def visualizeShapesWithEmbeddings3dMatch(model_name=None, args_shape=None, scaling_factor=None, rgb=False):
+    train_set = IndoorDataset(data_augmentation=False)
+    # sample = train_set.__getitem__(10)
+    for k in range(5):
+        pointcloud = train_set.__getitem__(k)[0]
+        # bin_file = "000098.bin"
+        # pointcloud = read_bin_file(bin_file)
+        noisy_pointcloud = pointcloud #+ np.random.normal(0, 0.01, pointcloud.shape)
         pointcloud = noisy_pointcloud.astype(np.float32)
         colors = classifyPoints(model_name=model_name, pcl_src=pointcloud, pcl_interest=pointcloud,
                        args_shape=args_shape, scaling_factor=scaling_factor)
@@ -420,8 +528,8 @@ def read_bin_file(bin_file):
     return points[:, :3]
 
 def find_closest_points(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3, n_neighbors=1):
-    # classification_1 = np.argmax(embeddings1[:,:4], axis=1)
-    # classification_2 = np.argmax(embeddings2[:,:4], axis=1)
+    classification_1 = np.argmax(embeddings1[:,:4], axis=1)
+    classification_2 = np.argmax(embeddings2[:,:4], axis=1)
     size_1 = embeddings1.shape[0]
     size_2 = embeddings2.shape[0]
     # Initialize NearestNeighbors instance
@@ -431,8 +539,12 @@ def find_closest_points(embeddings1, embeddings2, num_of_pairs=40, max_non_uniqu
     distances, indices = nbrs.kneighbors(embeddings1)
     appearance_1_nn = np.bincount(indices[:, 0], minlength=len(embeddings2))
 
-    mask = (appearance_1_nn >= max_non_unique_correspondences)
-    distances[:, 0][mask[indices[:, 0]]] = np.inf
+    # remove points which are NN of multiple points
+    mask_dup = (appearance_1_nn >= max_non_unique_correspondences)
+    distances[:, 0][mask_dup[indices[:, 0]]] = np.inf
+    # remove point pairings which have different classificatio
+    mask_cls = (classification_1 != classification_2)
+    distances[:, 0][mask_cls[indices[:, 0]]] = np.inf
     smallest_distances_indices = np.argsort(distances.flatten())
     first_inf_index = np.where(distances.flatten()[smallest_distances_indices] == np.inf)[0][0]
     num_of_pairs_2_take = min(num_of_pairs, first_inf_index)
@@ -441,6 +553,8 @@ def find_closest_points(embeddings1, embeddings2, num_of_pairs=40, max_non_uniqu
     emb2_indices = (indices.flatten()[smallest_distances_indices].squeeze()) % size_2
     return emb1_indices, emb2_indices
 def find_closest_points_with_dup(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3, n_neighbors=1):
+    classification_1 = np.argmax(embeddings1[:, :4], axis=1)
+    classification_2 = np.argmax(embeddings2[:, :4], axis=1)
     size_1 = embeddings1.shape[0]
     size_2 = embeddings2.shape[0]
     # Initialize NearestNeighbors instance
@@ -448,10 +562,13 @@ def find_closest_points_with_dup(embeddings1, embeddings2, num_of_pairs=40, max_
 
     # Find the indices and distances of the closest points in embeddings2 for each point in embeddings1
     distances, indices = nbrs.kneighbors(embeddings1)
-
+    # remove point pairings which have different classificatio
+    mask_cls = (classification_1 != classification_2)
+    distances[:, 0][mask_cls[indices[:, 0]]] = np.inf
     smallest_distances_indices = np.argsort(distances.flatten())
-    # dist_sorted = distances[smallest_distances_indices]
-    smallest_distances_indices= smallest_distances_indices[:num_of_pairs]
+    first_inf_index = np.where(distances.flatten()[smallest_distances_indices] == np.inf)[0][0]
+    num_of_pairs_2_take = min(num_of_pairs, first_inf_index)
+    smallest_distances_indices= smallest_distances_indices[:num_of_pairs_2_take]
     emb1_indices = smallest_distances_indices.squeeze() % size_1
     emb2_indices = (indices.flatten()[smallest_distances_indices].squeeze()) % size_2
     return emb1_indices, emb2_indices#, dist_sorted
@@ -612,8 +729,8 @@ def find_closest_points_torch(embeddings1, embeddings2, num_of_pairs=40, max_non
 
     return emb1_indices, emb2_indices
 def find_closest_points_best_buddy(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3):
-    # classification_1 = np.argmax(embeddings1[:, :4], axis=1)
-    # classification_2 = np.argmax(embeddings2[:, :4], axis=1)
+    classification_1 = np.argmax(embeddings1[:, :4], axis=1)
+    classification_2 = np.argmax(embeddings2[:, :4], axis=1)
 
     # Initialize NearestNeighbors instance for embeddings1 and embeddings2
     nbrs1 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
@@ -623,13 +740,17 @@ def find_closest_points_best_buddy(embeddings1, embeddings2, num_of_pairs=40, ma
     distances1, indices1 = nbrs1.kneighbors(embeddings1)
     distances2, indices2 = nbrs2.kneighbors(embeddings2)
 
+    # remove point pairings which have different classificatio
+    mask_cls = (classification_1 != classification_2)
+    distances1[:, 0][mask_cls[indices1[:, 0]]] = np.inf
+
     duplicates = np.zeros(len(embeddings1))
     best_buddies = []
 
     for i, index in enumerate(indices1.squeeze()):
         # Check if the point is a best buddy
-        # if ( i in indices2[index] ) and ( classification_1[i] == classification_2[index] ):
-        if ( i in indices2[index] ):
+        if ( i in indices2[index] ) and ( classification_1[i] == classification_2[index] ):
+        # if ( i in indices2[index] ):
             best_buddies.append((i, index))
 
     # Sort by distances and select the top num_neighbors
@@ -818,3 +939,64 @@ def find_mean_diameter_for_specific_coordinate(specific_coordinates):
     largest_dist = pairwise_distances.view(specific_coordinates.shape[0], -1).max(dim=1).values
     mean_distance = torch.mean(largest_dist)
     return mean_distance
+
+def farthest_point_sampling_o3d(point_cloud, k):
+    o3d_pcd = to_o3d_pcd(point_cloud)
+    downpcd_farthest = o3d_pcd.farthest_point_down_sample(k)
+    return np.asarray(downpcd_farthest.points, dtype=np.float32)
+
+def save_receptive_field(point_cloud, point, rfield=[1, 5, 10, 20], filename="plot.html", dir=r"./"):
+    fig = go.Figure()
+
+    # Define a color list for the receptive fields
+    colors = ['blue', 'orange', 'brown', 'red', 'green', 'pink', 'purple', 'cyan', 'magenta']
+
+    # Plot the original point cloud in gray
+    fig.add_trace(go.Scatter3d(
+        x=point_cloud[:, 0], y=point_cloud[:, 1], z=point_cloud[:, 2],
+        mode='markers', marker=dict(size=2, color='gray'),
+        name='Original Point Cloud'
+    ))
+
+    # Plot the interest point in green
+    fig.add_trace(go.Scatter3d(
+        x=[point[0]], y=[point[1]], z=[point[2]],
+        mode='markers', marker=dict(size=5, color='green'),
+        name='Interest Point'
+    ))
+
+    # Process each receptive field scale
+    for i, scale in enumerate(rfield):
+        if i >= len(colors):
+            break
+        if ((int)(len(point_cloud) // scale) < 41):
+            break
+
+        # Subsample point cloud according to the scale
+        subsampled_pc = farthest_point_sampling_o3d(point_cloud, k=int(len(point_cloud) // scale))
+
+        # Get 40 nearest neighbors centered around the given point
+        neighbors_centered = (get_k_nearest_neighbors_diff_pcls(subsampled_pc, point.reshape(1,3), 41).squeeze()).T
+
+        # Translate neighbors back to the original coordinates
+        neighbors_uncentered = neighbors_centered + point
+
+        # Plot the neighbors for this receptive field in the specified color
+        fig.add_trace(go.Scatter3d(
+            x=neighbors_uncentered[:, 0], y=neighbors_uncentered[:, 1], z=neighbors_uncentered[:, 2],
+            mode='markers', marker=dict(size=3, color=colors[i]),
+            name=f'Receptive Field {scale}'
+        ))
+
+    fig.update_layout(
+        title=f'Receptive Fields Visualization',
+        scene=dict(
+            xaxis=dict(title='X'),
+            yaxis=dict(title='Y'),
+            zaxis=dict(title='Z'),
+        ),
+        margin=dict(r=20, l=10, b=10, t=100)
+    )
+
+    # Save the figure as an HTML file
+    fig.write_html(os.path.join(dir,filename))
