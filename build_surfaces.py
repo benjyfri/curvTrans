@@ -39,8 +39,8 @@ def createDataSet():
     if not os.path.exists(test_path):
         os.makedirs(test_path)
 
-    new_file_path_train = "train_surfaces_rotation_std005.h5"
-    new_file_path_test = "test_surfaces_rotation_std005.h5"
+    new_file_path_train = "train_surfaces_with_corners.h5"
+    new_file_path_test = "test_surfaces_with_corners.h5"
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, counter=0, amount_of_pcl=10000,
@@ -61,6 +61,14 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, counter=30000, amount_of_pcl=10000,
                      size_of_pcl=40)
         print(f'Finished train saddle surfaces')
+        addDataCornersToSet(point_clouds_group, angle=30, label=4, counter=40000, amount_of_pcl=10000, size_of_pcl=40)
+        print(f'Finished train 30 angle surfaces')
+        addDataCornersToSet(point_clouds_group, angle=90, label=5, counter=50000, amount_of_pcl=10000, size_of_pcl=40)
+        print(f'Finished train 90 angle surfaces')
+        addDataCornersToSet(point_clouds_group, angle=150, label=6, counter=60000, amount_of_pcl=10000, size_of_pcl=40)
+        print(f'Finished train 150 angle surfaces')
+        addDataCornersToSet(point_clouds_group, angle=360, label=7, counter=70000, amount_of_pcl=10000, size_of_pcl=40)
+        print(f'Finished train room corner surfaces')
 
     with h5py.File(new_file_path_test, "w") as new_hdf5_test_file:
         point_clouds_group = new_hdf5_test_file.create_group("point_clouds")
@@ -82,6 +90,14 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, counter=3000, amount_of_pcl=1000,
                      size_of_pcl=40)
         print(f'Finished test saddle surfaces')
+        addDataCornersToSet(point_clouds_group, angle=30, label=4, counter=4000, amount_of_pcl=1000, size_of_pcl=40)
+        print(f'Finished test 30 angle surfaces')
+        addDataCornersToSet(point_clouds_group, angle=90, label=5, counter=5000, amount_of_pcl=1000, size_of_pcl=40)
+        print(f'Finished test 90 angle surfaces')
+        addDataCornersToSet(point_clouds_group, angle=150, label=6, counter=6000, amount_of_pcl=1000, size_of_pcl=40)
+        print(f'Finished test 150 angle surfaces')
+        addDataCornersToSet(point_clouds_group, angle=360, label=7, counter=7000, amount_of_pcl=1000, size_of_pcl=40)
+        print(f'Finished test room corner surfaces')
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40):
     for k in range(amount_of_pcl):
@@ -96,7 +112,24 @@ def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, a
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['H'] = H
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['K'] = K
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['class'] = label
-    # plotFunc(a, b, c, d, e, point_cloud)
+def addDataCornersToSet(point_clouds_group,angle, label, counter, amount_of_pcl, size_of_pcl=40):
+    sampling_cur = generate_surfaces_angles_and_sample
+    # room corner situation
+    if angle ==360:
+        sampling_cur=generate_room_corner_with_points
+    for k in range(amount_of_pcl):
+        rand_angle = np.random.uniform(angle-10, angle+10)
+        point_cloud = sampling_cur(size_of_pcl, rand_angle)
+        point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
+        point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = rand_angle
+        point_clouds_group[f"point_cloud_{counter+k}"].attrs['b'] = rand_angle
+        point_clouds_group[f"point_cloud_{counter+k}"].attrs['c'] = rand_angle
+        point_clouds_group[f"point_cloud_{counter+k}"].attrs['d'] = rand_angle
+        point_clouds_group[f"point_cloud_{counter+k}"].attrs['e'] = rand_angle
+        point_clouds_group[f"point_cloud_{counter+k}"].attrs['H'] = rand_angle
+        point_clouds_group[f"point_cloud_{counter+k}"].attrs['K'] = rand_angle
+        point_clouds_group[f"point_cloud_{counter+k}"].attrs['class'] = label
+
 def createFunction(gaussian_curv, mean_curv, boundary=3, epsilon=0.05):
     if gaussian_curv==1 and mean_curv==0:
         raise ValueError("gaussian_curv==1 and mean_curv==0 is impossible")
@@ -512,7 +545,41 @@ def plot_point_clouds(point_cloud1, point_cloud2):
     )
 
     fig.show()
+
+def generate_room_corner_with_points(N, angle=None):
+    N1, N2, N3 = np.random.multinomial(N-3, [1/3, 1/3, 1/3]) + np.array([1,1,1])
+
+    x_coords1 = np.random.uniform(0, 1, N)
+    y_coords1 = np.random.uniform(0, 1, N)
+
+    center = np.array([0, 0, 0])
+    points1 = np.stack((np.random.uniform(0, 1, N1), np.random.uniform(0, 1, N1), np.zeros(N1)), axis=-1)
+    points2 = np.stack((np.zeros(N2), np.random.uniform(0, 1, N2), -np.random.uniform(0, 1, N2)), axis=-1)
+    points3 = np.stack((np.random.uniform(0, 1, N3), np.zeros(N3), -np.random.uniform(0, 1, N3)), axis=-1)
+    points = np.vstack((center, points1,points2,points3))
+    return points
+def generate_surfaces_angles_and_sample(N, angle):
+    # 1. Generate a random angle between 0 and 30 degrees
+    angle_rad = np.radians((180 - angle)/2)
+
+    # 2. Compute the slopes (m1 and m2) for the surfaces
+    m1 = np.tan(angle_rad)  # slope for the left surface (x < 0)
+    m2 = -m1  # slope for the right surface (x >= 0)
+
+    # 3. Generate N random points in the square [-1, 1] x [-1, 1]
+    x_coords = np.random.uniform(-1, 1, N)
+    y_coords = np.random.uniform(-1, 1, N)
+
+    # 4. Calculate the corresponding z values based on the surfaces
+    z_coords = np.where(x_coords < 0, m1 * x_coords, m2 * x_coords)
+    # z_coords = np.abs(x_coords)
+
+    # 5. Stack the points into a single array
+    points = np.stack((x_coords, y_coords, z_coords), axis=-1)
+    center = np.array([0,0,0])
+    points = np.vstack((center,points))
+    return points
+
 if __name__ == '__main__':
     createDataSet()
-
     print("yay")
