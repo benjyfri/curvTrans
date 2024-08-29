@@ -304,7 +304,7 @@ def testPretrainedModel(args, model=None):
             label = info['class'].to(device).long()
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
             # output = output[:,:4]
-            output = output[:,:8]
+            output = (output[:,:8]).squeeze()
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
 
@@ -348,7 +348,8 @@ def testPretrainedModel(args, model=None):
 if __name__ == '__main__':
     args = configArgsPCT()
     model = train_and_test(args)
+    torch.save(model.state_dict(), f'{args.exp_name}.pt')
     # model = input_visualized_importance()
     testPretrainedModel(args, model=model.to('cuda'))
-    torch.save(model.state_dict(), f'{args.exp_name}.pt')
+
 
