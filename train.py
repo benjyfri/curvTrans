@@ -18,29 +18,36 @@ def test(model, dataloader, loss_function, device, args):
     total_loss = 0.0
     total_acc_loss = 0.0
     count = 0
-    label_correct = {label: 0 for label in range(4)}
-    label_total = {label: 0 for label in range(4)}
+    # label_correct = {label: 0 for label in range(4)}
+    # label_total = {label: 0 for label in range(4)}
+    label_correct = {label: 0 for label in range(8)}
+    label_total = {label: 0 for label in range(8)}
 
     with torch.no_grad():
         for batch in dataloader:
             pcl, info = batch['point_cloud'].to(device), batch['info']
             label = info['class'].to(device).long()
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+            output = output.squeeze()
             loss = loss_function(output, label)
-            output = output[:,:4]
+            # output = output[:,:4]
+            output = output[:,:8]
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
             total_loss += loss.item()
             count += 1
-            for label_name in range(4):
+            # for label_name in range(4):
+            for label_name in range(8):
                 correct_mask = (preds == label_name) & (label == label_name)
                 label_correct[label_name] += correct_mask.sum().item()
                 label_total[label_name] += (label == label_name).sum().item()
 
     # Overall accuracy
     test_acc = (total_acc_loss / (count))
+    # label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
+    #                     for label in range(4)}
     label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
-                        for label in range(4)}
+                        for label in range(8)}
     average_loss = total_loss / (count)
 
     return average_loss, test_acc, label_accuracies
@@ -64,8 +71,10 @@ def train_and_test(args):
     #     test_dataset = BasicPointCloudDataset(file_path='test_surfaces.h5' , args=args)
     # if args.sampled_points==40:
 
-    train_dataset = BasicPointCloudDataset(file_path="train_surfaces_40_stronger_boundaries.h5" , args=args)
-    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5' , args=args)
+    # train_dataset = BasicPointCloudDataset(file_path="train_surfaces_40_stronger_boundaries.h5" , args=args)
+    # test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5' , args=args)
+    train_dataset = BasicPointCloudDataset(file_path="train_surfaces_with_corners.h5" , args=args)
+    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners.h5' , args=args)
 
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
@@ -102,12 +111,14 @@ def train_and_test(args):
             for batch in tqdm_bar:
                 pcl, info = batch['point_cloud'].to(device), batch['info']
                 label = info['class'].to(device).long()
-                output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-                orig_classification = output[:, :4]
+                output = (model((pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
+                # orig_classification = output[:, :4]
+                orig_classification = output[:, :8]
                 orig_emb = output
                 classification_loss = torch.tensor((0))
                 if args.classification == 1:
-                    orig_emb = output[:, 4:]
+                    # orig_emb = output[:, 4:]
+                    orig_emb = output[:, 8:]
                     classification_loss = criterion(orig_classification, label)
 
                 if args.contr_loss_weight != 0:
@@ -117,11 +128,13 @@ def train_and_test(args):
                     output_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
                     pos_emb = output_pcl2
                     if args.classification == 1:
-                        pos_emb = output_pcl2[:, 4:]
+                        # pos_emb = output_pcl2[:, 4:]
+                        pos_emb = output_pcl2[:, 8:]
                     output_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
                     neg_emb = output_contrastive_pcl
                     if args.classification == 1:
-                        neg_emb = output_contrastive_pcl[:, 4:]
+                        # neg_emb = output_contrastive_pcl[:, 4:]
+                        neg_emb = output_contrastive_pcl[:, 8:]
                     contrstive_loss = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
                     total_train_contrastive_positive_loss += mseLoss(orig_emb, pos_emb)
                     total_train_contrastive_negative_loss += mseLoss(orig_emb, neg_emb)
@@ -137,8 +150,10 @@ def train_and_test(args):
                     positive_smooth_emb = positive_output_smooth_pcl
                     negative_smooth_emb = negative_output_smooth_pcl
                     if args.classification == 1:
-                        positive_smooth_emb = positive_smooth_emb[:,4:]
-                        negative_smooth_emb = negative_smooth_emb[:,4:]
+                        # positive_smooth_emb = positive_smooth_emb[:,4:]
+                        # negative_smooth_emb = negative_smooth_emb[:,4:]
+                        positive_smooth_emb = positive_smooth_emb[:,8:]
+                        negative_smooth_emb = negative_smooth_emb[:,8:]
                     smoothness_contrastive_loss = tripletMarginLoss(orig_emb, positive_smooth_emb, negative_smooth_emb)
                     total_train_smoothness_loss += smoothness_contrastive_loss
                 else:
@@ -204,6 +219,8 @@ def configArgsPCT():
                         help='learning rate (default: 0.001, 0.1 if using sgd)')
     parser.add_argument('--use_wandb', type=int, default=0, metavar='N',
                         help='use angles in learning ')
+    parser.add_argument('--graph_weight_mode', type=int, default=0, metavar='N',
+                        help='0 is -dist; 1 is -dist^2; 2 is -dist dvided by largest dist')
     parser.add_argument('--use_lap_reorder', type=int, default=1, metavar='N',
                         help='reorder points by laplacian order ')
     parser.add_argument('--lap_eigenvalues_dim', type=int, default=0, metavar='N',
@@ -252,7 +269,8 @@ def testPretrainedModel(args, model=None):
     #     test_dataset = BasicPointCloudDataset(file_path='test_surfaces.h5', args=args)
     # elif args.sampled_points == 40:
 
-    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5', args=args)
+    # test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5', args=args)
+    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners.h5', args=args)
 
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     if model is None:
@@ -268,11 +286,16 @@ def testPretrainedModel(args, model=None):
     model.eval()
     count =0
     total_acc_loss = 0.0
-    label_correct = {label: 0 for label in range(4)}
-    label_total = {label: 0 for label in range(4)}
-    wrong_preds = {label: [] for label in range(4)}
-    wrong_H_values = {label: [] for label in range(4)}
-    wrong_K_values = {label: [] for label in range(4)}
+    # label_correct = {label: 0 for label in range(4)}
+    # label_total = {label: 0 for label in range(4)}
+    # wrong_preds = {label: [] for label in range(4)}
+    # wrong_H_values = {label: [] for label in range(4)}
+    # wrong_K_values = {label: [] for label in range(4)}
+    label_correct = {label: 0 for label in range(8)}
+    label_total = {label: 0 for label in range(8)}
+    wrong_preds = {label: [] for label in range(8)}
+    wrong_H_values = {label: [] for label in range(8)}
+    wrong_K_values = {label: [] for label in range(8)}
     wrong_predictions_stats = {}  # Store statistics for wrong predictions
 
     with torch.no_grad():
@@ -280,7 +303,8 @@ def testPretrainedModel(args, model=None):
             pcl, info = batch['point_cloud'].to(device), batch['info']
             label = info['class'].to(device).long()
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-            output = output[:,:4]
+            # output = output[:,:4]
+            output = output[:,:8]
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
 
@@ -294,20 +318,23 @@ def testPretrainedModel(args, model=None):
             count += 1
 
             # Update per-label statistics
-            for label_name in range(4):
+            # for label_name in range(4):
+            for label_name in range(8):
                 correct_mask = (preds == label_name) & (label == label_name)
                 label_correct[label_name] += correct_mask.sum().item()
                 label_total[label_name] += (label == label_name).sum().item()
 
     label_accuracies = {
         label: label_correct[label] / label_total[label]
-        for label in range(4)
+        # for label in range(4)
+        for label in range(8)
         if label_total[label] != 0
     }
     for label, accuracy in label_accuracies.items():
         print(f"Accuracy for label {label}: {accuracy:.4f}")
 
-    for label in range(4):
+    # for label in range(4):
+    for label in range(8):
         if len(wrong_preds[label]) > 0:
             print(f"Label {label}:")
             print(f"  - Most frequent wrong prediction: {max(wrong_preds[label], key=wrong_preds[label].count)}")

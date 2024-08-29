@@ -33,9 +33,14 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                     self.point_clouds_group[point_cloud_name].attrs}
         # point_cloud = self.point_clouds_group[point_cloud_name]
         # point_cloud_orig = np.array(point_cloud, dtype=np.float32)
-
-        point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
-                                            count=self.sampled_points)
+        if info['class'] <= 3:
+            point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
+                                                count=self.sampled_points)
+        elif info['class'] == 7:
+            point_cloud = generate_room_corner_with_points(N=self.sampled_points)
+        else:
+            angle = 30 + (60 * (info['class']-4))
+            point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=angle)
 
         point_cloud = point_cloud / self.normalization_factor
         if self.pcl_scaling > 1.0:
@@ -314,6 +319,43 @@ def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0])):
 
     return sampled_points_with_centroid - centroid
 
+def generate_room_corner_with_points(N):
+    value = np.random.normal(loc=13.21, scale=4.522)
+    upper_bound = value * np.cos(45)
+    upper_bound = np.clip(upper_bound, 2, 40)
+
+    N1, N2, N3 = np.random.multinomial(N-3, [1/3, 1/3, 1/3]) + np.array([1,1,1])
+    center = np.array([0, 0, 0])
+    points1 = np.stack((np.random.uniform(0, upper_bound, N1), np.random.uniform(0, upper_bound, N1), np.zeros(N1)), axis=-1)
+    points2 = np.stack((np.zeros(N2), np.random.uniform(0, upper_bound, N2), -np.random.uniform(0, upper_bound, N2)), axis=-1)
+    points3 = np.stack((np.random.uniform(0, upper_bound, N3), np.zeros(N3), -np.random.uniform(0, upper_bound, N3)), axis=-1)
+    points = np.vstack((center, points1,points2,points3))
+    return points
+def generate_surfaces_angles_and_sample(N, angle):
+    angle_rad = np.radians((180 - angle) / 2)
+    value = np.random.normal(loc=13.21, scale=4.522)
+    upper_bound = value * np.cos(angle_rad)
+    upper_bound = np.clip(upper_bound, 2, 40)
+    # 1. Generate a random angle between 0 and 30 degrees
+
+
+    # 2. Compute the slopes (m1 and m2) for the surfaces
+    m1 = np.tan(angle_rad)  # slope for the left surface (x < 0)
+    m2 = -m1  # slope for the right surface (x >= 0)
+
+    # 3. Generate N random points in the square [-1, 1] x [-1, 1]
+    x_coords = np.random.uniform(-upper_bound, upper_bound, N)
+    y_coords = np.random.uniform(-upper_bound, upper_bound, N)
+
+    # 4. Calculate the corresponding z values based on the surfaces
+    z_coords = np.where(x_coords < 0, m1 * x_coords, m2 * x_coords)
+    # z_coords = np.abs(x_coords)
+
+    # 5. Stack the points into a single array
+    points = np.stack((x_coords, y_coords, z_coords), axis=-1)
+    center = np.array([0,0,0])
+    points = np.vstack((center,points))
+    return points
 def plotFunc(a, b, c, d, e,sampled_points):
     # Create a grid of points for the surface
     x = np.linspace(-1, 1, 100)
