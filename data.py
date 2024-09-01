@@ -37,10 +37,13 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
                                                 count=self.sampled_points)
         elif info['class'] == 7:
-            point_cloud = generate_room_corner_with_points(N=self.sampled_points)
+            # point_cloud = sample_points_on_pyramid(num_samples=self.sampled_points)
+            point_cloud = generate_room_corner_with_points(self.sampled_points)
         else:
-            angle = 30 + (60 * (info['class']-4))
-            point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=angle)
+            angle = 30 + (30 * (info['class']-4))
+            rand_angle = np.random.uniform(angle - 10, angle + 10)
+            point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=rand_angle)
+
 
         point_cloud = point_cloud / self.normalization_factor
         if self.pcl_scaling > 1.0:
@@ -256,7 +259,7 @@ def calculate_angle_and_area(a, b, c , d):
 
     return angle_at_a, angle_at_c, angle_at_d, area
 
-def plot_point_clouds(point_cloud1, point_cloud2, title):
+def plot_point_clouds(point_cloud1, point_cloud2, title=""):
     """
     Plot two point clouds in an interactive 3D plot with Plotly.
 
@@ -319,10 +322,62 @@ def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0])):
 
     return sampled_points_with_centroid - centroid
 
+
+def sample_points_on_pyramid(num_samples=40):
+    # Define an equilateral triangle as the base
+    # base_vertices = np.array([
+    #     [0, 0, 0],  # Vertex A
+    #     [1, 0, 0],  # Vertex B
+    #     [0.5, np.sqrt(3) / 2, 0]  # Vertex C
+    # ])
+    tri_edge_len = 4 * (np.sqrt(3))
+    tri_height = (np.sqrt(3) / 2) * tri_edge_len
+    centroid_vertex_len = (2/3) * tri_height
+    max_dist_point = np.random.normal(loc=13.21, scale=4.522)
+    max_dist_point = np.clip(max_dist_point,4.5,40)
+    height = np.sqrt((max_dist_point**2) - (centroid_vertex_len**2)  )
+    square_min = -1
+    square_max = 1
+
+    # Vertices of an equilateral triangle touching the edges of the square
+    # One vertex on the bottom edge, two on the left and right edges
+    A = np.array([0, -1,0])  # Middle of bottom edge
+    B = np.array([2*(np.sqrt(3)), 1,0])  # Right edge
+    C = np.array([-2*(np.sqrt(3)), 1,0])  # Left edge
+
+    # Apex is directly above the center of the triangle
+    centroid = (A + B + C) / 3
+    apex = np.array([centroid[0], centroid[1], height])
+
+    # Apex is directly above the center of the base
+    # apex = np.array([0.5, np.sqrt(3) / 6, height])
+    #
+    # A, B, C = base_vertices
+
+    # Ensure at least one point is sampled from each face
+    N1, N2, N3 = np.random.multinomial(num_samples-3, [1/3, 1/3, 1/3]) + np.array([1,1,1])
+
+    # 1. Sample points on the three faces
+    def sample_on_face(P, Q, num_samples_face):
+        u = np.random.rand(num_samples_face, 1)
+        v = np.random.rand(num_samples_face, 1)
+        mask = (u + v) > 1
+        u[mask], v[mask] = 1 - u[mask], 1 - v[mask]  # Reflect points that are outside the triangle
+        return (1 - u - v) * P + u * Q + v * apex
+
+    face_points_AB = sample_on_face(A, B, N1) - apex
+    face_points_BC = sample_on_face(B, C, N2) - apex
+    face_points_CA = sample_on_face(C, A, N3) - apex
+    center = np.array([0, 0, 0])
+    # Combine all sampled points
+    sampled_points = np.vstack((center,face_points_AB, face_points_BC, face_points_CA))
+
+    return sampled_points
 def generate_room_corner_with_points(N):
-    value = np.random.normal(loc=13.21, scale=4.522)
+    value = np.random.normal(loc=3.2715, scale=0.8955)
     upper_bound = value * np.cos(45)
-    upper_bound = np.clip(upper_bound, 2, 40)
+    upper_bound = np.clip(upper_bound, 1, 8)
+    # upper_bound = 1
 
     N1, N2, N3 = np.random.multinomial(N-3, [1/3, 1/3, 1/3]) + np.array([1,1,1])
     center = np.array([0, 0, 0])
@@ -333,9 +388,10 @@ def generate_room_corner_with_points(N):
     return points
 def generate_surfaces_angles_and_sample(N, angle):
     angle_rad = np.radians((180 - angle) / 2)
-    value = np.random.normal(loc=13.21, scale=4.522)
-    upper_bound = value * np.cos(angle_rad)
-    upper_bound = np.clip(upper_bound, 2, 40)
+    # value = np.random.normal(loc=3.2715, scale=0.8955)
+    # upper_bound = (value * np.cos(angle_rad)) / (np.sqrt(1.25))
+    # upper_bound = np.clip(upper_bound, 1, 8)
+    upper_bound = 1
     # 1. Generate a random angle between 0 and 30 degrees
 
 

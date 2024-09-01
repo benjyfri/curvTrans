@@ -73,8 +73,8 @@ def train_and_test(args):
 
     # train_dataset = BasicPointCloudDataset(file_path="train_surfaces_40_stronger_boundaries.h5" , args=args)
     # test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5' , args=args)
-    train_dataset = BasicPointCloudDataset(file_path="train_surfaces_with_corners.h5" , args=args)
-    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners.h5' , args=args)
+    train_dataset = BasicPointCloudDataset(file_path="train_surfaces_with_corners_mild.h5" , args=args)
+    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners_mild.h5' , args=args)
 
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
@@ -270,7 +270,7 @@ def testPretrainedModel(args, model=None):
     # elif args.sampled_points == 40:
 
     # test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5', args=args)
-    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners.h5', args=args)
+    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners_mild.h5', args=args)
 
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     if model is None:
