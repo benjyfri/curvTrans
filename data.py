@@ -374,9 +374,10 @@ def sample_points_on_pyramid(num_samples=40):
 
     return sampled_points
 def generate_room_corner_with_points(N):
-    value = np.random.normal(loc=3.2715, scale=0.8955)
+    # value = np.random.normal(loc=3.2715, scale=0.8955)
+    value = np.random.normal(loc=4.85, scale=0.8955)
+    value = np.clip(value, 1, 8)
     upper_bound = value * np.cos(45)
-    upper_bound = np.clip(upper_bound, 1, 8)
     # upper_bound = 1
 
     N1, N2, N3 = np.random.multinomial(N-3, [1/3, 1/3, 1/3]) + np.array([1,1,1])
@@ -389,9 +390,11 @@ def generate_room_corner_with_points(N):
 def generate_surfaces_angles_and_sample(N, angle):
     angle_rad = np.radians((180 - angle) / 2)
     # value = np.random.normal(loc=3.2715, scale=0.8955)
-    # upper_bound = (value * np.cos(angle_rad)) / (np.sqrt(1.25))
-    # upper_bound = np.clip(upper_bound, 1, 8)
-    upper_bound = 1
+    value = np.random.normal(loc=3.42, scale=0.8955)
+    value = np.clip(value, 1, 8)
+    upper_bound_y = 1
+    upper_bound_x = np.sqrt( ( value**2 ) - 1 ) * np.cos(angle_rad)
+    # upper_bound = 1
     # 1. Generate a random angle between 0 and 30 degrees
 
 
@@ -400,8 +403,8 @@ def generate_surfaces_angles_and_sample(N, angle):
     m2 = -m1  # slope for the right surface (x >= 0)
 
     # 3. Generate N random points in the square [-1, 1] x [-1, 1]
-    x_coords = np.random.uniform(-upper_bound, upper_bound, N)
-    y_coords = np.random.uniform(-upper_bound, upper_bound, N)
+    x_coords = np.random.uniform(-upper_bound_x, upper_bound_x, N)
+    y_coords = np.random.uniform(-upper_bound_y, upper_bound_y, N)
 
     # 4. Calculate the corresponding z values based on the surfaces
     z_coords = np.where(x_coords < 0, m1 * x_coords, m2 * x_coords)
