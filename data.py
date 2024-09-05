@@ -375,25 +375,32 @@ def sample_points_on_pyramid(num_samples=40):
     return sampled_points
 def generate_room_corner_with_points(N):
     # value = np.random.normal(loc=3.2715, scale=0.8955)
-    value = np.random.normal(loc=4.85, scale=0.8955)
-    value = np.clip(value, 1, 8)
-    upper_bound = value * np.cos(45)
+    # value = np.random.normal(loc=4.85, scale=0.8955)
+    # value = np.clip(value, 1, 8)
+    # value = np.random.normal(loc=1.924, scale=0.41)
+
+    upper_bound1, upper_bound2, upper_bound3 = [
+        np.clip(np.random.normal(loc=1.91, scale=0.41), 1, 4.4) * np.cos(np.radians(45)) for _ in range(3)]
+
     # upper_bound = 1
 
     N1, N2, N3 = np.random.multinomial(N-3, [1/3, 1/3, 1/3]) + np.array([1,1,1])
     center = np.array([0, 0, 0])
-    points1 = np.stack((np.random.uniform(0, upper_bound, N1), np.random.uniform(0, upper_bound, N1), np.zeros(N1)), axis=-1)
-    points2 = np.stack((np.zeros(N2), np.random.uniform(0, upper_bound, N2), -np.random.uniform(0, upper_bound, N2)), axis=-1)
-    points3 = np.stack((np.random.uniform(0, upper_bound, N3), np.zeros(N3), -np.random.uniform(0, upper_bound, N3)), axis=-1)
+    points1 = np.stack((np.random.uniform(0, upper_bound1, N1), np.random.uniform(0, upper_bound1, N1), np.zeros(N1)), axis=-1)
+    points2 = np.stack((np.zeros(N2), np.random.uniform(0, upper_bound2, N2), -np.random.uniform(0, upper_bound2, N2)), axis=-1)
+    points3 = np.stack((np.random.uniform(0, upper_bound3, N3), np.zeros(N3), -np.random.uniform(0, upper_bound3, N3)), axis=-1)
     points = np.vstack((center, points1,points2,points3))
     return points
 def generate_surfaces_angles_and_sample(N, angle):
     angle_rad = np.radians((180 - angle) / 2)
     # value = np.random.normal(loc=3.2715, scale=0.8955)
-    value = np.random.normal(loc=3.42, scale=0.8955)
-    value = np.clip(value, 1, 8)
-    upper_bound_y = 1
-    upper_bound_x = np.sqrt( ( value**2 ) - 1 ) * np.cos(angle_rad)
+    # value = np.random.normal(loc=3.42, scale=0.8955)
+    # value = np.random.normal(loc=1.924, scale=0.41)
+    value = np.random.normal(loc=2.07, scale=0.41)
+    # value = np.clip(value, 1, 8)
+    value = np.clip(value, 1, 4.4)
+    upper_bound_y = np.clip(np.random.normal(loc=1, scale=0.3), min(0.2, value), value - 0.1)
+    upper_bound_x = np.sqrt( ( value**2 ) - ( upper_bound_y**2 ) ) * np.cos(angle_rad)
     # upper_bound = 1
     # 1. Generate a random angle between 0 and 30 degrees
 
