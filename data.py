@@ -285,16 +285,18 @@ def plot_point_clouds(point_cloud1, point_cloud2, title=""):
         mode='markers', marker=dict(color='rgb(255, 105, 180)'), name='Origin (0, 0, 0)'
     ))
 
+    # Calculate global min and max values for all axes
+    all_points = np.vstack((point_cloud1, point_cloud2))
+    min_val = all_points.min()
+    max_val = all_points.max()
+
     fig.update_layout(
         title=title,  # Set the title
         title_y=0.9,  # Adjust the y position of the title
         scene=dict(
-            xaxis=dict(title='X', range=[min(point_cloud1[:,0].min(), point_cloud2[:,0].min()),
-                                         max(point_cloud1[:,0].max(), point_cloud2[:,0].max())]),
-            yaxis=dict(title='Y', range=[min(point_cloud1[:,1].min(), point_cloud2[:,1].min()),
-                                         max(point_cloud1[:,1].max(), point_cloud2[:,1].max())]),
-            zaxis=dict(title='Z', range=[min(point_cloud1[:,2].min(), point_cloud2[:,2].min()),
-                                         max(point_cloud1[:,2].max(), point_cloud2[:,2].max())]),
+            xaxis=dict(title='X', range=[min_val, max_val]),
+            yaxis=dict(title='Y', range=[min_val, max_val]),
+            zaxis=dict(title='Z', range=[min_val, max_val]),
             aspectmode='cube'  # Enforce same scale for all axes
         ),
         margin=dict(r=20, l=10, b=10, t=10)
@@ -390,6 +392,8 @@ def generate_room_corner_with_points(N):
     points2 = np.stack((np.zeros(N2), np.random.uniform(0, upper_bound2, N2), -np.random.uniform(0, upper_bound2, N2)), axis=-1)
     points3 = np.stack((np.random.uniform(0, upper_bound3, N3), np.zeros(N3), -np.random.uniform(0, upper_bound3, N3)), axis=-1)
     points = np.vstack((center, points1,points2,points3))
+    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    points = points - points[center_point_idx, :]
     return points
 def generate_surfaces_angles_and_sample(N, angle):
     angle_rad = np.radians((180 - angle) / 2)
@@ -409,8 +413,12 @@ def generate_surfaces_angles_and_sample(N, angle):
     m1 = np.tan(angle_rad)  # slope for the left surface (x < 0)
     m2 = -m1  # slope for the right surface (x >= 0)
 
+    alpha = np.clip(np.random.normal(loc=0.5, scale=0.2), 0.1, 0.9)
+    N1, N2 = np.random.multinomial(N - 2, [alpha, 1-alpha]) + np.array([1, 1])
     # 3. Generate N random points in the square [-1, 1] x [-1, 1]
-    x_coords = np.random.uniform(-upper_bound_x, upper_bound_x, N)
+    x_coords_neg = np.random.uniform(-upper_bound_x, 0, N1)
+    x_coords_pos = np.random.uniform(0, upper_bound_x, N2)
+    x_coords = np.concatenate((x_coords_neg,x_coords_pos))
     y_coords = np.random.uniform(-upper_bound_y, upper_bound_y, N)
 
     # 4. Calculate the corresponding z values based on the surfaces
@@ -418,7 +426,7 @@ def generate_surfaces_angles_and_sample(N, angle):
     # z_coords = np.abs(x_coords)
 
     # 5. Stack the points into a single array
-    points = np.stack((x_coords, y_coords, z_coords), axis=-1)
+    points = np.stack((x_coords, y_coords, z_coords), axis=-1) - np.array([0, (np.random.uniform(-(upper_bound_y / 2 ), (upper_bound_y / 2 ))), 0])
     center = np.array([0,0,0])
     points = np.vstack((center,points))
     return points
