@@ -382,7 +382,7 @@ def generate_room_corner_with_points(N):
     # value = np.random.normal(loc=1.924, scale=0.41)
 
     upper_bound1, upper_bound2, upper_bound3 = [
-        np.clip(np.random.normal(loc=1.91, scale=0.41), 1, 4.4) * np.cos(np.radians(45)) for _ in range(3)]
+        np.clip(np.random.normal(loc=1.9, scale=0.4), 1, 4.4) * np.cos(np.radians(45)) for _ in range(3)]
 
     # upper_bound = 1
 
@@ -400,7 +400,7 @@ def generate_surfaces_angles_and_sample(N, angle):
     # value = np.random.normal(loc=3.2715, scale=0.8955)
     # value = np.random.normal(loc=3.42, scale=0.8955)
     # value = np.random.normal(loc=1.924, scale=0.41)
-    value = np.random.normal(loc=2.07, scale=0.41)
+    value = np.random.normal(loc=2, scale=0.4)
     # value = np.clip(value, 1, 8)
     value = np.clip(value, 1, 4.4)
     upper_bound_y = np.clip(np.random.normal(loc=1, scale=0.3), min(0.2, value), value - 0.1)
