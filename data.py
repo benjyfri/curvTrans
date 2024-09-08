@@ -40,7 +40,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             # point_cloud = sample_points_on_pyramid(num_samples=self.sampled_points)
             point_cloud = generate_room_corner_with_points(self.sampled_points)
         else:
-            angle = 30 + (30 * (info['class']-4))
+            if info['class']==4:
+                angle = 15
+            if info['class']==5:
+                angle = 45
+            if info['class']==6:
+                angle = 90
             rand_angle = np.random.uniform(angle - 10, angle + 10)
             point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=rand_angle)
 
@@ -382,7 +387,7 @@ def generate_room_corner_with_points(N):
     # value = np.random.normal(loc=1.924, scale=0.41)
 
     upper_bound1, upper_bound2, upper_bound3 = [
-        np.clip(np.random.normal(loc=1.9, scale=0.4), 1, 4.4) * np.cos(np.radians(45)) for _ in range(3)]
+        np.clip(np.random.normal(loc=2.5, scale=0.57), 1, 6) * np.cos(np.radians(45)) for _ in range(3)]
 
     # upper_bound = 1
 
@@ -400,9 +405,9 @@ def generate_surfaces_angles_and_sample(N, angle):
     # value = np.random.normal(loc=3.2715, scale=0.8955)
     # value = np.random.normal(loc=3.42, scale=0.8955)
     # value = np.random.normal(loc=1.924, scale=0.41)
-    value = np.random.normal(loc=2, scale=0.4)
+    value = np.random.normal(loc=2.55, scale=0.57)
     # value = np.clip(value, 1, 8)
-    value = np.clip(value, 1, 4.4)
+    value = np.clip(value, 1, 6)
     upper_bound_y = np.clip(np.random.normal(loc=1, scale=0.3), min(0.2, value), value - 0.1)
     upper_bound_x = np.sqrt( ( value**2 ) - ( upper_bound_y**2 ) ) * np.cos(angle_rad)
     # upper_bound = 1
