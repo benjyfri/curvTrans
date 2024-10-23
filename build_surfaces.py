@@ -27,8 +27,7 @@ def samplePoints(a, b, c, d, e, count):
     return sampled_points_with_centroid
 def createDataSet():
     '''
-    At the moment I'm only creating "mountains" as in Lidar that seems to be mor likely
-    to scan a protruding mountain than a valley or potato chip
+    A
     :return:
     '''
     #create folders
@@ -39,8 +38,8 @@ def createDataSet():
     if not os.path.exists(test_path):
         os.makedirs(test_path)
 
-    new_file_path_train = "train_surfaces_with_corners.h5"
-    new_file_path_test = "test_surfaces_with_corners.h5"
+    new_file_path_train = "train_surfaces_with_corners_very_mild.h5"
+    new_file_path_test = "test_surfaces_with_corners_very_mild.h5"
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, counter=0, amount_of_pcl=10000,
@@ -101,7 +100,7 @@ def createDataSet():
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40):
     for k in range(amount_of_pcl):
-        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=5, epsilon=0.05)
+        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=1.5, epsilon=0.01)
         point_cloud = samplePoints(a, b, c, d, e, count=size_of_pcl)
         point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = a
@@ -120,7 +119,8 @@ def addDataCornersToSet(point_clouds_group,angle, label, counter, amount_of_pcl,
     for k in range(amount_of_pcl):
         rand_angle = np.random.uniform(angle-10, angle+10)
         point_cloud = sampling_cur(size_of_pcl, rand_angle)
-        point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
+        # point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
+        point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=np.array([0,0,0]).reshape(1,3))
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = rand_angle
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['b'] = rand_angle
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['c'] = rand_angle
@@ -138,9 +138,15 @@ def createFunction(gaussian_curv, mean_curv, boundary=3, epsilon=0.05):
     while not okFunc:
         okFunc=True
         count += 1
-        a, b, c, d, e = [random.uniform(-10, 10) for _ in range(5)]
+        a, b, c, d, e = np.random.uniform(-2, 2, 5)
         K = (4*(a*b)-((c**2))) / ((1 + d**2 + e**2)**2)
         H = (a*(1 + e**2)-d*e*c +b*(1 + d**2)) / ( ( (d**2) + (e**2) + 1 )**1.5)
+
+
+        # Not to steep
+        if abs(H)> 5 or abs(K)>5:
+            okFunc = False
+            continue
         # zero gaussian curve
         if gaussian_curv==0:
             if abs(K) > epsilon:
