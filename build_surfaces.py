@@ -100,7 +100,7 @@ def createDataSet():
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40):
     for k in range(amount_of_pcl):
-        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=1.5, epsilon=0.01)
+        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=0.5, epsilon=0.01)
         point_cloud = samplePoints(a, b, c, d, e, count=size_of_pcl)
         point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = a
@@ -138,13 +138,13 @@ def createFunction(gaussian_curv, mean_curv, boundary=3, epsilon=0.05):
     while not okFunc:
         okFunc=True
         count += 1
-        a, b, c, d, e = np.random.uniform(-2, 2, 5)
+        a, b, c, d, e = np.random.uniform(-1, 1, 5)
         K = (4*(a*b)-((c**2))) / ((1 + d**2 + e**2)**2)
         H = (a*(1 + e**2)-d*e*c +b*(1 + d**2)) / ( ( (d**2) + (e**2) + 1 )**1.5)
 
 
         # Not to steep
-        if abs(H)> 5 or abs(K)>5:
+        if abs(H)> 3 or abs(K)>3:
             okFunc = False
             continue
         # zero gaussian curve
@@ -208,11 +208,14 @@ def plotPcl(a, b, c, d, e, sample_count=40):
                                textposition='middle center',
                                name='Rest of Points'))
 
-    # Customize layout
-    fig.update_layout(scene=dict(xaxis_title='X', yaxis_title='Y', zaxis_title='Z'),
-                      title="Sampled Points")
-
-    # Show the plot
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(title='X'),
+            yaxis=dict(title='Y'),
+            zaxis=dict(title='Z'),
+        ),
+        margin=dict(r=20, l=10, b=10, t=50)
+    )
     fig.show()
 
 
