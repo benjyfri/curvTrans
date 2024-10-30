@@ -100,7 +100,7 @@ def createDataSet():
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40):
     for k in range(amount_of_pcl):
-        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=0.5, epsilon=0.1)
+        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=0.5, epsilon=0.3)
         point_cloud = samplePoints(a, b, c, d, e, count=size_of_pcl)
         point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = a
