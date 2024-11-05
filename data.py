@@ -348,9 +348,12 @@ def sampleHalfSpacePoints(a, b, c, d, e, count):
     # Concatenate the centroid [0, 0, 0] to the beginning of the array
     centroid = np.array([[0, 0, 0]])
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
-    # center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-5,0))]
-    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[-1]
+    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-15,0))]
+    # center_point_idx = np.argsort(np.linalg.norm(sampled_points, axis=1))[-1]
     sampled_points_with_centroid = sampled_points_with_centroid - sampled_points_with_centroid[center_point_idx, :]
+    sampled_points_with_centroid[center_point_idx, :] = (sampled_points_with_centroid[0, :]).copy()
+    sampled_points_with_centroid[0, :] = np.array([[0, 0, 0]])
+
     return sampled_points_with_centroid
 
 def sample_points_on_pyramid(num_samples=40):
@@ -422,6 +425,9 @@ def generate_room_corner_with_points(N):
     points = np.vstack((center, points1,points2,points3))
     center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
     points = points - points[center_point_idx, :]
+
+    # must fix - is wrong! first point must be centered!
+    a = 3/0
     return points
 def generate_surfaces_angles_and_sample(N, angle):
     angle_rad = np.radians((180 - angle) / 2)
@@ -459,6 +465,9 @@ def generate_surfaces_angles_and_sample(N, angle):
     points = np.vstack((center,points))
     center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
     points = points - points[center_point_idx, :]
+
+    # must fix - is wrong! first point must be centered!
+    a = 3/0
     return points
 def plotFunc(a, b, c, d, e,sampled_points):
     # Create a grid of points for the surface
