@@ -53,12 +53,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #     point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=rand_angle)
 
 
-        point_cloud = point_cloud / self.normalization_factor
-        if self.pcl_scaling > 1.0:
-            increase_scale = np.random.uniform(low=1, high=self.pcl_scaling)
-            decrease_scale = np.random.uniform(low=(1/self.pcl_scaling), high=1)
-            scale = random.choice([increase_scale, decrease_scale])
-            point_cloud = scale * point_cloud
+        # point_cloud = point_cloud / self.normalization_factor
+        # if self.pcl_scaling > 1.0:
+        #     increase_scale = np.random.uniform(low=1, high=self.pcl_scaling)
+        #     decrease_scale = np.random.uniform(low=(1/self.pcl_scaling), high=1)
+        #     scale = random.choice([increase_scale, decrease_scale])
+        #     point_cloud = scale * point_cloud
         if self.rotate_data:
             # point_cloud1 = random_rotation(point_cloud)
             rot = R.random().as_matrix()
@@ -348,7 +348,7 @@ def sampleHalfSpacePoints(a, b, c, d, e, count):
     # Concatenate the centroid [0, 0, 0] to the beginning of the array
     centroid = np.array([[0, 0, 0]])
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
-    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-15,0))]
+    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-5,0))]
     # center_point_idx = np.argsort(np.linalg.norm(sampled_points, axis=1))[-1]
     sampled_points_with_centroid = sampled_points_with_centroid - sampled_points_with_centroid[center_point_idx, :]
     sampled_points_with_centroid[center_point_idx, :] = (sampled_points_with_centroid[0, :]).copy()
