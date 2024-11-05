@@ -36,18 +36,21 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         if info['class'] <= 3:
             point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
                                                 count=self.sampled_points)
-        elif info['class'] == 7:
-            # point_cloud = sample_points_on_pyramid(num_samples=self.sampled_points)
-            point_cloud = generate_room_corner_with_points(self.sampled_points)
         else:
-            if info['class']==4:
-                angle = 10
-            if info['class']==5:
-                angle = 45
-            if info['class']==6:
-                angle = 90
-            rand_angle = np.random.uniform(angle - 10, angle + 10)
-            point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=rand_angle)
+            point_cloud = sampleHalfSpacePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
+                                                count=self.sampled_points)
+        # elif info['class'] == 7:
+        #     # point_cloud = sample_points_on_pyramid(num_samples=self.sampled_points)
+        #     point_cloud = generate_room_corner_with_points(self.sampled_points)
+        # else:
+        #     if info['class']==4:
+        #         angle = 10
+        #     if info['class']==5:
+        #         angle = 45
+        #     if info['class']==6:
+        #         angle = 90
+        #     rand_angle = np.random.uniform(angle - 10, angle + 10)
+        #     point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=rand_angle)
 
 
         point_cloud = point_cloud / self.normalization_factor
@@ -327,8 +330,28 @@ def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0])):
     centroid = np.expand_dims(center_point, axis=0)
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
 
-    return sampled_points_with_centroid - centroid
+    return sampled_points_with_centroid
+def sampleHalfSpacePoints(a, b, c, d, e, count):
+    def surface_function(x, y):
+        return a * x**2 + b * y**2 + c * x * y + d * x + e * y
 
+    # Generate random points within the range [-1, 1] for both x and y
+    x_samples = np.random.uniform(-1, 1, count)
+    y_samples = np.random.uniform(-1, 1, count)
+
+    # Evaluate the surface function at the random points
+    z_samples = surface_function(x_samples, y_samples)
+
+    # Create an array with the sampled points
+    sampled_points = np.column_stack((x_samples, y_samples, z_samples))
+
+    # Concatenate the centroid [0, 0, 0] to the beginning of the array
+    centroid = np.array([[0, 0, 0]])
+    sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
+    # center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-10,0))]
+    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[-15]
+    sampled_points_with_centroid = sampled_points_with_centroid - sampled_points_with_centroid[center_point_idx, :]
+    return sampled_points_with_centroid
 
 def sample_points_on_pyramid(num_samples=40):
     # Define an equilateral triangle as the base
@@ -434,6 +457,8 @@ def generate_surfaces_angles_and_sample(N, angle):
     points = np.stack((x_coords, y_coords, z_coords), axis=-1) - np.array([0, (np.random.uniform(-(upper_bound_y / 2 ), (upper_bound_y / 2 ))), 0])
     center = np.array([0,0,0])
     points = np.vstack((center,points))
+    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    points = points - points[center_point_idx, :]
     return points
 def plotFunc(a, b, c, d, e,sampled_points):
     # Create a grid of points for the surface
