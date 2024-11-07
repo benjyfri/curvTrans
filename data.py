@@ -36,21 +36,21 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         if info['class'] <= 3:
             point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
                                                 count=self.sampled_points)
-        # else:
-        #     point_cloud = sampleHalfSpacePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
-        #                                         count=self.sampled_points)
-        elif info['class'] == 7:
-            # point_cloud = sample_points_on_pyramid(num_samples=self.sampled_points)
-            point_cloud = generate_room_corner_with_points(self.sampled_points)
         else:
-            if info['class']==4:
-                angle = 10
-            if info['class']==5:
-                angle = 45
-            if info['class']==6:
-                angle = 90
-            rand_angle = np.random.uniform(angle - 10, angle + 10)
-            point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=rand_angle)
+            point_cloud = sampleHalfSpacePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
+                                                count=self.sampled_points)
+        # elif info['class'] == 7:
+        #     # point_cloud = sample_points_on_pyramid(num_samples=self.sampled_points)
+        #     point_cloud = generate_room_corner_with_points(self.sampled_points)
+        # else:
+        #     if info['class']==4:
+        #         angle = 10
+        #     if info['class']==5:
+        #         angle = 45
+        #     if info['class']==6:
+        #         angle = 90
+        #     rand_angle = np.random.uniform(angle - 10, angle + 10)
+        #     point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=rand_angle)
 
 
         # point_cloud = point_cloud / self.normalization_factor
