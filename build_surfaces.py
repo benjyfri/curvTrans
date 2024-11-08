@@ -160,7 +160,7 @@ def createDataSet():
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40, edge=False):
     for k in range(amount_of_pcl):
-        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=0.7, epsilon=0.4)
+        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=0.5, epsilon=0.1)
         if edge==True:
             point_cloud = sampleHalfSpacePoints(a, b, c, d, e, count=size_of_pcl)
         else:
