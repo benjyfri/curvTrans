@@ -120,23 +120,23 @@ def train_and_test(args):
                 classification_loss = torch.tensor((0))
                 if args.classification == 1:
                     # orig_emb = output[:, 4:]
-                    orig_emb = output[:, 8:]
+                    # orig_emb = output[:, 8:]
                     classification_loss = criterion(orig_classification, label)
 
                 if args.contr_loss_weight != 0:
                     pcl2 = batch['point_cloud2'].to(device)
                     contrastive_point_cloud = batch['contrastive_point_cloud'].to(device)
 
-                    output_pcl2 = model((pcl2.permute(0, 2, 1)).unsqueeze(2))
+                    output_pcl2 = (model((pcl2.permute(0, 2, 1)).unsqueeze(2))).squeeze()
                     pos_emb = output_pcl2
-                    if args.classification == 1:
-                        # pos_emb = output_pcl2[:, 4:]
-                        pos_emb = output_pcl2[:, 8:]
-                    output_contrastive_pcl = model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))
+                    # if args.classification == 1:
+                    #     # pos_emb = output_pcl2[:, 4:]
+                    #     pos_emb = output_pcl2[:, 8:]
+                    output_contrastive_pcl = (model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))).squeeze()
                     neg_emb = output_contrastive_pcl
-                    if args.classification == 1:
-                        # neg_emb = output_contrastive_pcl[:, 4:]
-                        neg_emb = output_contrastive_pcl[:, 8:]
+                    # if args.classification == 1:
+                    #     # neg_emb = output_contrastive_pcl[:, 4:]
+                    #     neg_emb = output_contrastive_pcl[:, 8:]
                     contrstive_loss = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
                     total_train_contrastive_positive_loss += mseLoss(orig_emb, pos_emb)
                     total_train_contrastive_negative_loss += mseLoss(orig_emb, neg_emb)
@@ -210,14 +210,14 @@ def train_and_test(args):
 def configArgsPCT():
     parser = argparse.ArgumentParser(description='Point Cloud Recognition')
     parser.add_argument('--wandb_proj', type=str, default='MLP-Contrastive-Ablation', metavar='N',
-                        help='Name of the wnadb project name to upload the run data')
+                        help='Name of the wandb project name to upload the run data')
     parser.add_argument('--exp_name', type=str, default='exp', metavar='N',
                         help='Name of the experiment')
-    parser.add_argument('--batch_size', type=int, default=512, metavar='batch_size',
+    parser.add_argument('--batch_size', type=int, default=1024, metavar='batch_size',
                         help='Size of batch)')
-    parser.add_argument('--epochs', type=int, default=100, metavar='N',
+    parser.add_argument('--epochs', type=int, default=50, metavar='N',
                         help='number of episode to train ')
-    parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                         help='learning rate (default: 0.001, 0.1 if using sgd)')
     parser.add_argument('--use_wandb', type=int, default=0, metavar='N',
                         help='use angles in learning ')
@@ -227,39 +227,33 @@ def configArgsPCT():
                         help='reorder points by laplacian order ')
     parser.add_argument('--lap_eigenvalues_dim', type=int, default=0, metavar='N',
                         help='use eigenvalues in as input')
-    parser.add_argument('--use_second_deg', type=int, default=0, metavar='N',
+    parser.add_argument('--use_second_deg', type=int, default=1, metavar='N',
                         help='use second degree embedding ')
     parser.add_argument('--lpe_normalize', type=int, default=0, metavar='N',
                         help='use PCT transformer version')
     parser.add_argument('--std_dev', type=float, default=0, metavar='N',
                         help='amount of noise to add to data')
-    parser.add_argument('--pcl_scaling', type=float, default=1.0, metavar='N',
-                        help='scaling the point cloud')
-    parser.add_argument('--normalization_factor', type=float, default=1.0, metavar='N',
-                        help='scaling the data set to be in cube [-1 1]')
     parser.add_argument('--contr_loss_weight', type=float, default=0.0, metavar='N',
                         help='weight of contrastive loss')
     parser.add_argument('--smoothness_loss', type=float, default=0.0, metavar='N',
                         help='weight of smoothness contrastive loss')
-    parser.add_argument('--lpe_dim', type=int, default=3, metavar='N',
+    parser.add_argument('--lpe_dim', type=int, default=0, metavar='N',
                         help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--use_xyz', type=int, default=1, metavar='N',
                         help='use xyz coordinates as part of input')
     parser.add_argument('--classification', type=int, default=1, metavar='N',
                         help='use classification loss')
-    parser.add_argument('--contrastive_mid_layer', type=int, default=0, metavar='N',
-                        help='use contrastive loss with middle layer (one before last)')
     parser.add_argument('--rotate_data', type=int, default=1, metavar='N',
                         help='use rotated data')
-    parser.add_argument('--num_neurons_per_layer', type=int, default=64, metavar='N',
+    parser.add_argument('--num_neurons_per_layer', type=int, default=32, metavar='N',
                         help='how many neurons per layer to use')
-    parser.add_argument('--num_mlp_layers', type=int, default=4, metavar='N',
+    parser.add_argument('--num_mlp_layers', type=int, default=3, metavar='N',
                         help='how many mlp layers to use')
     parser.add_argument('--output_dim', type=int, default=4, metavar='N',
                         help='how many labels are used')
-    parser.add_argument('--lr_jumps', type=int, default=50, metavar='N',
+    parser.add_argument('--lr_jumps', type=int, default=15, metavar='N',
                         help='Lower lr *0.1 every amount of jumps')
-    parser.add_argument('--sampled_points', type=int, default=40, metavar='N',
+    parser.add_argument('--sampled_points', type=int, default=20, metavar='N',
                         help='How many points where sampled around centroid')
     parser.add_argument('--smooth_num_of_neighbors', type=int, default=1, metavar='N',
                         help='How many neighbors should we choose from for smoothing')
