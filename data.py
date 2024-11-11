@@ -127,8 +127,6 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                 contrastive_point_cloud = samplePoints(a, b, c, d, e, count=self.sampled_points)
                 positive_point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'], count=self.sampled_points)
 
-            plot_point_clouds(point_cloud, contrastive_point_cloud, "neg " + str(info['class']))
-            plot_point_clouds(point_cloud, positive_point_cloud, "pos " + str(info['class']))
             contrastive_point_cloud = torch.tensor(contrastive_point_cloud, dtype=torch.float32)
             contrastive_point_cloud = random_rotation(contrastive_point_cloud)
 
