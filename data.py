@@ -98,30 +98,27 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             positive_smooth_point_cloud = torch.tensor((0))
             negative_smooth_point_cloud = torch.tensor((0))
         if self.contr_loss_weight  != 0:
-            countty = 0
+            a,b,c,d,e = info['a'], info['b'], info['c'], info['d'],info['e']
+            K_orig = (4 * ((a) * (b)) - (((c) ** 2))) / ((1 + (d) ** 2 + (e) ** 2) ** 2)
+            H_orig = ((a) * (1 + (e) ** 2) - (d) * (e) * (c) + (b) * (1 + (d) ** 2)) / (
+                        (((d) ** 2) + ((e) ** 2) + 1) ** 1.5)
             while True:
-                noise_to_add = np.random.normal(0, 1, 5)
-                K_orig = (4 * ((info['a']) * (info['b'])) - (((info['c']) ** 2))) / ((1 + (info['d']) ** 2 + (info['e']) ** 2) ** 2)
-                H_orig = ((info['a']) * (1 + (info['e']) ** 2) - (info['d']) * (info['e']) * (info['c']) + (info['b']) * (1 + (info['d']) ** 2)) / ((((info['d']) ** 2) + ((info['e']) ** 2) + 1) ** 1.5)
-                K_cont = (4 * ((info['a'] + noise_to_add[0]) * (info['b'] + noise_to_add[1])) - (
-                ((info['c'] + noise_to_add[2]) ** 2))) / (
-                                     (1 + (info['d'] + noise_to_add[3]) ** 2 + (info['e'] + noise_to_add[4]) ** 2) ** 2)
-                H_cont = ((info['a'] + noise_to_add[0]) * (1 + (info['e'] + noise_to_add[4]) ** 2) - (
-                            info['d'] + noise_to_add[3]) * (info['e'] + noise_to_add[4]) * (
-                                      info['c'] + noise_to_add[2]) + (info['b'] + noise_to_add[1]) * (
-                                      1 + (info['d'] + noise_to_add[3]) ** 2)) / ((((info['d'] + noise_to_add[
-                    3]) ** 2) + ((info['e'] + noise_to_add[4]) ** 2) + 1) ** 1.5)
+                noise_to_add = np.random.normal(0, 0.5, 5)
+                K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
+                ((c + noise_to_add[2]) ** 2))) / (
+                                     (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
+                H_cont = ((a + noise_to_add[0]) * (1 + (e + noise_to_add[4]) ** 2) - (
+                            d + noise_to_add[3]) * (e + noise_to_add[4]) * (
+                                      c + noise_to_add[2]) + (b + noise_to_add[1]) * (
+                                      1 + (d + noise_to_add[3]) ** 2)) / ((((d + noise_to_add[
+                    3]) ** 2) + ((e + noise_to_add[4]) ** 2) + 1) ** 1.5)
                 if ((abs(H_cont-H_orig) > 0.5) or (abs(K_cont-K_orig) > 0.5)) and ((abs(H_cont-H_orig) < 2) and (abs(K_cont-K_orig) <2)):
-                    # print(f'++++++++++++')
-                    # print(f'H_diff: {abs(H_cont-H_orig)}, K_diff: {abs(K_cont-K_orig)}')
-                    # print(f'COUNT: {countty}')
                     a = info['a'] + noise_to_add[0]
                     b = info['b'] + noise_to_add[1]
                     c = info['c'] + noise_to_add[2]
                     d = info['d'] + noise_to_add[3]
                     e = info['e'] + noise_to_add[4]
                     break
-                countty+=1
 
             if info['class']==4:
                 contrastive_point_cloud = sampleHalfSpacePoints(a, b, c, d, e, count=self.sampled_points)
@@ -148,7 +145,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
 
-        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_point_cloud":positive_smooth_point_cloud, "negative_smooth_point_cloud":negative_smooth_point_cloud, "info": info, "ff":countty}
+        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_point_cloud":positive_smooth_point_cloud, "negative_smooth_point_cloud":negative_smooth_point_cloud, "info": info}
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
