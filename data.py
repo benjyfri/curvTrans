@@ -532,3 +532,30 @@ def random_rotation(point_cloud):
     rot_mat = torch.tensor(rot, dtype=torch.float32)
     rotated_point_cloud = torch.matmul(point_cloud, rot_mat.T)
     return rotated_point_cloud
+
+from sklearn.neighbors import NearestNeighbors
+def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):
+    """
+    Returns the k nearest neighbors for each point in the point cloud.
+
+    Args:
+        point_cloud (np.ndarray): Point cloud of shape (pcl_size, 3)
+        k (int): Number of nearest neighbors to return
+
+    Returns:
+        np.ndarray: Array of shape (1, 3, pcl_size, k) containing the k nearest neighbors for each point
+    """
+    pcl_size = pcl_interest.shape[0]
+    neigh = NearestNeighbors(n_neighbors=k)
+    neigh.fit(pcl_src)
+    distances, indices = neigh.kneighbors(pcl_interest)
+
+    neighbors_centered = np.empty((1, 3, pcl_size, k), dtype=pcl_src.dtype)
+    # Each point cloud should be centered around first point which is at the origin
+    for i in range(pcl_size):
+        orig = pcl_src[indices[i, :]] - pcl_interest[i,:]
+        if not (np.array_equal(orig[0,], np.array([0,0,0]))):
+            orig = np.vstack([np.array([0,0,0]), orig])[:-1]
+        neighbors_centered[0, :, i, :] = orig.T
+
+    return neighbors_centered

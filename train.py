@@ -98,6 +98,7 @@ def train_and_test(args):
     mseLoss = nn.MSELoss()
     contr_loss_weight = args.contr_loss_weight
     smooth_loss_weight = args.smoothness_loss
+    data_in_1_cube = args.cube
     # Training loop
     for epoch in range(num_epochs):
         model.train()  # Set the model to training mode
@@ -112,6 +113,8 @@ def train_and_test(args):
         with tqdm(train_dataloader, desc=f'Epoch {epoch + 1}/{num_epochs}', leave=False) as tqdm_bar:
             for batch in tqdm_bar:
                 pcl, info = batch['point_cloud'].to(device), batch['info']
+                if data_in_1_cube:
+                    pcl /= torch.max(torch.abs(pcl))
                 label = info['class'].to(device).long()
                 output = (model((pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
                 # orig_classification = output[:, :4]
@@ -247,6 +250,8 @@ def configArgsPCT():
                         help='use classification loss')
     parser.add_argument('--rotate_data', type=int, default=1, metavar='N',
                         help='use rotated data')
+    parser.add_argument('--cube', type=int, default=0, metavar='N',
+                        help='Normalize data into 1 cube')
     parser.add_argument('--num_neurons_per_layer', type=int, default=32, metavar='N',
                         help='how many neurons per layer to use')
     parser.add_argument('--num_mlp_layers', type=int, default=3, metavar='N',
