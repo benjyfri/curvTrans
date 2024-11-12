@@ -231,8 +231,10 @@ def configArgsPCT():
                         help='use second degree embedding ')
     parser.add_argument('--lpe_normalize', type=int, default=0, metavar='N',
                         help='use PCT transformer version')
-    parser.add_argument('--std_dev', type=float, default=0, metavar='N',
+    parser.add_argument('--std_dev', type=float, default=0.07, metavar='N',
                         help='amount of noise to add to data')
+    parser.add_argument('--clip', type=float, default=0.15, metavar='N',
+                        help='clip noise')
     parser.add_argument('--contr_loss_weight', type=float, default=0.0, metavar='N',
                         help='weight of contrastive loss')
     parser.add_argument('--smoothness_loss', type=float, default=0.0, metavar='N',

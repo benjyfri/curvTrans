@@ -16,6 +16,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.pcls_per_class = self.num_point_clouds // 4
         self.indices = list(range(self.num_point_clouds))
         self.std_dev = args.std_dev
+        self.clip = args.clip
         self.rotate_data = args.rotate_data
         self.contr_loss_weight = args.contr_loss_weight
         self.sampled_points = args.sampled_points
@@ -55,6 +56,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             # point_cloud1 = random_rotation(point_cloud)
             rot = R.random().as_matrix()
             point_cloud1 = np.matmul(point_cloud, rot.T)
+            point_cloud10 = point_cloud1.copy()
         else:
             point_cloud1 = point_cloud
         point_cloud1 = torch.tensor(point_cloud1, dtype=torch.float32)
@@ -65,7 +67,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
 
         #Add noise to point cloud
         if self.std_dev != 0:
-            noise = torch.normal(0, self.std_dev, size=point_cloud1.shape, dtype=torch.float32)
+            noise = torch.normal(0, self.std_dev, size=point_cloud1.shape, dtype=torch.float32, device=point_cloud1.device)
+            noise = torch.clamp(noise, min=-self.clip, max=self.clip)
             point_cloud1 = point_cloud1 + noise
             point_cloud1 = point_cloud1 - point_cloud1[0,:]
         if self.smoothness_loss != 0:
@@ -87,10 +90,16 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             negative_smooth_point_cloud = random_rotation(negative_smooth_point_cloud)
 
             if self.std_dev != 0:
-                positive_smooth_noise = torch.normal(0, self.std_dev, size=positive_smooth_point_cloud.shape, dtype=torch.float32)
+                positive_smooth_noise = torch.normal(0, self.std_dev, size=positive_smooth_point_cloud.shape, dtype=torch.float32,
+                                     device=positive_smooth_point_cloud.device)
+                positive_smooth_noise = torch.clamp(positive_smooth_noise, min=-self.clip, max=self.clip)
                 positive_smooth_point_cloud = positive_smooth_point_cloud + positive_smooth_noise
                 positive_smooth_point_cloud = positive_smooth_point_cloud - positive_smooth_point_cloud[0, :]
-                negative_smooth_noise = torch.normal(0, self.std_dev, size=negative_smooth_point_cloud.shape, dtype=torch.float32)
+
+                negative_smooth_noise = torch.normal(0, self.std_dev, size=negative_smooth_point_cloud.shape,
+                                                     dtype=torch.float32,
+                                                     device=negative_smooth_point_cloud.device)
+                negative_smooth_noise = torch.clamp(negative_smooth_noise, min=-self.clip, max=self.clip)
                 negative_smooth_point_cloud = negative_smooth_point_cloud + negative_smooth_noise
                 negative_smooth_point_cloud = negative_smooth_point_cloud - negative_smooth_point_cloud[0, :]
 
@@ -133,10 +142,16 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud2 = torch.tensor(positive_point_cloud, dtype=torch.float32)
             point_cloud2 = random_rotation(point_cloud2)
             if self.std_dev != 0:
-                noise = torch.normal(0, self.std_dev, size=point_cloud2.shape, dtype=torch.float32)
+                noise = torch.normal(0, self.std_dev, size=point_cloud2.shape, dtype=torch.float32,
+                                     device=point_cloud2.device)
+                noise = torch.clamp(noise, min=-self.clip, max=self.clip)
                 point_cloud2 = point_cloud2 + noise
                 point_cloud2 = point_cloud2 - point_cloud2[0, :]
-                contrastive_noise = torch.normal(0, self.std_dev, size=contrastive_point_cloud.shape, dtype=torch.float32)
+
+
+                contrastive_noise = torch.normal(0, self.std_dev, size=contrastive_point_cloud.shape, dtype=torch.float32,
+                                     device=contrastive_point_cloud.device)
+                contrastive_noise = torch.clamp(contrastive_noise, min=-self.clip, max=self.clip)
                 contrastive_point_cloud = contrastive_point_cloud + contrastive_noise
                 contrastive_point_cloud = contrastive_point_cloud - contrastive_point_cloud[0, :]
         else:
