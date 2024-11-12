@@ -56,7 +56,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             # point_cloud1 = random_rotation(point_cloud)
             rot = R.random().as_matrix()
             point_cloud1 = np.matmul(point_cloud, rot.T)
-            point_cloud10 = point_cloud1.copy()
+            # point_cloud10 = point_cloud1.copy()
         else:
             point_cloud1 = point_cloud
         point_cloud1 = torch.tensor(point_cloud1, dtype=torch.float32)
