@@ -160,11 +160,11 @@ def createDataSet():
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40, edge=False):
     for k in range(amount_of_pcl):
-        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=1.2, epsilon=0.05)
-        if edge==True:
-            point_cloud = sampleHalfSpacePoints(a, b, c, d, e, count=size_of_pcl)
-        else:
-            point_cloud = samplePoints(a, b, c, d, e, count=size_of_pcl)
+        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=1.2, epsilon=0.1)
+        # if edge==True:
+        #     point_cloud = sampleHalfSpacePoints(a, b, c, d, e, count=size_of_pcl)
+        # else:
+        #     point_cloud = samplePoints(a, b, c, d, e, count=size_of_pcl)
         # point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
         point_clouds_group.create_dataset(f"point_cloud_{counter + k}", data=np.array([0, 0, 0]).reshape(1, 3))
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = a
@@ -207,55 +207,55 @@ def createFunction(gaussian_curv, mean_curv, boundary=3, epsilon=0.05):
         K = (4*(a*b)-((c**2))) / ((1 + d**2 + e**2)**2)
         H = (a*(1 + e**2)-d*e*c +b*(1 + d**2)) / ( ( (d**2) + (e**2) + 1 )**1.5)
 
-        # discriminant = H ** 2 - K
-        # k1 = H + np.sqrt(discriminant)
-        # k2 = H - np.sqrt(discriminant)
+        discriminant = H ** 2 - K
+        k1 = H + np.sqrt(discriminant)
+        k2 = H - np.sqrt(discriminant)
 
+
+        temp_max = k1 if abs(k1) > abs(k2) else k2
+        temp_min = k1 if abs(k1) < abs(k2) else k2
 
         # Not to steep
-        if abs(H)> 5 or abs(K)>5:
+        if abs(temp_max)> 5:
             okFunc = False
             continue
-        # zero gaussian curve
+
+        # zero gaussian curve --> either plane or ridge/valley
         if gaussian_curv==0:
-            if abs(K) > epsilon:
+            if (abs(temp_min) > epsilon):
                 okFunc=False
                 continue
-        # If gaussian curvature is non zero (saddle or parabolic) make sure both principal curvatures in saddle are large enough
-        if gaussian_curv != 0:
-            discriminant = H ** 2 - K
-            k1 = H + np.sqrt(discriminant)
-            k2 = H - np.sqrt(discriminant)
-            if (abs(k1) < boundary) or (abs(k2) < boundary):
+            # positive mean curv
+            if mean_curv == 0:
+                if (abs(temp_max) > epsilon):
+                    okFunc = False
+                    continue
+            # positive mean curv
+            if mean_curv == 1:
+                if temp_max < (boundary):
+                    okFunc = False
+                    continue
+            # negative mean curv
+            if mean_curv == -1:
+                if temp_max > -(boundary):
+                    okFunc = False
+                    continue
+
+        # non-zero gaussian curve --> either parabola or saddle
+        else:
+            if (abs(temp_min) < boundary):
                 okFunc = False
                 continue
-        # positive gaussian curv
-        if gaussian_curv==1:
-            if K < boundary:
-                okFunc=False
-                continue
-        # negative gaussian curv
-        if gaussian_curv==-1:
-            if K > -(boundary):
-                okFunc=False
-                continue
-
-
-        # zero mean curve
-        if mean_curv==0:
-            if abs(H) > epsilon:
-                okFunc=False
-                continue
-        # positive mean curv
-        if mean_curv==1:
-            if H < (boundary):
-                okFunc=False
-                continue
-        # negative mean curv
-        if mean_curv==-1:
-            if H > -(boundary):
-                okFunc=False
-                continue
+            # positive gaussian curv
+            if gaussian_curv==1:
+                if K < 0:
+                    okFunc=False
+                    continue
+            # negative gaussian curv
+            if gaussian_curv==-1:
+                if K > 0:
+                    okFunc=False
+                    continue
 
     return a, b, c, d, e, count , H , K
 
