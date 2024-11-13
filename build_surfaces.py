@@ -160,7 +160,7 @@ def createDataSet():
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40, edge=False):
     for k in range(amount_of_pcl):
-        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=0.5, epsilon=0.1)
+        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=1.2, epsilon=0.05)
         if edge==True:
             point_cloud = sampleHalfSpacePoints(a, b, c, d, e, count=size_of_pcl)
         else:
@@ -221,6 +221,14 @@ def createFunction(gaussian_curv, mean_curv, boundary=3, epsilon=0.05):
             if abs(K) > epsilon:
                 okFunc=False
                 continue
+        # If gaussian curvature is non zero (saddle or parabolic) make sure both principal curvatures in saddle are large enough
+        if gaussian_curv != 0:
+            discriminant = H ** 2 - K
+            k1 = H + np.sqrt(discriminant)
+            k2 = H - np.sqrt(discriminant)
+            if (abs(k1) < boundary) or (abs(k2) < boundary):
+                okFunc = False
+                continue
         # positive gaussian curv
         if gaussian_curv==1:
             if K < boundary:
@@ -231,6 +239,7 @@ def createFunction(gaussian_curv, mean_curv, boundary=3, epsilon=0.05):
             if K > -(boundary):
                 okFunc=False
                 continue
+
 
         # zero mean curve
         if mean_curv==0:
