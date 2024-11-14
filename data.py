@@ -158,6 +158,11 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
 
+
+        # title_class = info['class']
+        # plot_point_clouds(point_cloud1, np.load("10_pcl_noisy.npy"), f'class: {title_class}')
+        # a=1
+
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_point_cloud":positive_smooth_point_cloud, "negative_smooth_point_cloud":negative_smooth_point_cloud, "info": info}
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
@@ -377,7 +382,7 @@ def sampleHalfSpacePoints(a, b, c, d, e, count):
     # Concatenate the centroid [0, 0, 0] to the beginning of the array
     centroid = np.array([[0, 0, 0]])
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
-    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-15,0))]
+    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-10,0))]
     # center_point_idx = np.argsort(np.linalg.norm(sampled_points, axis=1))[-1]
     sampled_points_with_centroid = sampled_points_with_centroid - sampled_points_with_centroid[center_point_idx, :]
     sampled_points_with_centroid[center_point_idx, :] = (sampled_points_with_centroid[0, :]).copy()
