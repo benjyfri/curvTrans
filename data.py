@@ -111,8 +111,9 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             K_orig = (4 * ((a) * (b)) - (((c) ** 2))) / ((1 + (d) ** 2 + (e) ** 2) ** 2)
             H_orig = ((a) * (1 + (e) ** 2) - (d) * (e) * (c) + (b) * (1 + (d) ** 2)) / (
                         (((d) ** 2) + ((e) ** 2) + 1) ** 1.5)
+            count=0
             while True:
-                noise_to_add = np.random.normal(0, 0.5, 5)
+                noise_to_add = np.random.normal(0, 0.4, 5)
                 K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
                 ((c + noise_to_add[2]) ** 2))) / (
                                      (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
@@ -121,14 +122,14 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                                       c + noise_to_add[2]) + (b + noise_to_add[1]) * (
                                       1 + (d + noise_to_add[3]) ** 2)) / ((((d + noise_to_add[
                     3]) ** 2) + ((e + noise_to_add[4]) ** 2) + 1) ** 1.5)
-                if ((abs(H_cont-H_orig) > 0.5) or (abs(K_cont-K_orig) > 0.5)) and ((abs(H_cont-H_orig) < 2) and (abs(K_cont-K_orig) <2)):
+                if ((abs(H_cont-H_orig) > 0.3) or (abs(K_cont-K_orig) > 0.3)) and ((abs(H_cont-H_orig) < 1.5) and (abs(K_cont-K_orig) <1.5)):
                     a = info['a'] + noise_to_add[0]
                     b = info['b'] + noise_to_add[1]
                     c = info['c'] + noise_to_add[2]
                     d = info['d'] + noise_to_add[3]
                     e = info['e'] + noise_to_add[4]
                     break
-
+                count += 1
             if info['class']==4:
                 contrastive_point_cloud = sampleHalfSpacePoints(a, b, c, d, e, count=self.sampled_points)
                 positive_point_cloud = point_cloud
@@ -163,7 +164,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         # plot_point_clouds(point_cloud1, np.load("10_pcl_noisy.npy"), f'class: {title_class}')
         # a=1
 
-        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_point_cloud":positive_smooth_point_cloud, "negative_smooth_point_cloud":negative_smooth_point_cloud, "info": info}
+        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_point_cloud":positive_smooth_point_cloud, "negative_smooth_point_cloud":negative_smooth_point_cloud, "info": info, "count": count}
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
