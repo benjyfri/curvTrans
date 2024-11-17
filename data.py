@@ -175,10 +175,10 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             contrastive_point_cloud = torch.tensor((0))
 
 
-        title_class = info['class']
-        if title_class in [2,3]:
-            plot_point_clouds(point_cloud1@rot_orig, np.load("10_pcl_noisy.npy"), f'class: {title_class}')
-            a=1
+        # title_class = info['class']
+        # if title_class in [2,3]:
+        #     plot_point_clouds(point_cloud1@rot_orig, np.load("10_pcl_noisy.npy"), f'class: {title_class}')
+        #     a=1
     #         plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, f'pos; class: {title_class}')
     #         plot_point_clouds(point_cloud1@rot_orig, contrastive_point_cloud@neg_rot,
     # f'neg; class: {title_class}, orig_k1:{k1_orig:.2f}, orig_k2:{k2_orig:.2f}||\n'
