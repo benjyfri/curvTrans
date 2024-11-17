@@ -73,10 +73,10 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=2.5, epsilon=0.2, counter=15000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train parabolic pit surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1.5, epsilon=0.2, counter=20000, amount_of_pcl=5000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=2, epsilon=0.2, counter=20000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train ridge surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1.5, epsilon=0.2, counter=25000, amount_of_pcl=5000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=2, epsilon=0.2, counter=25000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train valley surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=2.5, epsilon=0.2, counter=30000, amount_of_pcl=10000,
@@ -121,10 +121,10 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=2.5, epsilon=0.2, counter=1500, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test parabolic pit surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1.5, epsilon=0.2, counter=2000, amount_of_pcl=500,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=2, epsilon=0.2, counter=2000, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test ridge surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1.5, epsilon=0.2, counter=2500, amount_of_pcl=500,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=2, epsilon=0.2, counter=2500, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test valley surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=2.5, epsilon=0.2, counter=3000, amount_of_pcl=1000,
