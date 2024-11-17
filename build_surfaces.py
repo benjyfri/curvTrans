@@ -79,7 +79,7 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1.5, epsilon=0.3, counter=25000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train valley surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=3.5, epsilon=0.3, counter=30000, amount_of_pcl=10000,
+        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=3, epsilon=0.3, counter=30000, amount_of_pcl=10000,
                      size_of_pcl=40)
         print(f'Finished train saddle surfaces')
 
@@ -127,7 +127,7 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1.5, epsilon=0.3, counter=2500, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test valley surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3.5, boundary=3, epsilon=0.3, counter=3000, amount_of_pcl=1000,
+        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=3, epsilon=0.3, counter=3000, amount_of_pcl=1000,
                      size_of_pcl=40)
         print(f'Finished test saddle surfaces')
 
