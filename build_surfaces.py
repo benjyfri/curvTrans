@@ -64,41 +64,41 @@ def createDataSet():
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
 
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, counter=0, amount_of_pcl=10000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=1.5, epsilon=0.2, counter=0, amount_of_pcl=10000,
                      size_of_pcl=40)
         print(f'Finished train flat surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, counter=10000, amount_of_pcl=5000,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=2.5, epsilon=0.2, counter=10000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train parabolic peak surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, counter=15000, amount_of_pcl=5000,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=2.5, epsilon=0.2, counter=15000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train parabolic pit surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, counter=20000, amount_of_pcl=5000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1.5, epsilon=0.2, counter=20000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train ridge surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, counter=25000, amount_of_pcl=5000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1.5, epsilon=0.2, counter=25000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train valley surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, counter=30000, amount_of_pcl=10000,
+        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=2.5, epsilon=0.2, counter=30000, amount_of_pcl=10000,
                      size_of_pcl=40)
         print(f'Finished train saddle surfaces')
 
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, counter=40000, amount_of_pcl=2500,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4,boundary=1.5, epsilon=0.2, counter=40000, amount_of_pcl=2500,
                      size_of_pcl=40, edge=True)
         print(f'Finished train HALFSPACE flat surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, counter=42500, amount_of_pcl=1250,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4,boundary=1.5, epsilon=0.2, counter=42500, amount_of_pcl=1250,
                      size_of_pcl=40, edge=True)
         print(f'Finished train HALFSPACE parabolic peak surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, counter=43750, amount_of_pcl=1250,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4,boundary=1.5, epsilon=0.2, counter=43750, amount_of_pcl=1250,
                      size_of_pcl=40, edge=True)
         print(f'Finished train HALFSPACE parabolic pit surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, counter=45000, amount_of_pcl=1250,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4,boundary=1.5, epsilon=0.2, counter=45000, amount_of_pcl=1250,
                      size_of_pcl=40, edge=True)
         print(f'Finished train HALFSPACE ridge surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, counter=46250, amount_of_pcl=1250,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4,boundary=1.5, epsilon=0.2, counter=46250, amount_of_pcl=1250,
                      size_of_pcl=40, edge=True)
         print(f'Finished train HALFSPACE valley surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, counter=47500, amount_of_pcl=2500,
+        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=1.5, epsilon=0.2, counter=47500, amount_of_pcl=2500,
                      size_of_pcl=40, edge=True)
         print(f'Finished train HALFSPACE saddle surfaces')
         # addDataCornersToSet(point_clouds_group, angle=30, label=4, counter=40000, amount_of_pcl=10000, size_of_pcl=40)
@@ -112,41 +112,41 @@ def createDataSet():
 
     with h5py.File(new_file_path_test, "w") as new_hdf5_test_file:
         point_clouds_group = new_hdf5_test_file.create_group("point_clouds")
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, counter=0, amount_of_pcl=1000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=1.5, epsilon=0.2, counter=0, amount_of_pcl=1000,
                      size_of_pcl=40)
         print(f'Finished test flat surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, counter=1000, amount_of_pcl=500,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=2.5, epsilon=0.2, counter=1000, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test parabolic peak surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, counter=1500, amount_of_pcl=500,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=2.5, epsilon=0.2, counter=1500, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test parabolic pit surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, counter=2000, amount_of_pcl=500,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1.5, epsilon=0.2, counter=2000, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test ridge surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, counter=2500, amount_of_pcl=500,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1.5, epsilon=0.2, counter=2500, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test valley surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, counter=3000, amount_of_pcl=1000,
+        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=2.5, epsilon=0.2, counter=3000, amount_of_pcl=1000,
                      size_of_pcl=40)
         print(f'Finished test saddle surfaces')
 
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, counter=4000, amount_of_pcl=250,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, counter=4000,boundary=1.5, epsilon=0.2, amount_of_pcl=250,
                      size_of_pcl=40, edge=True)
         print(f'Finished test HALFSPACE flat surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, counter=4250, amount_of_pcl=125,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4,boundary=1.5, epsilon=0.2, counter=4250, amount_of_pcl=125,
                      size_of_pcl=40, edge=True)
         print(f'Finished test HALFSPACE parabolic peak surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, counter=4375, amount_of_pcl=125,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4,boundary=1.5, epsilon=0.2, counter=4375, amount_of_pcl=125,
                      size_of_pcl=40, edge=True)
         print(f'Finished test HALFSPACE parabolic pit surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, counter=4500, amount_of_pcl=125,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4,boundary=1.5, epsilon=0.2, counter=4500, amount_of_pcl=125,
                      size_of_pcl=40, edge=True)
         print(f'Finished test HALFSPACE ridge surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, counter=4625, amount_of_pcl=125,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4,boundary=1.5, epsilon=0.2, counter=4625, amount_of_pcl=125,
                      size_of_pcl=40, edge=True)
         print(f'Finished test HALFSPACE valley surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, counter=4750, amount_of_pcl=250,
+        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=1.5, epsilon=0.2, counter=4750, amount_of_pcl=250,
                      size_of_pcl=40, edge=True)
         print(f'Finished test HALFSPACE saddle surfaces')
         # addDataCornersToSet(point_clouds_group, angle=30, label=4, counter=4000, amount_of_pcl=1000, size_of_pcl=40)
@@ -158,9 +158,9 @@ def createDataSet():
         # addDataCornersToSet(point_clouds_group, angle=360, label=7, counter=7000, amount_of_pcl=1000, size_of_pcl=40)
         # print(f'Finished test room corner surfaces')
 
-def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40, edge=False):
+def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, size_of_pcl=40, edge=False, boundary=2.5, epsilon=0.2):
     for k in range(amount_of_pcl):
-        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=2.3, epsilon=0.2)
+        a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=boundary, epsilon=epsilon)
         # if edge==True:
         #     point_cloud = sampleHalfSpacePoints(a, b, c, d, e, count=size_of_pcl)
         # else:
@@ -203,7 +203,7 @@ def createFunction(gaussian_curv, mean_curv, boundary=3, epsilon=0.05):
         okFunc=True
         count += 1
         # a, b, c, d, e = np.random.uniform(-1.3, 1.3, 5)
-        a, b, c, d, e = np.random.uniform(-1.5, 1.5, 5)
+        a, b, c, d, e = np.random.uniform(-2, 2, 5)
         K = (4*(a*b)-((c**2))) / ((1 + d**2 + e**2)**2)
         H = (a*(1 + e**2)-d*e*c +b*(1 + d**2)) / ( ( (d**2) + (e**2) + 1 )**1.5)
 

@@ -52,14 +52,10 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #     point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=rand_angle)
 
 
+        point_cloud1 = torch.tensor(point_cloud, dtype=torch.float32)
         if self.rotate_data:
-            # point_cloud1 = random_rotation(point_cloud)
-            rot = R.random().as_matrix()
-            point_cloud1 = np.matmul(point_cloud, rot.T)
+            rot_orig, point_cloud1 = random_rotation(point_cloud1)
             # point_cloud10 = point_cloud1.copy()
-        else:
-            point_cloud1 = point_cloud
-        point_cloud1 = torch.tensor(point_cloud1, dtype=torch.float32)
         # permute points
         shuffled_indices = torch.randperm(self.sampled_points) + 1
         permuted_indices = torch.cat((torch.tensor([0]), shuffled_indices), dim=0)
@@ -111,9 +107,18 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             K_orig = (4 * ((a) * (b)) - (((c) ** 2))) / ((1 + (d) ** 2 + (e) ** 2) ** 2)
             H_orig = ((a) * (1 + (e) ** 2) - (d) * (e) * (c) + (b) * (1 + (d) ** 2)) / (
                         (((d) ** 2) + ((e) ** 2) + 1) ** 1.5)
+
+            discriminant_orig = H_orig ** 2 - K_orig
+            k1_orig = H_orig + np.sqrt(discriminant_orig)
+            k2_orig = H_orig - np.sqrt(discriminant_orig)
+
+            temp_max_orig = k1_orig if abs(k1_orig) > abs(k2_orig) else k2_orig
+            temp_min_orig = k1_orig if abs(k1_orig) < abs(k2_orig) else k2_orig
+            min_curve_diff = 1
+            max_curve_diff = 1.5
             count=0
             while True:
-                noise_to_add = np.random.normal(0, 0.3, 5)
+                noise_to_add = np.random.normal(0, 0.7, 5)
                 K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
                 ((c + noise_to_add[2]) ** 2))) / (
                                      (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
@@ -122,7 +127,17 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                                       c + noise_to_add[2]) + (b + noise_to_add[1]) * (
                                       1 + (d + noise_to_add[3]) ** 2)) / ((((d + noise_to_add[
                     3]) ** 2) + ((e + noise_to_add[4]) ** 2) + 1) ** 1.5)
-                if ((abs(H_cont-H_orig) > 0.2) or (abs(K_cont-K_orig) > 0.2)) and ((abs(H_cont-H_orig) < 1) and (abs(K_cont-K_orig) <1)):
+                discriminant_cont = H_cont ** 2 - K_cont
+                k1_cont = H_cont + np.sqrt(discriminant_cont)
+                k2_cont = H_cont - np.sqrt(discriminant_cont)
+                temp_max_cont = k1_cont if abs(k1_cont) > abs(k2_cont) else k2_cont
+                temp_min_cont = k1_cont if abs(k1_cont) < abs(k2_cont) else k2_cont
+
+                temp_max_diff = abs(temp_max_cont-temp_max_orig)
+                temp_min_diff = abs(temp_min_cont-temp_min_orig)
+
+                if (( (temp_max_diff > min_curve_diff) or (temp_min_diff > min_curve_diff)) and
+                        ((temp_max_diff < max_curve_diff) and (temp_min_diff < max_curve_diff))):
                     a = info['a'] + noise_to_add[0]
                     b = info['b'] + noise_to_add[1]
                     c = info['c'] + noise_to_add[2]
@@ -138,10 +153,10 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                 positive_point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'], count=self.sampled_points)
 
             contrastive_point_cloud = torch.tensor(contrastive_point_cloud, dtype=torch.float32)
-            contrastive_point_cloud = random_rotation(contrastive_point_cloud)
+            neg_rot,contrastive_point_cloud = random_rotation(contrastive_point_cloud)
 
             point_cloud2 = torch.tensor(positive_point_cloud, dtype=torch.float32)
-            point_cloud2 = random_rotation(point_cloud2)
+            pos_rot, point_cloud2 = random_rotation(point_cloud2)
             if self.std_dev != 0:
                 noise = torch.normal(0, self.std_dev, size=point_cloud2.shape, dtype=torch.float32,
                                      device=point_cloud2.device)
@@ -160,14 +175,18 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             contrastive_point_cloud = torch.tensor((0))
 
 
-        # title_class = info['class']
-        # plot_point_clouds(point_cloud1, np.load("10_pcl_noisy.npy"), f'class: {title_class}')
-        # a=1
-        # plot_point_clouds(point_cloud1, point_cloud2, f'pos')
-        # plot_point_clouds(point_cloud1, contrastive_point_cloud, f'neg')
-        # a=1
+        title_class = info['class']
+        if title_class in [2,3]:
+            plot_point_clouds(point_cloud1@rot_orig, np.load("10_pcl_noisy.npy"), f'class: {title_class}')
+            a=1
+    #         plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, f'pos; class: {title_class}')
+    #         plot_point_clouds(point_cloud1@rot_orig, contrastive_point_cloud@neg_rot,
+    # f'neg; class: {title_class}, orig_k1:{k1_orig:.2f}, orig_k2:{k2_orig:.2f}||\n'
+    #         f'cont_k1:{k1_cont:.2f}, cont_k2:{k2_cont:.2f}')
+    #         a=1
 
-        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_point_cloud":positive_smooth_point_cloud, "negative_smooth_point_cloud":negative_smooth_point_cloud, "info": info, "count": count}
+        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_point_cloud":positive_smooth_point_cloud, "negative_smooth_point_cloud":negative_smooth_point_cloud, "info": info, "count": count}
+        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "positive_smooth_point_cloud":positive_smooth_point_cloud, "negative_smooth_point_cloud":negative_smooth_point_cloud, "info": info}
 class PointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
@@ -540,7 +559,7 @@ def random_rotation(point_cloud):
     rot = R.random().as_matrix()
     rot_mat = torch.tensor(rot, dtype=torch.float32)
     rotated_point_cloud = torch.matmul(point_cloud, rot_mat.T)
-    return rotated_point_cloud
+    return rot, rotated_point_cloud
 
 from sklearn.neighbors import NearestNeighbors
 def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):
