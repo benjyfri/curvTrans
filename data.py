@@ -32,7 +32,9 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                     self.point_clouds_group[point_cloud_name].attrs}
         # point_cloud = self.point_clouds_group[point_cloud_name]
         # point_cloud_orig = np.array(point_cloud, dtype=np.float32)
-        if info['class'] <= 3:
+
+        class_label = info['class']
+        if class_label <= 3:
             point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
                                                 count=self.sampled_points)
         else:
@@ -51,7 +53,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #     rand_angle = np.random.uniform(angle - 10, angle + 10)
         #     point_cloud = generate_surfaces_angles_and_sample(N=self.sampled_points, angle=rand_angle)
 
-
+        median_diameter = [3.144, 5.654, 4.593, 4.162, 4.958]
         point_cloud1 = torch.tensor(point_cloud, dtype=torch.float32)
         if self.rotate_data:
             rot_orig, point_cloud1 = random_rotation(point_cloud1)
@@ -114,11 +116,15 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
 
             temp_max_orig = k1_orig if abs(k1_orig) > abs(k2_orig) else k2_orig
             temp_min_orig = k1_orig if abs(k1_orig) < abs(k2_orig) else k2_orig
-            min_curve_diff = 1
-            max_curve_diff = 1.5
+            if class_label==0:
+                min_curve_diff = 0.1
+                max_curve_diff = 0.2
+            else:
+                min_curve_diff = 1
+                max_curve_diff = 1.5
             count=0
             while True:
-                noise_to_add = np.random.normal(0, 0.7, 5)
+                noise_to_add = np.random.normal(0, 0.6, 5)
                 K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
                 ((c + noise_to_add[2]) ** 2))) / (
                                      (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
@@ -145,7 +151,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                     e = info['e'] + noise_to_add[4]
                     break
                 count += 1
-            if info['class']==4:
+            if class_label==4:
                 contrastive_point_cloud = sampleHalfSpacePoints(a, b, c, d, e, count=self.sampled_points)
                 positive_point_cloud = point_cloud
             else:
@@ -157,6 +163,14 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
 
             point_cloud2 = torch.tensor(positive_point_cloud, dtype=torch.float32)
             pos_rot, point_cloud2 = random_rotation(point_cloud2)
+
+            #normalize contrasive point cloud to regular data size
+            current_data_diameter = median_diameter[class_label]
+            neg_diameter = torch.max(torch.norm(contrastive_point_cloud,dim=1))
+            pos_diameter = torch.max(torch.norm(point_cloud2,dim=1))
+            contrastive_point_cloud = contrastive_point_cloud * (current_data_diameter / neg_diameter)
+            point_cloud2 = point_cloud2 * (current_data_diameter / pos_diameter)
+
             if self.std_dev != 0:
                 noise = torch.normal(0, self.std_dev, size=point_cloud2.shape, dtype=torch.float32,
                                      device=point_cloud2.device)
@@ -175,13 +189,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             contrastive_point_cloud = torch.tensor((0))
 
 
-        # title_class = info['class']
-        # if title_class in [2,3]:
-        #     plot_point_clouds(point_cloud1@rot_orig, np.load("10_pcl_noisy.npy"), f'class: {title_class}')
-        #     a=1
-    #         plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, f'pos; class: {title_class}')
+    #     if class_label in [0]:
+    #         # plot_point_clouds(point_cloud1@rot_orig, np.load("10_pcl_noisy.npy")*2, f'class: {class_label}, {k1_orig}, {k2_orig}')
+    #         # a=1
+    #         plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, f'pos; class: {class_label}')
     #         plot_point_clouds(point_cloud1@rot_orig, contrastive_point_cloud@neg_rot,
-    # f'neg; class: {title_class}, orig_k1:{k1_orig:.2f}, orig_k2:{k2_orig:.2f}||\n'
+    # f'neg; class: {class_label}, orig_k1:{k1_orig:.2f}, orig_k2:{k2_orig:.2f}||\n'
     #         f'cont_k1:{k1_cont:.2f}, cont_k2:{k2_cont:.2f}')
     #         a=1
 
@@ -369,13 +382,13 @@ def plot_point_clouds(point_cloud1, point_cloud2, title=""):
 
     fig.show()
 
-def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0])):
+def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0]), sample_box=2):
     def surface_function(x, y):
         return a * x**2 + b * y**2 + c * x * y + d * x + e * y
 
     # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-1, 1, count) + center_point[0]
-    y_samples = np.random.uniform(-1, 1, count) + center_point[1]
+    x_samples = np.random.uniform(-sample_box, sample_box, count) + center_point[0]
+    y_samples = np.random.uniform(-sample_box, sample_box, count) + center_point[1]
 
     # Evaluate the surface function at the random points
     z_samples = surface_function(x_samples, y_samples)
@@ -388,13 +401,13 @@ def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0])):
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
 
     return sampled_points_with_centroid
-def sampleHalfSpacePoints(a, b, c, d, e, count):
+def sampleHalfSpacePoints(a, b, c, d, e, count, sample_box=2):
     def surface_function(x, y):
         return a * x**2 + b * y**2 + c * x * y + d * x + e * y
 
     # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-1, 1, count)
-    y_samples = np.random.uniform(-1, 1, count)
+    x_samples = np.random.uniform(-sample_box, sample_box, count)
+    y_samples = np.random.uniform(-sample_box, sample_box, count)
 
     # Evaluate the surface function at the random points
     z_samples = surface_function(x_samples, y_samples)
