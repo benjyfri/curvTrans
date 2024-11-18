@@ -7,6 +7,8 @@ import plotly.express as px
 import random
 from scipy.spatial.transform import Rotation as R
 import plotly.graph_objects as go
+
+from sklearn.neighbors import NearestNeighbors
 class BasicPointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, args):
         self.file_path = file_path
@@ -144,61 +146,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
     #         f'cont_k1:{k1_cont:.2f}, cont_k2:{k2_cont:.2f}')
     #         a=1
 
-        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
-        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
-class PointCloudDataset(torch.utils.data.Dataset):
-    def __init__(self, file_path, args):
-        self.file_path = file_path
-        self.hdf5_file = h5py.File(file_path, 'r')
-        self.point_clouds_group = self.hdf5_file['point_clouds']
-        self.num_point_clouds = len(self.point_clouds_group)
-        self.indices = list(range(self.num_point_clouds))
-        self.lpe_dim = args.lpe_dim
-        self.PE_dim = args.PE_dim
-        self.normalize = args.lpe_normalize
-    def __len__(self):
-        return self.num_point_clouds
-
-    def __getitem__(self, idx):
-        point_cloud_name = f"point_cloud_{self.indices[idx]}"
-
-        # Load point cloud data
-        point_cloud = self.point_clouds_group[point_cloud_name]
-        old_pcl = torch.tensor(point_cloud, dtype=torch.float32)
-        # createLPE(point_cloud)
-        #get canonical point cloud order
-        pcl, lpe = createLPEembedding(point_cloud, self.lpe_dim, normalize=self.normalize)
-        point_cloud = torch.tensor(pcl, dtype=torch.float32)
-        if self.lpe_dim!=0:
-            lpe = torch.tensor(lpe, dtype=torch.float32)
-        else:
-            lpe = torch.tensor([])
-
-        if self.PE_dim!=0:
-            # lpe, pcl = createLPE(point_cloud, self.lpe_dim)
-            pe = positional_encoding_nerf(point_cloud, self.PE_dim)
-            pe = torch.tensor(pe, dtype=torch.float32)
-        else:
-            pe = torch.tensor([])
-        # Load metadata from attributes
-        info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
-                    self.point_clouds_group[point_cloud_name].attrs}
-
-        return {"point_cloud": point_cloud, "lpe": lpe, "info": info, "pe": pe, "old_pcl": old_pcl}
-
-def createLPE(data):
-    umbrella = estimate_HK_from_one_ring(data[1:, :], data[0, :], k=3)
-
-def laplacian_pe(lap, k):
-
-    # select eigenvectors with smaller eigenvalues O(n + klogk)
-    EigVal, EigVec = np.linalg.eig(lap)
-    kpartition_indices = np.argpartition(EigVal, k + 1)[:k + 1]
-    topk_eigvals = EigVal[kpartition_indices]
-    topk_indices = kpartition_indices[topk_eigvals.argsort()][1:]
-    topk_EigVec = np.real(EigVec[:, topk_indices])
-
-    return topk_EigVec
+        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
+        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 def estimate_KH_from_one_ring(point_cloud, centroid, k):
     num_points = point_cloud.shape[0]
 
@@ -384,62 +333,7 @@ def sampleHalfSpacePoints(a, b, c, d, e, count, sample_box=2):
 
     return sampled_points_with_centroid
 
-def sample_points_on_pyramid(num_samples=40):
-    # Define an equilateral triangle as the base
-    # base_vertices = np.array([
-    #     [0, 0, 0],  # Vertex A
-    #     [1, 0, 0],  # Vertex B
-    #     [0.5, np.sqrt(3) / 2, 0]  # Vertex C
-    # ])
-    tri_edge_len = 4 * (np.sqrt(3))
-    tri_height = (np.sqrt(3) / 2) * tri_edge_len
-    centroid_vertex_len = (2/3) * tri_height
-    max_dist_point = np.random.normal(loc=13.21, scale=4.522)
-    max_dist_point = np.clip(max_dist_point,4.5,40)
-    height = np.sqrt((max_dist_point**2) - (centroid_vertex_len**2)  )
-    square_min = -1
-    square_max = 1
-
-    # Vertices of an equilateral triangle touching the edges of the square
-    # One vertex on the bottom edge, two on the left and right edges
-    A = np.array([0, -1,0])  # Middle of bottom edge
-    B = np.array([2*(np.sqrt(3)), 1,0])  # Right edge
-    C = np.array([-2*(np.sqrt(3)), 1,0])  # Left edge
-
-    # Apex is directly above the center of the triangle
-    centroid = (A + B + C) / 3
-    apex = np.array([centroid[0], centroid[1], height])
-
-    # Apex is directly above the center of the base
-    # apex = np.array([0.5, np.sqrt(3) / 6, height])
-    #
-    # A, B, C = base_vertices
-
-    # Ensure at least one point is sampled from each face
-    N1, N2, N3 = np.random.multinomial(num_samples-3, [1/3, 1/3, 1/3]) + np.array([1,1,1])
-
-    # 1. Sample points on the three faces
-    def sample_on_face(P, Q, num_samples_face):
-        u = np.random.rand(num_samples_face, 1)
-        v = np.random.rand(num_samples_face, 1)
-        mask = (u + v) > 1
-        u[mask], v[mask] = 1 - u[mask], 1 - v[mask]  # Reflect points that are outside the triangle
-        return (1 - u - v) * P + u * Q + v * apex
-
-    face_points_AB = sample_on_face(A, B, N1) - apex
-    face_points_BC = sample_on_face(B, C, N2) - apex
-    face_points_CA = sample_on_face(C, A, N3) - apex
-    center = np.array([0, 0, 0])
-    # Combine all sampled points
-    sampled_points = np.vstack((center,face_points_AB, face_points_BC, face_points_CA))
-
-    return sampled_points
 def generate_room_corner_with_points(N):
-    # value = np.random.normal(loc=3.2715, scale=0.8955)
-    # value = np.random.normal(loc=4.85, scale=0.8955)
-    # value = np.clip(value, 1, 8)
-    # value = np.random.normal(loc=1.924, scale=0.41)
-
     upper_bound1, upper_bound2, upper_bound3 = [
         np.clip(np.random.normal(loc=2.04, scale=0.4), 1, 6) * np.cos(np.radians(45)) for _ in range(3)]
 
@@ -460,11 +354,7 @@ def generate_room_corner_with_points(N):
     return points
 def generate_surfaces_angles_and_sample(N, angle):
     angle_rad = np.radians((180 - angle) / 2)
-    # value = np.random.normal(loc=3.2715, scale=0.8955)
-    # value = np.random.normal(loc=3.42, scale=0.8955)
-    # value = np.random.normal(loc=1.924, scale=0.41)
     value = np.random.normal(loc=2, scale=0.4)
-    # value = np.clip(value, 1, 8)
     value = np.clip(value, 1, 6)
     upper_bound_y = np.clip(np.random.normal(loc=1, scale=0.3), min(0.2, value), value - 0.1)
     upper_bound_x = np.sqrt( ( value**2 ) - ( upper_bound_y**2 ) ) * np.cos(angle_rad)
@@ -531,30 +421,3 @@ def random_rotation(point_cloud):
     rot_mat = torch.tensor(rot, dtype=torch.float32)
     rotated_point_cloud = torch.matmul(point_cloud, rot_mat.T)
     return rot, rotated_point_cloud
-
-from sklearn.neighbors import NearestNeighbors
-def get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k):
-    """
-    Returns the k nearest neighbors for each point in the point cloud.
-
-    Args:
-        point_cloud (np.ndarray): Point cloud of shape (pcl_size, 3)
-        k (int): Number of nearest neighbors to return
-
-    Returns:
-        np.ndarray: Array of shape (1, 3, pcl_size, k) containing the k nearest neighbors for each point
-    """
-    pcl_size = pcl_interest.shape[0]
-    neigh = NearestNeighbors(n_neighbors=k)
-    neigh.fit(pcl_src)
-    distances, indices = neigh.kneighbors(pcl_interest)
-
-    neighbors_centered = np.empty((1, 3, pcl_size, k), dtype=pcl_src.dtype)
-    # Each point cloud should be centered around first point which is at the origin
-    for i in range(pcl_size):
-        orig = pcl_src[indices[i, :]] - pcl_interest[i,:]
-        if not (np.array_equal(orig[0,], np.array([0,0,0]))):
-            orig = np.vstack([np.array([0,0,0]), orig])[:-1]
-        neighbors_centered[0, :, i, :] = orig.T
-
-    return neighbors_centered
