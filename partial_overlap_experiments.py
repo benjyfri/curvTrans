@@ -18,95 +18,26 @@ import numpy as np
 from scipy.spatial import KDTree
 
 
-def find_possible_correspondences_volume(query_point, pcl1, max_angle_deg=45, max_translation=0.5):
-    """
-    Find all possible corresponding points in pcl1 for a query point from pcl2
-    by computing the possible volume where the point could be located.
 
-    Parameters:
-    -----------
-    query_point : np.ndarray
-        3D point from pcl2 to find correspondences for
-    pcl1 : np.ndarray
-        First point cloud (Nx3 array)
-    max_angle_deg : float
-        Maximum rotation angle in degrees per axis
-    max_translation : float
-        Maximum translation distance per axis
-
-    Returns:
-    --------
-    np.ndarray
-        Boolean mask indicating which points in pcl1 could correspond to query_point
-    """
-    query_point = np.asarray(query_point)
-
-    # Calculate maximum displacement due to rotation
-    # For small angles (in radians), sin(θ) ≈ θ
-    # Maximum displacement = r * θ, where r is distance from origin
-    max_angle_rad = np.deg2rad(max_angle_deg)
-    point_distance = np.linalg.norm(query_point)
-
-    # The maximum displacement due to rotation is approximately:
-    # distance_from_origin * sin(max_angle)
-    max_rotation_displacement = point_distance * np.sin(max_angle_rad)
-
-    # For 45 degrees or less, we can compute the maximum possible displacement
-    # This creates a sphere around the point's position
-    # The radius of this sphere is the max rotation displacement
-
-    # Total maximum displacement is the sum of:
-    # 1. Translation in any direction (forms a cube)
-    # 2. Rotation displacement (forms a sphere)
-    total_max_radius = max_rotation_displacement + max_translation
-
-    # Create a KD-tree for efficient nearest neighbor search
-    tree = KDTree(pcl1)
-
-    # Find all points within the maximum possible radius
-    indices = tree.query_ball_point(query_point, total_max_radius)
-
-    # Create mask for the entire point cloud
-    mask = np.zeros(len(pcl1), dtype=bool)
-    mask[indices] = True
-
-    return mask
-
-
-def visualize_volume(query_point, max_angle_deg=45, max_translation=0.5, num_points=1000):
-    """
-    Generate points to visualize the possible volume where a point could be located.
-    This is useful for debugging and visualization purposes.
-
-    Returns points on the boundary and within the possible volume.
-    """
-    # Generate random points in a sphere
-    theta = np.random.uniform(0, 2 * np.pi, num_points)
-    phi = np.random.uniform(0, np.pi, num_points)
-    r = np.random.uniform(0, 1, num_points)
-
-    # Convert to Cartesian coordinates
-    x = r * np.sin(phi) * np.cos(theta)
-    y = r * np.sin(phi) * np.sin(theta)
-    z = r * np.cos(phi)
-    points = np.column_stack((x, y, z))
-
-    # Scale points based on maximum displacement
-    point_distance = np.linalg.norm(query_point)
-    max_angle_rad = np.deg2rad(max_angle_deg)
-    max_rotation_displacement = point_distance * np.sin(max_angle_rad)
-    total_max_radius = max_rotation_displacement + max_translation * np.sqrt(3)
-
-    points = points * total_max_radius + query_point
-
-    return points
-def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0])):
+def samplePoints(a, b, c, d, e, count, center_point=np.array([0, 0, 0]), sample_box=2, label=None):
     def surface_function(x, y):
-        return a * x**2 + b * y**2 + c * x * y + d * x + e * y
+        return a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y
+
+    if label is not None:
+        if label == 4:
+            return sampleHalfSpacePoints(a, b, c, d, e, count, sample_box=np.random.uniform(1.7, 2.5))
+        if label == 0:
+            sample_box = np.random.uniform(2.5, 4)
+        if label == 1:
+            sample_box = np.random.uniform(1.8, 2.1)
+        if label == 2:
+            sample_box = np.random.uniform(1.7, 2.7)
+        if label == 3:
+            sample_box = np.random.uniform(1.7, 2.9)
 
     # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-1, 1, count) + center_point[0]
-    y_samples = np.random.uniform(-1, 1, count) + center_point[1]
+    x_samples = np.random.uniform(-sample_box, sample_box, count) + center_point[0]
+    y_samples = np.random.uniform(-sample_box, sample_box, count) + center_point[1]
 
     # Evaluate the surface function at the random points
     z_samples = surface_function(x_samples, y_samples)
@@ -119,13 +50,15 @@ def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0])):
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
 
     return sampled_points_with_centroid
-def sampleHalfSpacePoints(a, b, c, d, e, count):
+
+
+def sampleHalfSpacePoints(a, b, c, d, e, count, sample_box=2):
     def surface_function(x, y):
-        return a * x**2 + b * y**2 + c * x * y + d * x + e * y
+        return a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y
 
     # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-1, 1, count)
-    y_samples = np.random.uniform(-1, 1, count)
+    x_samples = np.random.uniform(-sample_box, sample_box, count)
+    y_samples = np.random.uniform(-sample_box, sample_box, count)
 
     # Evaluate the surface function at the random points
     z_samples = surface_function(x_samples, y_samples)
@@ -136,7 +69,8 @@ def sampleHalfSpacePoints(a, b, c, d, e, count):
     # Concatenate the centroid [0, 0, 0] to the beginning of the array
     centroid = np.array([[0, 0, 0]])
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
-    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-15,0))]
+    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[
+        np.random.choice(np.arange(-10, 0))]
     # center_point_idx = np.argsort(np.linalg.norm(sampled_points, axis=1))[-1]
     sampled_points_with_centroid = sampled_points_with_centroid - sampled_points_with_centroid[center_point_idx, :]
     sampled_points_with_centroid[center_point_idx, :] = (sampled_points_with_centroid[0, :]).copy()
@@ -151,8 +85,11 @@ def checkSizeSynthetic():
     indices = list(range(num_point_clouds))
     total_sum_median = 0
     total_sum_mean = 0
+    total_diam_med = 0
+    total_max_dist_from_center = 0
+    yay_max = 0
     for idx in range(num_point_clouds):
-        if idx%1000 ==0:
+        if idx%10000 ==0:
             print(f'------------{idx}------------')
         point_cloud_name = f"point_cloud_{indices[idx]}"
 
@@ -168,6 +105,9 @@ def checkSizeSynthetic():
                                                 count=20)
         distances = cdist(point_cloud, point_cloud)
 
+        max_ax = np.max(np.abs(point_cloud))
+        if yay_max < max_ax:
+            yay_max = max_ax
         # Replace the diagonal with infinity to ignore self-distances
         np.fill_diagonal(distances, np.inf)
 
@@ -177,16 +117,51 @@ def checkSizeSynthetic():
         mean_closest_distance = np.mean(closest_distances)
         total_sum_median += np.mean(median_closest_distance)
         total_sum_mean += np.mean(mean_closest_distance)
+        total_diam_med += np.median(np.max(np.abs(point_cloud),axis=0))
+        total_max_dist_from_center += np.max(np.linalg.norm(point_cloud,axis=1))
     print(f'++++++++++++++++++++++++++++++++++')
     print(f'SYNTHETIC')
     print(f'++++++++++++++++++++++++++++++++++')
-    print(f'AVG point distance synthetic: {total_sum_median / num_point_clouds}')
-    print(f'AVG point distance synthetic: {total_sum_mean / num_point_clouds}')
+    print(f'max value in any axis {yay_max}')
+    print(f'MEDIAN point distance synthetic: {total_sum_median / num_point_clouds}')
+    print(f'MEAN point distance synthetic: {total_sum_mean / num_point_clouds}')
+    print(f'mean of MEDIAN diameter synthetic: {total_diam_med / num_point_clouds}')
+    print(f'total_max_dist_from_center: {total_max_dist_from_center}, num_point_clouds: {num_point_clouds}')
+    print(f'MEAN max distance from center: {total_max_dist_from_center / num_point_clouds}')
+def checkDiameterPCLSynthetic():
+    hdf5_file = h5py.File("train_surfaces_with_corners_very_mild_curve.h5" , 'r')
+    point_clouds_group = hdf5_file['point_clouds']
+    num_point_clouds = len(point_clouds_group)
+    for label in [0,1,2,3,4]:
+        all_diameter_vals = []
+        for idx in range(num_point_clouds // 5):
+            # if idx%10000 ==0:
+            #     print(f'------------{idx}------------')
+            point_cloud_name = f"point_cloud_{idx + (label * (num_point_clouds // 5))}"
+
+            info = {key: point_clouds_group[point_cloud_name].attrs[key] for key in
+                    point_clouds_group[point_cloud_name].attrs}
+            class_label = info['class']
+            point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'], count=20, label=class_label)
+            cur_diameter = (np.max(np.linalg.norm(point_cloud,axis=1)))
+            all_diameter_vals.append(cur_diameter)
+        all_diameter_vals = np.array(all_diameter_vals)
+        print(f'++++++++++++++++++++++++++++++++++')
+        print(f'label: {label}')
+        print(f'++++++++++++++++++++++++++++++++++')
+        print(f'Mean: {np.mean(all_diameter_vals)}')
+        print(f'Median: {np.median(all_diameter_vals)}')
+        print(f'Max: {np.max(all_diameter_vals)}')
+        print(f'Min: {np.min(all_diameter_vals)}')
+
 def checkSizeModelnet():
     test_dataset = test_predator_data()
     total_sum = 0
     total_sum_median = 0
     total_sum_mean = 0
+    total_diam_med = 0
+    total_max_dist_from_center = 0
+    yay_max = 0
     size = len(test_dataset)
     for i in range(size):
         if i%1000 ==0:
@@ -198,10 +173,17 @@ def checkSizeModelnet():
         num_of_points = pcl.shape[1]
         cur_sum_median=0
         cur_sum_mean=0
+        cur_sum_max_dist_from_center=0
+        cur_diam_med = np.median(np.max(np.abs(pcl),axis=0))
+        total_diam_med += cur_diam_med
         for i in range(num_of_points):
             point_cloud = pcl[:,i,:]
 
             distances = cdist(point_cloud, point_cloud)
+
+            max_ax = np.max(np.abs(point_cloud))
+            if yay_max < max_ax:
+                yay_max = max_ax
 
             # Replace the diagonal with infinity to ignore self-distances
             np.fill_diagonal(distances, np.inf)
@@ -212,56 +194,20 @@ def checkSizeModelnet():
             mean_closest_distance = np.mean(closest_distances)
             cur_sum_median += median_closest_distance
             cur_sum_mean += mean_closest_distance
+            cur_sum_max_dist_from_center += np.max(np.linalg.norm(point_cloud, axis=1))
         total_sum_median += cur_sum_median/num_of_points
         total_sum_mean += cur_sum_mean/num_of_points
+        total_max_dist_from_center += cur_sum_max_dist_from_center/num_of_points
     print(f'++++++++++++++++++++++++++++++++++')
     print(f'MODELNET')
     print(f'++++++++++++++++++++++++++++++++++')
-    print(f'AVG point distance synthetic: {total_sum_median / size}')
-    print(f'AVG point distance synthetic: {total_sum_mean / size}')
-def example_usage():
-    # Create sample point clouds
-    test_dataset = test_predator_data()
-    data = test_dataset.__getitem__(83)
-    src_pcd, tgt_pcd, GT_rot, GT_trans, sample = data['src_pcd'], data['tgt_pcd'], data['rot'], data['trans'], data[
-        'sample']
+    print(f'max value in any axis {yay_max}')
+    print(f'MEDIAN point distance modelnet: {total_sum_median / size}')
+    print(f'MEAN point distance modelnet: {total_sum_mean / size}')
+    print(f'mean of MEDIAN diameter modelnet: {total_diam_med / size}')
+    print(f'total_max_dist_from_center: {total_max_dist_from_center}, size: {size}')
+    print(f'MEAN max distance from center: {total_max_dist_from_center / size}')
 
-    query_point = tgt_pcd[0,:]
-    # query_point = np.array([0, 0, 0])
-
-    # Find possible correspondences
-    mask = find_possible_correspondences_volume(query_point, src_pcd)
-    corresponding_points = src_pcd[mask]
-
-    # Generate visualization points
-    volume_points = visualize_volume(query_point)
-
-    return corresponding_points, volume_points
-
-def checkPred():
-    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36_1')
-    train_dataset = test_predator_data()
-    size = len(train_dataset)
-    ov_list = []
-    size = 5
-    for i in range(size):
-        src_pcd, tgt_pcd, rot, trans, matching_inds, src_pcd, tgt_pcd, sample = train_dataset.__getitem__(i+85)
-        if matching_inds is not None and len(matching_inds.shape)==2:
-            overlap = len(np.unique(matching_inds[:, 0]))
-        else:
-            overlap = 0
-        ov_list.append( overlap / (len(src_pcd)) )
-        plot_multiclass_point_clouds([src_pcd, src_pcd[matching_inds[:, 0]]], [tgt_pcd, tgt_pcd[matching_inds[:, 1]]],
-                                     rotation=rot, title=f'unique = {len(np.unique(matching_inds[:, 0]))}')
-
-        view_stabiity(cls_args=cls_args,num_worst_losses = 3, scaling_factor=1, scales=5, receptive_field=[1,5, 10], amount_of_interest_points=300,
-                                    num_of_ransac_iter=50, plot_graphs=1, given_pcls=[src_pcd,tgt_pcd, matching_inds[10,:]])
-        # exit(0)
-    exit(0)
-    ov_list = np.array(ov_list)
-    avg_overlap = np.mean(ov_list)
-    print(avg_overlap)
-    return ov_list
 def test_predator_data(matching=False, partial_p_keep=[0.7, 0.7]):
     # partial_p_keep= [0.5, 0.5]
     rot_mag = 45.0
@@ -314,126 +260,7 @@ def create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36'):
     cls_args_shape.use_lap_reorder = 1
     cls_args_shape.lap_eigenvalues_dim = 36
     return cls_args_shape, 1, 1
-def split_pointcloud_overlap(point_cloud, overlap_ratio):
-    """Splits a point cloud into two with a random overlap ratio.
 
-    Args:
-      pointcloud: A numpy array of shape (2048, 3) representing the point cloud.
-      r: The overlap ratio between the two split point clouds (0 < r < 1).
-
-    Returns:
-      pcl1, pcl2: Two numpy arrays representing the split point clouds.
-    """
-
-    if not (0 < overlap_ratio < 1):
-        raise ValueError("Overlap ratio r must be between 0 and 1.")
-
-    # Check for empty pointcloud
-    if not point_cloud.any():
-        return np.empty((0, 3)), np.empty((0, 3))
-
-    rotation_matrix = Rotation.random().as_matrix()
-
-    # Project the pointcloud onto the chosen vector
-    projected_points = point_cloud @ rotation_matrix
-
-    ratio = ( (1 + overlap_ratio) / 2)
-    # Find the split point based on the overlap ratio
-    split_point_top = np.percentile(projected_points[:,0], 100 * ratio)
-    split_point_bot = np.percentile(projected_points[:,0], 100 * (1 - ratio))
-
-    # Filter the pointcloud based on the split point
-    pcl1_indices = np.where(projected_points[:,0] <= split_point_top)[0]
-    pcl2_indices = np.where(projected_points[:,0] > split_point_bot)[0]
-    pcl1 = point_cloud[pcl1_indices]
-    pcl2 = point_cloud[pcl2_indices]
-    overlapping_indices = np.where(np.logical_and((projected_points[:,0] <= split_point_top),projected_points[:,0] > split_point_bot))[0]
-
-    return pcl1, pcl2, pcl1_indices, pcl2_indices, overlapping_indices
-
-
-def load_data_and_compute_means(base_dir):
-    means = []
-    subdir_names = []
-
-    # Traverse the base directory
-    for root, dirs, files in os.walk(base_dir):
-        if "combined_dict.pkl" in files:
-            # Load the dictionary
-            with open(os.path.join(root, "combined_dict.pkl"), 'rb') as f:
-                data_dict = pickle.load(f)
-
-                # Compute the mean values of 'err_r_deg' and 'err_t'
-                err_r_deg_mean = np.mean(data_dict['err_r_deg'])
-                err_t_mean = np.mean(data_dict['err_t'])
-
-                means.append((err_r_deg_mean, err_t_mean))
-                subdir_names.append(os.path.basename(root))
-
-    return means, subdir_names
-
-def load_data_and_compute_means_3dmatch(base_dir):
-    means = []
-    subdir_names = []
-
-    # Traverse the base directory
-    for root, dirs, files in os.walk(base_dir):
-        if "losses_rot.npy" in files:
-            losses_rot = np.load(os.path.join(root, "losses_rot.npy"))
-            means.append(np.mean(losses_rot))
-            subdir_names.append(os.path.basename(root))
-    combined = list(zip(means, subdir_names))
-    combined.sort(key=lambda x: x[0])
-
-    # Select the top 10% with the lowest err_r_deg_mean
-    top_10_percent = combined[:max(1, len(combined) // 5)]
-
-    # Unpack the filtered means and names
-    err_r_deg_means, err_t_means, subdir_names = zip(*top_10_percent)
-
-    # Create a 2D plot
-    plt.figure(figsize=(12, 8))
-
-    for err_r_deg_mean, err_t_mean, subdir_name in zip(err_r_deg_means, err_t_means, subdir_names):
-        plt.scatter(err_r_deg_mean, err_t_mean, label=subdir_name)
-
-    plt.xlabel('Mean err_r_deg')
-    plt.ylabel('Mean err_t')
-    plt.title('Mean err_r_deg vs Mean err_t for each subdirectory')
-    plt.legend(loc='best', fontsize='small')
-    plt.grid(True)
-    plt.show()
-
-    return means, subdir_names
-
-
-def plot_means(means, subdir_names):
-    # Unpack the means for plotting
-    err_r_deg_means, err_t_means = zip(*means)
-
-    combined = list(zip(err_r_deg_means, err_t_means, subdir_names))
-
-    # Sort by err_r_deg_mean
-    combined.sort(key=lambda x: x[0])
-
-    # Select the top 10% with the lowest err_r_deg_mean
-    top_10_percent = combined[:max(1, len(combined) // 5)]
-
-    # Unpack the filtered means and names
-    err_r_deg_means, err_t_means, subdir_names = zip(*top_10_percent)
-
-    # Create a 2D plot
-    plt.figure(figsize=(12, 8))
-
-    for err_r_deg_mean, err_t_mean, subdir_name in zip(err_r_deg_means, err_t_means, subdir_names):
-        plt.scatter(err_r_deg_mean, err_t_mean, label=subdir_name)
-
-    plt.xlabel('Mean err_r_deg')
-    plt.ylabel('Mean err_t')
-    plt.title('Mean err_r_deg vs Mean err_t for each subdirectory')
-    plt.legend(loc='best', fontsize='small')
-    plt.grid(True)
-    plt.show()
 def check_pairings_modelnet():
     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36_1')
     # nn_modes = [2, 3, 4]
@@ -496,22 +323,24 @@ def check_pairings_3dmatch():
             plot_losses(losses=losses_rot, inliers=final_inliers_list, filename=f'rot_loss_scales_emb.png',
                         dir=run_name)
             plotWorst(worst_losses=worst_losses, dir=run_name)
-def check_registration_modelnet():
-    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='small_very_mild_3MLP64N2deg_lpe0eig16')
-    cls_args.output_dim = 8
-    cls_args.num_neurons_per_layer = 64
+def check_registration_modelnet(model_name):
+    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
+    cls_args.output_dim = 5
+    cls_args.num_neurons_per_layer = 32
     cls_args.sampled_points = 20
-    cls_args.lap_eigenvalues_dim = 16
-    scaling_factors = ["min"]
+    cls_args.lap_eigenvalues_dim = 15
+    scaling_factors = ["axis"]
     subsamples = [700,500]
-    receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
-    receptive_fields_list = [[1, 5, 9]]
-    receptive_fields_list = [[1]]
-    scales_list = [1]
+    # receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
+    # receptive_fields_list = [[1, 3], [1, 3, 5],[1, 5, 9]]
+    receptive_fields_list = [[1,3]]
+    # scales_list = [2,3,3]
+    scales_list = [1,3]
     nn_modes = [2,3,4]
-    # nn_modes = [2]
-    pcts = [1]
-    runsac_iterations = [500]
+    nn_modes = [4]
+    pcts = [0.1]
+    runsac_iterations = [5000]
+    tri=False
     for scales, receptive_field in zip(scales_list, receptive_fields_list):
         for amount_of_interest_points in subsamples:
             for scaling_factor in scaling_factors:
@@ -532,6 +361,7 @@ def check_registration_modelnet():
 
                             worst_losses, losses_rot, losses_trans, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict = (
                                 test_multi_scale_using_embedding_predator_modelnet(cls_args=cls_args,
+                                                                                   tri=tri,
                                                                                    num_worst_losses=3,
                                                                                    scaling_factor=scaling_factor,
                                                                                    amount_of_interest_points=amount_of_interest_points,
@@ -552,28 +382,29 @@ def check_registration_modelnet():
                                         filename=f'rot_loss_scales_emb.png', dir=run_name)
                             plotWorst(worst_losses=worst_losses, dir=run_name)
 
-def check_registration_3dmatch():
-    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='small_very_mild_3MLP64N2deg_lpe0eig16')
-    cls_args.output_dim = 8
-    cls_args.num_neurons_per_layer = 64
+def check_registration_3dmatch(model_name):
+    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
+    cls_args.output_dim = 5
+    cls_args.num_neurons_per_layer = 32
     cls_args.sampled_points = 20
-    cls_args.lap_eigenvalues_dim = 16
+    cls_args.lap_eigenvalues_dim = 15
 
     # scaling_factors = ["min", "mean"]
-    scaling_factors = ["min"]
+    scaling_factors = ["axis"]
     # subsamples = [500, 1000, 1500, 2000, 3000, 5000]
     subsamples = [1000, 3000]
+
     # receptive_fields_list = [ [1, 5] ,[1, 10] , [1, 5, 10, 15]]
     # receptive_fields_list = [[1,5],[1,5,10],[1,10,20,30], [1,10,20,30,40,50], [1, 50, 100, 150, 200], [1,25, 50,75, 100,125, 150, 200]]
 
     # receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
-    receptive_fields_list = [ [1, 3, 5],[1, 2, 3]]
-    scales_list = [3,3]
+    receptive_fields_list = [ [1,10,20,30,40]]
+    scales_list = [5]
     # scales_list = [2,3,4,6,5,8]
     # scales_list = [2,3,4,2,3,3]
     # nn_modes = [2,3,4]
     nn_modes = [2]
-    pcts = [1]
+    pcts = [0.1]
     thresh_multi_options = [1,3,5]
     # tri_type =[True, False]
     tri_type =[False]
@@ -626,122 +457,117 @@ def check_registration_3dmatch():
                                                              dir=run_name)
                                     # exit(0)
 def viewStabilityWithPartial():
-    for scaling_factor in ["min"]:
-        print()
-        print()
-        print(f'---------------------------------------------')
-        # print(f'{scaling_factor}')
-        print(f'---------------------------------------------')
-        # cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='cur_3MLP32_eig15_lpe0_3')
-        cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32_eig15_cntr1')
+    a_3MLP32_eig15_cntr04_harder_receptive_field = [5,6,7,9]
+    for scaling_factor in ["axis", "min"]:
+        # for model_name in ["3MLP32_eig15_cntr05_std007", "3MLP32_eig15_cntr04_harder.pt"]:
+        for model_name in ["3MLP32_eig15_cntr04_harder"]:
+            print()
+            print()
+            print(f'---------------------------------------------')
+            print(f'{model_name} usin scaling: {scaling_factor}')
+            print(f'---------------------------------------------')
+            cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
 
-        cls_args.output_dim = 5
-        cls_args.num_neurons_per_layer = 32
-        cls_args.sampled_points = 20
-        cls_args.lap_eigenvalues_dim = 15
-        import itertools
-        receptive_field = [list(combo) for r in range(3, 6) for combo in itertools.combinations(range(2, 10), r)]
-        receptive_field = [[1,2,3],[1,3,5]]
-        train_dataset = test_predator_data(matching=True)
-        for pyr_layers in receptive_field:
-            count = 0
-            # for i in [65,83,94,95,97]:
-            size = len(train_dataset)
-            size = 100
-            for i in range(size):
-                data = train_dataset.__getitem__(i)
-                src_pcd, tgt_pcd, GT_rot, GT_trans, sample = data['src_pcd'], data['tgt_pcd'], data['rot'], data['trans'], data[
-                    'sample']
-                pair = data['matching_inds'][0].numpy()
-                #
-                # view_stabiity(cls_args=cls_args, scaling_factor="min", scales=3, receptive_field=[1, 3, 7],
-                #               given_pcls=[src_pcd, tgt_pcd, torch.tensor(pair)])
+            cls_args.output_dim = 5
+            cls_args.num_neurons_per_layer = 32
+            cls_args.sampled_points = 20
+            cls_args.lap_eigenvalues_dim = 15
+            import itertools
+            receptive_field = [list(combo) for r in range(2, 6) for combo in itertools.combinations(range(2, 10), r)]
+            # receptive_field = [[1],[1, 2, 3], [1, 3, 5]]
+            train_dataset = test_predator_data(matching=True)
+            for pyr_layers in receptive_field:
+                count = 0
+                # for i in [65,83,94,95,97]:
+                size = len(train_dataset)
+                size = 100
+                for i in range(size):
+                    data = train_dataset.__getitem__(i)
+                    src_pcd, tgt_pcd, GT_rot, GT_trans, sample = data['src_pcd'], data['tgt_pcd'], data['rot'], data['trans'], data[
+                        'sample']
+                    pair = data['matching_inds'][0].numpy()
+                    #
+                    # view_stabiity(cls_args=cls_args, scaling_factor="min", scales=3, receptive_field=[1, 3, 7],
+                    #               given_pcls=[src_pcd, tgt_pcd, torch.tensor(pair)])
 
-                noisy_pointcloud_1 = src_pcd
-                noisy_pointcloud_2 = tgt_pcd
+                    noisy_pointcloud_1 = src_pcd
+                    noisy_pointcloud_2 = tgt_pcd
 
 
-                emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1,
-                                       args_shape=cls_args, scaling_factor=scaling_factor)
-                emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2,
-                                       args_shape=cls_args, scaling_factor=scaling_factor)
+                    emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1,
+                                           args_shape=cls_args, scaling_factor=scaling_factor)
+                    emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2,
+                                           args_shape=cls_args, scaling_factor=scaling_factor)
 
-                emb_1 = emb_1.detach().cpu().numpy().squeeze()
-                emb_2 = emb_2.detach().cpu().numpy().squeeze()
-                plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2, pair)
+                    emb_1 = emb_1.detach().cpu().numpy().squeeze()
+                    emb_2 = emb_2.detach().cpu().numpy().squeeze()
+                    # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2, pair)
 
-                if len(pyr_layers)>1:
-                    # for scale in pyr_layers[1:]:
-                    for scale in pyr_layers:
-                        subsampled_1 = farthest_point_sampling_o3d(noisy_pointcloud_1, k=(int)(len(noisy_pointcloud_1) // scale))
-                        subsampled_2 = farthest_point_sampling_o3d(noisy_pointcloud_2, k=(int)(len(noisy_pointcloud_2) // scale))
+                    if len(pyr_layers)>1:
+                        # for scale in pyr_layers[1:]:
+                        for scale in pyr_layers:
+                            subsampled_1 = farthest_point_sampling_o3d(noisy_pointcloud_1, k=(int)(len(noisy_pointcloud_1) // scale))
+                            subsampled_2 = farthest_point_sampling_o3d(noisy_pointcloud_2, k=(int)(len(noisy_pointcloud_2) // scale))
 
-                        global_emb_1 = classifyPoints(model_name=cls_args.exp,
-                                                      pcl_src=subsampled_1,
-                                                      pcl_interest=noisy_pointcloud_1, args_shape=cls_args,
-                                                      scaling_factor=scaling_factor)
+                            global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                                                          pcl_src=subsampled_1,
+                                                          pcl_interest=noisy_pointcloud_1, args_shape=cls_args,
+                                                          scaling_factor=scaling_factor)
 
-                        global_emb_2 = classifyPoints(model_name=cls_args.exp,
-                                                      pcl_src=subsampled_2,
-                                                      pcl_interest=noisy_pointcloud_2, args_shape=cls_args,
-                                                      scaling_factor=scaling_factor)
+                            global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                                                          pcl_src=subsampled_2,
+                                                          pcl_interest=noisy_pointcloud_2, args_shape=cls_args,
+                                                          scaling_factor=scaling_factor)
 
-                        global_emb_1 = global_emb_1.detach().cpu().numpy().squeeze()
-                        global_emb_2 = global_emb_2.detach().cpu().numpy().squeeze()
-                        plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, global_emb_1, global_emb_2,pair)
-                        emb_1 = np.hstack((emb_1, global_emb_1))
-                        emb_2 = np.hstack((emb_2, global_emb_2))
+                            global_emb_1 = global_emb_1.detach().cpu().numpy().squeeze()
+                            global_emb_2 = global_emb_2.detach().cpu().numpy().squeeze()
+                            # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, global_emb_1, global_emb_2,pair)
+                            emb_1 = np.hstack((emb_1, global_emb_1))
+                            emb_2 = np.hstack((emb_2, global_emb_2))
 
-                # Calculate distances from the random embedding to all embeddings in embedding2
-                distances = np.linalg.norm(emb_2 - emb_1[pair[0]], axis=1)
+                    # Calculate distances from the random embedding to all embeddings in embedding2
+                    distances = np.linalg.norm(emb_2 - emb_1[pair[0]], axis=1)
 
-                # Find indices of the 20 closest points
-                closest_indices = np.argsort(distances)[:10]
-                if pair[1] in closest_indices:
-                    count += 1
-            print(f'{pyr_layers}')
-            print(f'Count: {count} out of {size} shapes are in the top 10')
+                    # Find indices of the 20 closest points
+                    closest_indices = np.argsort(distances)[:10]
+                    if pair[1] in closest_indices:
+                        count += 1
+                print(f'{pyr_layers}')
+                print(f'Count: {count} out of {size} shapes are in the top 10')
 if __name__ == '__main__':
+
+    model_name = "3MLP32_eig15_cntr005_std01"
     # viewStabilityWithPartial()
-    checkSizeModelnet()
-    checkSizeSynthetic()
-    exit(0)
+    # checkSizeModelnet()
+    # checkSizeSynthetic()
+    # exit(0)
 
     # example_usage()
     # exit(0)
-    checkSizeSynthetic()
-    checkSyntheticData()
+    # checkSizeSynthetic()
+    # checkSyntheticData()
+    checkDiameterPCLSynthetic()
     exit(0)
-    # check_registration_modelnet()
-    # check_registration_3dmatch()
+    # check_registration_modelnet(model_name)
+    # check_registration_3dmatch(model_name)
     # exit(0)
 
-    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name='3MLP32_eig15_cntr01')
+
+    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
     cls_args.output_dim=5
     cls_args.num_neurons_per_layer = 64
     cls_args.num_neurons_per_layer = 32
     cls_args.sampled_points = 20
     cls_args.lap_eigenvalues_dim = 15
-    checking_1 = [0.5]
 
-    # view_stabiity(cls_args=cls_args, scaling_factor="min",scales=3, receptive_field=[1, 5, 9])
-    # view_stabiity(cls_args=cls_args, scaling_factor="min",scales=3, receptive_field=[1, 2, 3])
-    # view_stabiity(cls_args=cls_args, scaling_factor="min",scales=2, receptive_field=[2, 5, 6, 7, 8])
+    # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=3, receptive_field=[1, 3,5])
+    # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=3, receptive_field=[1, 2, 3])
+    # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=5, receptive_field=[2, 3, 4, 6, 8])
     # exit(0)
-    for i in checking_1:
-        # visualizeShapesWithEmbeddings3dMatchCorners(model_name='3MLP32_eig15_cntr01', args_shape=cls_args,
-        # scaling_factor="min", rgb=False) visualizeShapesWithEmbeddings3dMatchCorners(
-        # model_name='3MLP32_eig15_cntr01', args_shape=cls_args, scaling_factor="min", rgb=False)
-        # visualizeShapesWithEmbeddingsCorners(model_name='3MLP32_eig15_cntr01', args_shape=cls_args,scaling_factor="min", rgb=False)
-        visualizeShapesWithEmbeddings(model_name='3MLP32_eig15_cntr01', args_shape=cls_args, scaling_factor="max", rgb=True)
-        visualizeShapesWithEmbeddings(model_name='3MLP32_eig15_cntr01', args_shape=cls_args, scaling_factor="median", rgb=True)
+
+
+    # visualizeShapesWithEmbeddings3dMatchCorners(model_name=model_name, args_shape=cls_args, scaling_factor="axis", rgb=False)
+    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="axis", rgb=False, add_noise=False)
+    visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor="axis", rgb=True, add_noise=False)
     exit(0)
 
-
-    receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7],[1, 5, 9]]
-    # receptive_fields_list = [[1, 3, 5, 7]]
-    scales_list = [2, 3, 4, 2, 3,3]
-    # scales_list = [4]
-    for scales, receptive_field in zip(scales_list, receptive_fields_list):
-        test_pairings_modelnet(cls_args=cls_args,num_worst_losses=3,scaling_factor="min",amount_of_interest_points=500,
-                              num_of_ransac_iter=1000,use_o3d_ransac=False,pct_of_points_2_take=1,max_non_unique_correspondences=3,nn_mode=2, scales=scales,receptive_field=receptive_field,thresh_multi=5,tri=True,amount_of_samples=1)
