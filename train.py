@@ -18,10 +18,8 @@ def test(model, dataloader, loss_function, device, args):
     total_loss = 0.0
     total_acc_loss = 0.0
     count = 0
-    # label_correct = {label: 0 for label in range(4)}
-    # label_total = {label: 0 for label in range(4)}
-    label_correct = {label: 0 for label in range(8)}
-    label_total = {label: 0 for label in range(8)}
+    label_correct = {label: 0 for label in range(5)}
+    label_total = {label: 0 for label in range(5)}
 
     with torch.no_grad():
         for batch in dataloader:
@@ -30,24 +28,20 @@ def test(model, dataloader, loss_function, device, args):
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
             output = output.squeeze()
             loss = loss_function(output, label)
-            # output = output[:,:4]
-            output = output[:,:8]
+            output = output[:,:5]
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
             total_loss += loss.item()
             count += 1
-            # for label_name in range(4):
-            for label_name in range(8):
+            for label_name in range(5):
                 correct_mask = (preds == label_name) & (label == label_name)
                 label_correct[label_name] += correct_mask.sum().item()
                 label_total[label_name] += (label == label_name).sum().item()
 
     # Overall accuracy
     test_acc = (total_acc_loss / (count))
-    # label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
-    #                     for label in range(4)}
     label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
-                        for label in range(8)}
+                        for label in range(5)}
     average_loss = total_loss / (count)
 
     return average_loss, test_acc, label_accuracies
@@ -57,7 +51,7 @@ def test(model, dataloader, loss_function, device, args):
 def train_and_test(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if args.use_wandb:
-        wandb.login(key="ed8e8f26d1ee503cda463f300a605cb35e75ad23")
+        wandb.login(key="ed5e5f26d1ee503cda463f300a605cb35e75ad23")
         wandb.init(project=args.wandb_proj, name=args.exp_name)
 
     print(device)
@@ -65,26 +59,12 @@ def train_and_test(args):
     num_epochs = args.epochs
     learning_rate = args.lr
 
-    # Create instances for training and testing datasets
-    # if args.sampled_points==20:
-    #     train_dataset = BasicPointCloudDataset(file_path="train_surfaces.h5" , args=args)
-    #     test_dataset = BasicPointCloudDataset(file_path='test_surfaces.h5' , args=args)
-    # if args.sampled_points==40:
-
-    # train_dataset = BasicPointCloudDataset(file_path="train_surfaces_40_stronger_boundaries.h5" , args=args)
-    # test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5' , args=args)
-    # train_dataset = BasicPointCloudDataset(file_path="train_surfaces_with_corners_very_mild.h5" , args=args)
-    # test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners_very_mild.h5' , args=args)
     train_dataset = BasicPointCloudDataset(file_path="train_surfaces_with_corners_very_mild_curve.h5" , args=args)
     test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners_very_mild_curve.h5' , args=args)
 
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     model = shapeClassifier(args).to(device)
-    # model = shapeClassifier(args)
-    # state_dict = torch.load('base86.pt')
-    # model.load_state_dict(state_dict)
-    # model = model.to(device)
     num_params = sum(p.numel() for p in model.parameters())
     print(f'Num of parameters in NN: {num_params}')
 
@@ -115,13 +95,10 @@ def train_and_test(args):
                     pcl /= torch.max(torch.abs(pcl))
                 label = info['class'].to(device).long()
                 output = (model((pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
-                # orig_classification = output[:, :4]
-                orig_classification = output[:, :8]
+                orig_classification = output[:, :5]
                 orig_emb = output
                 classification_loss = torch.tensor((0))
                 if args.classification == 1:
-                    # orig_emb = output[:, 4:]
-                    # orig_emb = output[:, 8:]
                     classification_loss = criterion(orig_classification, label)
 
                 if args.contr_loss_weight != 0:
@@ -130,14 +107,8 @@ def train_and_test(args):
 
                     output_pcl2 = (model((pcl2.permute(0, 2, 1)).unsqueeze(2))).squeeze()
                     pos_emb = output_pcl2
-                    # if args.classification == 1:
-                    #     # pos_emb = output_pcl2[:, 4:]
-                    #     pos_emb = output_pcl2[:, 8:]
                     output_contrastive_pcl = (model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))).squeeze()
                     neg_emb = output_contrastive_pcl
-                    # if args.classification == 1:
-                    #     # neg_emb = output_contrastive_pcl[:, 4:]
-                    #     neg_emb = output_contrastive_pcl[:, 8:]
                     contrstive_loss = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
                     total_train_contrastive_positive_loss += mseLoss(orig_emb, pos_emb)
                     total_train_contrastive_negative_loss += mseLoss(orig_emb, neg_emb)
@@ -243,12 +214,6 @@ def configArgsPCT():
     return args
 def testPretrainedModel(args, model=None):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    # if args.sampled_points == 20:
-    #     test_dataset = BasicPointCloudDataset(file_path='test_surfaces.h5', args=args)
-    # elif args.sampled_points == 40:
-
-    # test_dataset = BasicPointCloudDataset(file_path='test_surfaces_40_stronger_boundaries.h5', args=args)
-    # test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners_very_mild.h5', args=args)
     test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners_very_mild_curve.h5', args=args)
 
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
@@ -265,25 +230,18 @@ def testPretrainedModel(args, model=None):
     model.eval()
     count =0
     total_acc_loss = 0.0
-    # label_correct = {label: 0 for label in range(4)}
-    # label_total = {label: 0 for label in range(4)}
-    # wrong_preds = {label: [] for label in range(4)}
-    # wrong_H_values = {label: [] for label in range(4)}
-    # wrong_K_values = {label: [] for label in range(4)}
-    label_correct = {label: 0 for label in range(8)}
-    label_total = {label: 0 for label in range(8)}
-    wrong_preds = {label: [] for label in range(8)}
-    wrong_H_values = {label: [] for label in range(8)}
-    wrong_K_values = {label: [] for label in range(8)}
-    wrong_predictions_stats = {}  # Store statistics for wrong predictions
+    label_correct = {label: 0 for label in range(5)}
+    label_total = {label: 0 for label in range(5)}
+    wrong_preds = {label: [] for label in range(5)}
+    wrong_H_values = {label: [] for label in range(5)}
+    wrong_K_values = {label: [] for label in range(5)}
 
     with torch.no_grad():
         for batch in test_dataloader:
             pcl, info = batch['point_cloud'].to(device), batch['info']
             label = info['class'].to(device).long()
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-            # output = output[:,:4]
-            output = (output[:,:8]).squeeze()
+            output = (output[:,:5]).squeeze()
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
 
@@ -297,23 +255,21 @@ def testPretrainedModel(args, model=None):
             count += 1
 
             # Update per-label statistics
-            # for label_name in range(4):
-            for label_name in range(8):
+            for label_name in range(5):
                 correct_mask = (preds == label_name) & (label == label_name)
                 label_correct[label_name] += correct_mask.sum().item()
                 label_total[label_name] += (label == label_name).sum().item()
 
     label_accuracies = {
         label: label_correct[label] / label_total[label]
-        # for label in range(4)
-        for label in range(8)
+        for label in range(5)
         if label_total[label] != 0
     }
     for label, accuracy in label_accuracies.items():
         print(f"Accuracy for label {label}: {accuracy:.4f}")
 
     # for label in range(4):
-    for label in range(8):
+    for label in range(5):
         if len(wrong_preds[label]) > 0:
             print(f"Label {label}:")
             print(f"  - Most frequent wrong prediction: {max(wrong_preds[label], key=wrong_preds[label].count)}")
