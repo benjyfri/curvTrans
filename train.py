@@ -97,14 +97,12 @@ def train_and_test(args):
     criterion = nn.CrossEntropyLoss(reduction='mean')
     mseLoss = nn.MSELoss()
     contr_loss_weight = args.contr_loss_weight
-    smooth_loss_weight = args.smoothness_loss
     data_in_1_cube = args.cube
     # Training loop
     for epoch in range(num_epochs):
         model.train()  # Set the model to training mode
         total_train_loss = 0.0
         total_train_contrastive_loss = 0.0
-        total_train_smoothness_loss = 0.0
         total_train_contrastive_positive_loss = 0.0
         total_train_contrastive_negative_loss = 0.0
         total_train_acc_loss = 0.0
@@ -147,23 +145,8 @@ def train_and_test(args):
                 else:
                     contrstive_loss = torch.tensor((0))
 
-                if smooth_loss_weight != 0:
-                    positive_smooth_point_cloud = batch['positive_smooth_point_cloud'].to(device)
-                    negative_smooth_point_cloud = batch['negative_smooth_point_cloud'].to(device)
-                    positive_output_smooth_pcl = model((positive_smooth_point_cloud.permute(0, 2, 1)).unsqueeze(2))
-                    negative_output_smooth_pcl = model((negative_smooth_point_cloud.permute(0, 2, 1)).unsqueeze(2))
-                    positive_smooth_emb = positive_output_smooth_pcl
-                    negative_smooth_emb = negative_output_smooth_pcl
-                    if args.classification == 1:
-                        # positive_smooth_emb = positive_smooth_emb[:,4:]
-                        # negative_smooth_emb = negative_smooth_emb[:,4:]
-                        positive_smooth_emb = positive_smooth_emb[:,8:]
-                        negative_smooth_emb = negative_smooth_emb[:,8:]
-                    smoothness_contrastive_loss = tripletMarginLoss(orig_emb, positive_smooth_emb, negative_smooth_emb)
-                    total_train_smoothness_loss += smoothness_contrastive_loss
-                else:
-                    smoothness_contrastive_loss = torch.tensor((0))
-                new_awesome_loss = classification_loss + (contr_loss_weight * contrstive_loss) + (smooth_loss_weight * smoothness_contrastive_loss)
+
+                new_awesome_loss = classification_loss + (contr_loss_weight * contrstive_loss)
                 optimizer.zero_grad()
                 new_awesome_loss.backward()
                 optimizer.step()
@@ -181,13 +164,11 @@ def train_and_test(args):
         classification_train_loss = (total_train_loss / count)
         classification_acc_train = (total_train_acc_loss / (count))
         contrastive_train_loss = (total_train_contrastive_loss / (count))
-        smoothness_train_loss = (total_train_smoothness_loss / (count))
         contrastive_positive_train_loss = (total_train_contrastive_positive_loss / (count))
         contrastive_negative_train_loss = (total_train_contrastive_negative_loss / (count))
         print(f'contrastive_loss: {contrastive_train_loss}')
         print(f'contrastive_positive_MSEloss: {contrastive_positive_train_loss}')
         print(f'contrastive_negative_MSEloss: {contrastive_negative_train_loss}')
-        print(f'smoothness_train_loss: {smoothness_train_loss}')
 
         if args.classification == 1:
             test_loss, acc_test, label_accuracies = test(model, test_dataloader, criterion, device, args)
@@ -206,8 +187,6 @@ def train_and_test(args):
                     wandb.log({"epoch": epoch, "label_"+str(key) : label_accuracies[key]})
             if args.contr_loss_weight!=0:
                 wandb.log({"epoch": epoch, "contrastive_loss":contrastive_train_loss})
-            if args.smoothness_loss!=0:
-                wandb.log({"epoch": epoch, "smoothness_loss":smoothness_train_loss})
     return model
 
 def configArgsPCT():
@@ -240,8 +219,6 @@ def configArgsPCT():
                         help='clip noise')
     parser.add_argument('--contr_loss_weight', type=float, default=0.0, metavar='N',
                         help='weight of contrastive loss')
-    parser.add_argument('--smoothness_loss', type=float, default=0.0, metavar='N',
-                        help='weight of smoothness contrastive loss')
     parser.add_argument('--lpe_dim', type=int, default=0, metavar='N',
                         help='laplacian positional encoding amount of eigens to take')
     parser.add_argument('--use_xyz', type=int, default=1, metavar='N',
@@ -262,8 +239,6 @@ def configArgsPCT():
                         help='Lower lr *0.1 every amount of jumps')
     parser.add_argument('--sampled_points', type=int, default=20, metavar='N',
                         help='How many points where sampled around centroid')
-    parser.add_argument('--smooth_num_of_neighbors', type=int, default=1, metavar='N',
-                        help='How many neighbors should we choose from for smoothing')
     args = parser.parse_args()
     return args
 def testPretrainedModel(args, model=None):
