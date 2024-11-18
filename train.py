@@ -51,7 +51,7 @@ def test(model, dataloader, loss_function, device, args):
 def train_and_test(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if args.use_wandb:
-        wandb.login(key="ed5e5f26d1ee503cda463f300a605cb35e75ad23")
+        wandb.login(key="ed8e8f26d1ee503cda463f300a605cb35e75ad23")
         wandb.init(project=args.wandb_proj, name=args.exp_name)
 
     print(device)
