@@ -12,6 +12,7 @@ class shapeClassifier(nn.Module):
         self.use_lap_reorder = args.use_lap_reorder
         self.lpe_dim = args.lpe_dim
         self.lap_eigenvalues_dim = args.lap_eigenvalues_dim
+        self.graph_weight_mode = args.graph_weight_mode
         input_dim = 0
         if self.use_xyz:
             input_dim = 3
@@ -58,7 +59,14 @@ class shapeClassifier(nn.Module):
 
     def createLap(self, point_cloud, normalized):
         distances = torch.cdist(point_cloud, point_cloud)
-        weights = torch.exp(-distances)
+        if self.graph_weight_mode == 0:
+            weights = torch.exp(-distances)
+        if self.graph_weight_mode == 1:
+            weights = torch.exp(-distances**2)
+        if self.graph_weight_mode == 2:
+            batch_size = point_cloud.shape[0]
+            rbf_weight = distances / (torch.max(distances.view(batch_size, -1), dim=1).values).view(batch_size, 1, 1)
+            weights = torch.exp(-rbf_weight)
         column_sums = weights.sum(dim=1)
         diag_matrix = torch.diag_embed(column_sums)
         laplacian = diag_matrix - weights

@@ -19,6 +19,7 @@ import cProfile
 import pstats
 from scipy.spatial import cKDTree
 from plotting_functions import *
+from experiments_utils import *
 
 
 def farthest_point_sampling(point_cloud, k):
@@ -107,22 +108,6 @@ def checkOnShapes(model_name=None, input_data=None, args_shape=None, scaling_fac
     model.eval()
     neighbors_centered, neighbors_non_centered = get_k_nearest_neighbors(input_data, 41)
     aaa=get_k_nearest_neighbors_diff_pcls(input_data, input_data, k=41)
-    src_knn_pcl = torch.tensor(neighbors_centered)
-    x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
-    y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
-    z_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,2,:,:])
-    scale = torch.mean(torch.stack((x_scale_src, y_scale_src, z_scale_src), dim=0))
-    #scale KNN point clouds to be of size 1
-    src_knn_pcl = src_knn_pcl / scale
-    #use 23 as it is around the size of the synthetic point clouds
-    src_knn_pcl = scaling_factor * src_knn_pcl
-    output = model(src_knn_pcl.permute(2,1,0,3))
-    return output
-def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None):
-    model = shapeClassifier(args_shape)
-    model.load_state_dict(torch.load(f'models_weights/{model_name}.pt'))
-    model.eval()
-    neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)
     src_knn_pcl = torch.tensor(neighbors_centered)
     x_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,0,:,:])
     y_scale_src = find_mean_diameter_for_specific_coordinate(src_knn_pcl[0,1,:,:])
@@ -1200,10 +1185,10 @@ def view_stabiity(model_name=None, args_shape=None, scaling_factor=None):
         noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
         noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
-        emb_1 = checkOnShapes(model_name=model_name,
-                              input_data=noisy_pointcloud_1, args_shape=args_shape, scaling_factor=scaling_factor)
-        emb_2 = checkOnShapes(model_name=model_name,
-                              input_data=noisy_pointcloud_2, args_shape=args_shape, scaling_factor=scaling_factor)
+        emb_1 = classifyPoints(model_name=model_name, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1,
+                       args_shape=args_shape, scaling_factor=scaling_factor)
+        emb_2 = classifyPoints(model_name=model_name, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2,
+                       args_shape=args_shape, scaling_factor=scaling_factor)
         emb_1 = emb_1.detach().cpu().numpy()
         emb_2 = emb_2.detach().cpu().numpy()
         # embeddings_1 = []

@@ -18,6 +18,7 @@ import cProfile
 import pstats
 from scipy.spatial import cKDTree
 from benchmark_modelnet import dcm2euler
+# from experiments_utils import farthest_point_sampling_o3d, get_k_nearest_neighbors_diff_pcls
 
 def plot_multiclass_point_clouds(point_clouds_1, point_clouds_2, rotation=None, title=""):
     """
@@ -263,6 +264,9 @@ def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
   # Save the figure as a png image
   fig.write_html(filename)
 
+
+
+
 def save_point_clouds(point_cloud1, point_cloud2, title="", filename="plot.html"):
     """
     Plot two point clouds in an interactive 3D plot with Plotly and save it.
@@ -469,7 +473,7 @@ def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embe
     distances = np.linalg.norm(embedding2 - random_embedding, axis=1)
 
     # Find indices of the 20 closest points
-    closest_indices = np.argsort(distances)[:20]
+    closest_indices = np.argsort(distances)[:10]
 
     # Define color scale based on distances
     max_distance = distances.max()
@@ -523,7 +527,7 @@ def plot_point_cloud_with_colors_by_dist_2_pcls(point_cloud1, point_cloud2, embe
             opacity=1
         )
     ))
-
+    fig.update_layout(title=f'{chosen_indices[1] in closest_indices}')
     fig.show()
 
 

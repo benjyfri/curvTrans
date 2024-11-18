@@ -51,6 +51,18 @@ def farthest_point_sampling(point_cloud, k):
 
     return sampled_indices
 
+from scipy.spatial import KDTree
+
+def middlePoints(pcl1, pcl2, trans_mag=0.5, rot_mag_deg=45, max_dist_from_center=0.2):
+    dist_from_center = np.linalg.norm(pcl1, axis=1)
+    trans_disp = ( np.sqrt(3) * trans_mag )
+    rot_disp = ( np.sin( np.radians(rot_mag_deg) ) * max_dist_from_center )
+    full_radial_max_displacement = trans_disp #+ rot_disp
+    middle_points_indices = dist_from_center < max_dist_from_center
+    kd_tree = KDTree(pcl2)
+    correspondences = kd_tree.query_ball_point(pcl1[middle_points_indices], full_radial_max_displacement)
+    return correspondences
+
 def find_triangles(data1, data2, first_index, remaining_indices, dist_threshold):
     dist_diff = np.abs(np.linalg.norm(data1[first_index] - data1[remaining_indices], axis=1) -
                        np.linalg.norm(data2[first_index] - data2[remaining_indices], axis=1))
@@ -176,8 +188,8 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_
             else:
                 tri_indices = np.random.choice(N, size=3, replace=False)
                 first_index = tri_indices[0]
-                tri_indices = tri_indices[1:]
                 if tri_indices is not None and len(set(tri_indices))==3:
+                    tri_indices = tri_indices[1:]
                     break
         if tri_indices is None:
             continue
@@ -308,7 +320,7 @@ def ransac_3dmatch(data1, data2, max_iterations=1000, threshold=0.1, min_inliers
 
         # Estimate rotation and translation
         rotation, translation = estimate_rigid_transform(src_points, dst_points)
-        # Find inliers
+        # Find inliers usin np.matmul(data1, rotation.T) + translation.squeeze()
         inliers1, inliers2 = find_inliers(src_centered, dst_centered, rotation,translation, threshold)
 
         # Update best model if we have enough inliers
@@ -348,17 +360,16 @@ def estimate_rigid_transform(src_points, dst_points):
     src_centered = src_points - src_mean
     dst_centered = dst_points - dst_mean
     H = np.matmul(src_centered.T, dst_centered)
-    # H = np.matmul(src_points.T, dst_points)
     U, _, Vt = np.linalg.svd(H)
     R = np.matmul(Vt.T, U.T)
 
     # Handle reflection case
     if np.linalg.det(R) < 0:
-        Vt[2, :] *= -1
-        R = np.matmul(Vt, U.T)
-    translation = dst_mean - ( R @ src_mean )
-    return R, translation
+        Vt[-1, :] *= -1  # Correct reflection handling
+        R = np.matmul(Vt.T, U.T)  # Recompute R with modified Vt
 
+    translation = dst_mean - (R @ src_mean)
+    return R, translation
 def find_inliers(data1, data2, rotation, translation, threshold):
     """
     Finds the inliers in two sets of 3D points given a rotation and translation.
@@ -438,7 +449,7 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
     iter_2_ransac_convergence = []
     combined_dict = {}
     # test_dataset = test_predator_data(partial_p_keep= [0.5, 0.5])
-    test_dataset = test_predator_data()
+    test_dataset = test_predator_data(matching=True)
     size = len(test_dataset)
     for i in range(size):
         if i > amount_of_samples:
@@ -446,19 +457,19 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         if i%10 ==0:
             print(f'------------{i}------------')
 
+        # data = test_dataset.__getitem__(83)
         data = test_dataset.__getitem__(i)
-        src_pcd, tgt_pcd, rot, trans, sample = data['src_pcd'], data['tgt_pcd'], data['rot'], data['trans'], data['sample']
+        src_pcd, tgt_pcd, GT_rot, GT_trans, sample = data['src_pcd'], data['tgt_pcd'], data['rot'], data['trans'], data['sample']
 
-        chosen_fps_indices_1 = farthest_point_sampling(src_pcd, k=amount_of_interest_points)
-        chosen_pcl_1 = src_pcd[chosen_fps_indices_1, :]
-        chosen_fps_indices_2 = farthest_point_sampling(tgt_pcd, k=amount_of_interest_points)
-        chosen_pcl_2 = tgt_pcd[chosen_fps_indices_2, :]
+        chosen_pcl_1 = farthest_point_sampling_o3d(src_pcd, k=amount_of_interest_points)
+        chosen_pcl_2 = farthest_point_sampling_o3d(tgt_pcd, k=amount_of_interest_points)
 
         emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
 
         emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
         emb_1 = emb_1.detach().cpu().numpy()[0]
         emb_2 = emb_2.detach().cpu().numpy()[0]
+
         # multiscale embeddings
         if scales > 1:
             for scale in receptive_field[1:]:
@@ -544,10 +555,12 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         # final_inliers_list.append(best_num_of_inliers)
         # iter_2_ransac_convergence.append(best_iter)
 
-        # transformed_points1 = np.matmul(src_pcd, best_rotation.T) + best_translation.squeeze()
-        loss = np.mean(((rot @ best_rotation.T) - np.eye(3)) ** 2)
-        losses_rot_list.append(loss)
-        losses_trans_list.append(np.linalg.norm(trans - best_translation))
+        transformed_points1 = np.matmul(src_pcd, best_rotation.T) + best_translation.squeeze()
+        rot_trace = np.trace(GT_rot @ best_rotation.T)
+        residual_rotdeg = np.arccos(np.clip(0.5 * (rot_trace - 1), -1.0, 1.0)) * 180.0 / np.pi
+        losses_rot_list.append(residual_rotdeg)
+        translation_loss = np.linalg.norm(GT_trans - best_translation)
+        losses_trans_list.append(translation_loss)
 
         best_rot_trans = np.hstack((best_rotation, best_translation.reshape(3, 1)))
         metrics = compute_metrics({key: torch.tensor(np.expand_dims(val, axis=0)) for key, val in sample.items()},
@@ -575,8 +588,8 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
                 'All_pairs_2': centered_points_2,
                 'failed_ransac': failed_ransac,
                 'pcl_id': i,
-                'rotation_matrix': rot,
-                'translation': trans,
+                'rotation_matrix': GT_rot,
+                'translation': GT_trans,
                 'best_rotation': best_rotation,
                 'best_translation': best_translation
             })
@@ -594,7 +607,7 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
     iter_2_ransac_convergence = []
     good_correspondences = []
     combined_dict = {}
-    train_dataset = IndoorDataset(data_augmentation=False)
+    train_dataset = IndoorDataset(data_augmentation=True)
     size = len(train_dataset)
     for i in range(size):
         if i > amount_of_samples:
@@ -605,16 +618,23 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
         data = train_dataset.__getitem__(i)
         src_pcd, tgt_pcd, GT_rot, GT_trans = data[0].astype(np.float32), data[1].astype(np.float32), data[4], data[5]
 
-        chosen_fps_indices_1 = farthest_point_sampling(src_pcd, k=amount_of_interest_points)
-        chosen_pcl_1 = src_pcd[chosen_fps_indices_1, :]
-        chosen_fps_indices_2 = farthest_point_sampling(tgt_pcd, k=amount_of_interest_points)
-        chosen_pcl_2 = tgt_pcd[chosen_fps_indices_2, :]
+        '''
+        (src_pcd @ GT_rot.T) + GT_trans.T = tgt_pcd
+        '''
+        # chosen_fps_indices_1 = farthest_point_sampling(src_pcd, k=amount_of_interest_points)
+        # chosen_pcl_1 = src_pcd[chosen_fps_indices_1, :]
+        # chosen_fps_indices_2 = farthest_point_sampling(tgt_pcd, k=amount_of_interest_points)
+        # chosen_pcl_2 = tgt_pcd[chosen_fps_indices_2, :]
+
+        chosen_pcl_1 = farthest_point_sampling_o3d(src_pcd, k=amount_of_interest_points)
+        chosen_pcl_2 = farthest_point_sampling_o3d(tgt_pcd, k=amount_of_interest_points)
 
         emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
 
         emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
         emb_1 = emb_1.detach().cpu().numpy()[0]
         emb_2 = emb_2.detach().cpu().numpy()[0]
+
         # multiscale embeddings
         if scales > 1:
             for scale in receptive_field[1:]:
@@ -863,6 +883,6 @@ def test_predator_data(matching=False, partial_p_keep=[0.7, 0.7]):
     else:
         root = r'/content/curvTrans/DeepBBS/modelnet40_ply_hdf5_2048'
     test_dataset = ModelNetHdf(overlap_radius=overlap_radius, root=root,
-                                subset='test', categories=None, transform=train_transforms, matching=matching)
+                                subset='train', categories=None, transform=train_transforms, matching=matching)
     return test_dataset
 
