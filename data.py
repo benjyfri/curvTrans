@@ -134,8 +134,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
     #         f'cont_k1:{k1_cont:.2f}, cont_k2:{k2_cont:.2f}')
     #         a=1
 
-        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
-        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
+        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
+        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 def estimate_KH_from_one_ring(point_cloud, centroid, k):
     num_points = point_cloud.shape[0]
 
