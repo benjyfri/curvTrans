@@ -64,13 +64,13 @@ def createDataSet():
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
 
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.2, counter=0, amount_of_pcl=10000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.15, counter=0, amount_of_pcl=10000,
                      size_of_pcl=40)
         print(f'Finished train flat surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=0.5, epsilon=0.2, counter=10000, amount_of_pcl=5000,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=0.75, epsilon=0.2, counter=10000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train parabolic peak surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=0.5, epsilon=0.2, counter=15000, amount_of_pcl=5000,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=0.75, epsilon=0.2, counter=15000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train parabolic pit surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=0.5, epsilon=0.2, counter=20000, amount_of_pcl=5000,
@@ -83,7 +83,7 @@ def createDataSet():
                      size_of_pcl=40)
         print(f'Finished train saddle surfaces')
 
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4,boundary=0.5, epsilon=0.2, counter=40000, amount_of_pcl=2500,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4,boundary=0.5, epsilon=0.15, counter=40000, amount_of_pcl=2500,
                      size_of_pcl=40, edge=True)
         print(f'Finished train HALFSPACE flat surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4,boundary=0.5, epsilon=0.2, counter=42500, amount_of_pcl=1250,
@@ -112,13 +112,13 @@ def createDataSet():
 
     with h5py.File(new_file_path_test, "w") as new_hdf5_test_file:
         point_clouds_group = new_hdf5_test_file.create_group("point_clouds")
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.2, counter=0, amount_of_pcl=1000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.15, counter=0, amount_of_pcl=1000,
                      size_of_pcl=40)
         print(f'Finished test flat surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=0.5, epsilon=0.2, counter=1000, amount_of_pcl=500,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=0.75, epsilon=0.2, counter=1000, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test parabolic peak surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=0.5, epsilon=0.2, counter=1500, amount_of_pcl=500,
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=0.75, epsilon=0.2, counter=1500, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test parabolic pit surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=0.5, epsilon=0.2, counter=2000, amount_of_pcl=500,
@@ -131,7 +131,7 @@ def createDataSet():
                      size_of_pcl=40)
         print(f'Finished test saddle surfaces')
 
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, counter=4000,boundary=0.5, epsilon=0.2, amount_of_pcl=250,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, counter=4000,boundary=0.15, epsilon=0.2, amount_of_pcl=250,
                      size_of_pcl=40, edge=True)
         print(f'Finished test HALFSPACE flat surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4,boundary=0.5, epsilon=0.2, counter=4250, amount_of_pcl=125,

@@ -60,14 +60,14 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             k1_orig = H_orig + np.sqrt(discriminant_orig)
             k2_orig = H_orig - np.sqrt(discriminant_orig)
             if class_label==0:
-                min_curve_diff = 0.2
-                max_curve_diff = 0.4
+                min_curve_diff = 0.15
+                max_curve_diff = 0.3
             else:
-                min_curve_diff = 0.5
-                max_curve_diff = 1
+                min_curve_diff = 0.2
+                max_curve_diff = 0.5
             count=0
             while True:
-                noise_to_add = np.random.normal(0, 0.4, 5)
+                noise_to_add = np.random.normal(0, 0.2, 5)
                 K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
                 ((c + noise_to_add[2]) ** 2))) / (
                                      (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
@@ -123,10 +123,10 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             contrastive_point_cloud = torch.tensor((0))
 
 
-    #     if class_label in [2]:
-    #         # plot_point_clouds(point_cloud1@rot_orig, np.load("10_pcl_noisy.npy")*2, f'class: {class_label}, {k1_orig}, {k2_orig}')
-    #         # plot_point_clouds(point_cloud1,point_cloud1, f'class: {class_label}, k1: {k1_orig}, k2: {k2_orig}')
-    #         # plotFunc(info['a'], info['b'], info['c'], info['d'], info['e'],point_cloud1@rot_orig)
+    #     if class_label in [0]:
+    # #         # plot_point_clouds(point_cloud1@rot_orig, np.load("10_pcl_noisy.npy")*2, f'class: {class_label}, {k1_orig}, {k2_orig}')
+    # #         plot_point_clouds(point_cloud1,point_cloud1, f'class: {class_label}, k1: {k1_orig}, k2: {k2_orig}')
+    # #         # plotFunc(info['a'], info['b'], info['c'], info['d'], info['e'],point_cloud1@rot_orig)
     #         a=1
     #         plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, f'pos; class: {class_label}')
     #         plot_point_clouds(point_cloud1@rot_orig, contrastive_point_cloud@neg_rot,
