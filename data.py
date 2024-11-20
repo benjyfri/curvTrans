@@ -60,10 +60,10 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             k1_orig = H_orig + np.sqrt(discriminant_orig)
             k2_orig = H_orig - np.sqrt(discriminant_orig)
             if class_label==0:
-                min_curve_diff = 0.15
-                max_curve_diff = 0.3
+                min_curve_diff = 0.1
+                max_curve_diff = 0.2
             else:
-                min_curve_diff = 0.2
+                min_curve_diff = 0.1
                 max_curve_diff = 0.5
             count=0
             while True:
