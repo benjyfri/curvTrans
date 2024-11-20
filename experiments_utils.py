@@ -417,7 +417,7 @@ def visualizeShapesWithEmbeddingsCorners(model_name=None, args_shape=None, scali
     pcls, label = load_data()
     shapes = [86, 174, 51]
     shapes = [47, 86, 162, 174, 176, 179]
-    # shapes = [86]
+    # shapes = [162]
     # shapes = [10, 17, 24, 47]
     # shapes = range(10)
     for k in shapes:
@@ -668,6 +668,132 @@ def read_bin_file(bin_file):
     # We only need the first three columns (x, y, z)
     return points[:, :3]
 
+
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+def find_closest_points_best_buddy_beta(
+    embeddings1,
+    embeddings2,
+    num_of_pairs=40,
+    max_non_unique_correspondences=3,
+    avoid_planes=True,
+    avoid_diff_classification=True
+):
+    # Extract classifications
+    classification_1 = np.argmax(embeddings1[:, :5], axis=1)
+    classification_2 = np.argmax(embeddings2[:, :5], axis=1)
+
+    # Track original indices
+    original_indices_1 = np.arange(embeddings1.shape[0])
+    original_indices_2 = np.arange(embeddings2.shape[0])
+
+    # Optionally filter out plane points
+    if avoid_planes:
+        mask_plane_1 = classification_1 != 0
+        mask_plane_2 = classification_2 != 0
+        embeddings1 = embeddings1[mask_plane_1]
+        embeddings2 = embeddings2[mask_plane_2]
+        classification_1 = classification_1[mask_plane_1]
+        classification_2 = classification_2[mask_plane_2]
+        original_indices_1 = original_indices_1[mask_plane_1]
+        original_indices_2 = original_indices_2[mask_plane_2]
+
+    # Initialize NearestNeighbors instance for embeddings1 and embeddings2
+    nbrs1 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
+    nbrs2 = NearestNeighbors(n_neighbors=max_non_unique_correspondences, algorithm='auto').fit(embeddings1)
+
+    # Find the indices and distances of the closest points
+    distances1, indices1 = nbrs1.kneighbors(embeddings1)
+    distances2, indices2 = nbrs2.kneighbors(embeddings2)
+
+    # Optionally filter out point pairings with different classifications
+    if avoid_diff_classification:
+        classification_mask = classification_1 != classification_2[indices1[:, 0]]
+        distances1[:, 0][classification_mask] = np.inf
+
+    # Filter out duplicates
+    duplicates = np.zeros(len(embeddings1))
+    best_buddies = []
+
+    for i, index in enumerate(indices1.squeeze()):
+        # Check if the point is a best buddy
+        if i in indices2[index] and distances1[i, 0] != np.inf:
+            best_buddies.append((i, index))
+
+    # Sort by distances and select the top num_of_pairs
+    best_buddies = sorted(best_buddies, key=lambda x: distances1[x[0], 0])
+    best_buddies = best_buddies[:num_of_pairs]
+
+    # Map back to original indices
+    emb1_indices = np.array([original_indices_1[x[0]] for x in best_buddies])
+    emb2_indices = np.array([original_indices_2[x[1]] for x in best_buddies])
+
+    return emb1_indices, emb2_indices
+def find_closest_points_beta(
+    embeddings1,
+    embeddings2,
+    num_of_pairs=40,
+    max_non_unique_correspondences=3,
+    n_neighbors=3,
+    avoid_duplicates=True,
+    avoid_diff_classification=True,
+    avoid_planes=True
+):
+    # Extract classifications
+    classification_1 = np.argmax(embeddings1[:, :5], axis=1)
+    classification_2 = np.argmax(embeddings2[:, :5], axis=1)
+
+    # Track original indices
+    original_indices_1 = np.arange(embeddings1.shape[0])
+    original_indices_2 = np.arange(embeddings2.shape[0])
+
+    # Optionally filter out plane points
+    if avoid_planes:
+        mask_plane_1 = classification_1 != 0
+        mask_plane_2 = classification_2 != 0
+        embeddings1 = embeddings1[mask_plane_1]
+        embeddings2 = embeddings2[mask_plane_2]
+        classification_1 = classification_1[mask_plane_1]
+        classification_2 = classification_2[mask_plane_2]
+        original_indices_1 = original_indices_1[mask_plane_1]
+        original_indices_2 = original_indices_2[mask_plane_2]
+
+    # Nearest Neighbors search
+    size_1 = embeddings1.shape[0]
+    size_2 = embeddings2.shape[0]
+    nbrs = NearestNeighbors(n_neighbors=n_neighbors, algorithm='auto').fit(embeddings2)
+    distances, indices = nbrs.kneighbors(embeddings1)
+    nearest_emb2_indices = indices[:, 0]
+
+    # Optionally filter out duplicates
+    if avoid_duplicates:
+        appearance_1_nn = np.bincount(nearest_emb2_indices, minlength=size_2)
+        mask_dup = (appearance_1_nn >= max_non_unique_correspondences)
+        distances[:, 0][mask_dup[nearest_emb2_indices]] = np.inf
+
+    # Filter out point pairings with different classifications after nearest neighbors
+    if avoid_diff_classification:
+        # Compare classifications of paired points
+        classification_mask = classification_1 != classification_2[nearest_emb2_indices]
+        # Mark distances for invalid pairs as infinity
+        distances[:, 0][classification_mask] = np.inf
+
+    # Identify valid indices based on distances
+    smallest_distances_indices = np.argsort(distances.flatten())
+    first_inf_index = np.where(distances.flatten()[smallest_distances_indices] == np.inf)[0][
+        0] if np.inf in distances else len(distances.flatten())
+    num_of_pairs_2_take = min(num_of_pairs, first_inf_index)
+    smallest_distances_indices = smallest_distances_indices[:num_of_pairs_2_take]
+
+    # Map back to original indices
+    filtered_emb1_indices = smallest_distances_indices.squeeze() % size_1
+    filtered_emb2_indices = (indices.flatten()[smallest_distances_indices].squeeze()) % size_2
+    original_emb1_indices = original_indices_1[filtered_emb1_indices]
+    original_emb2_indices = original_indices_2[filtered_emb2_indices]
+
+    return original_emb1_indices, original_emb2_indices
+
+
 def find_closest_points(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3, n_neighbors=1):
     classification_1 = np.argmax(embeddings1[:,:5], axis=1)
     classification_2 = np.argmax(embeddings2[:,:5], axis=1)
@@ -688,12 +814,12 @@ def find_closest_points(embeddings1, embeddings2, num_of_pairs=40, max_non_uniqu
     a2 = np.count_nonzero(distances == np.inf)
     # remove point pairings which have different classificatio
     mask_cls = classification_1 != classification_2[indices[:, 0]]
-    distances[:, 0][mask_cls[indices[:, 0]]] = np.inf
+    distances[:, 0][mask_cls] = np.inf
 
     a3 = np.count_nonzero(distances==np.inf)
     # remove plane points
     mask_plane = (classification_1 == 0)
-    distances[:, 0][mask_plane[indices[:, 0]]] = np.inf
+    distances[:, 0][mask_plane] = np.inf
 
     a4 = np.count_nonzero(distances == np.inf)
     smallest_distances_indices = np.argsort(distances.flatten())
@@ -903,7 +1029,7 @@ def calcDist(src_knn_pcl, scaling_mode):
         # scale = 3.275 / d_mean
         # scale = 1.9 / d_mean
         # scale = 2.435 / d_mean
-        scale = 2.989 / d_mean
+        scale = 5.121 / d_mean
 
     elif scaling_mode == "median":
         d_median = (torch.median(diam)).item()
@@ -911,7 +1037,7 @@ def calcDist(src_knn_pcl, scaling_mode):
         # scale = 12.7 / d_median
         # scale = 1.83 / d_median
         # scale = 2.39 / d_median
-        scale = 2.836 / d_median
+        scale = 4.886 / d_median
 
     elif scaling_mode == "max":
         d_max = (torch.max(diam)).item()
@@ -927,7 +1053,7 @@ def calcDist(src_knn_pcl, scaling_mode):
         # scale = 2.06 / d_min
         # scale = 1.07 / d_min
         # scale = 1.123 / d_min
-        scale = 2.3 / d_min
+        scale = 2.355 / d_min
     elif scaling_mode == "d_90":
         d_90 = (torch.quantile(diam, 0.9)).item()
         # scale = 19.13 / d_90
@@ -938,7 +1064,7 @@ def calcDist(src_knn_pcl, scaling_mode):
         diameter_med = torch.median(torch.median((torch.max(abs(pcl),dim=1))[0] , dim=0)[0])
 
         # scale = 1.105 / diameter_med
-        scale = 2.1789 / diameter_med
+        scale = 2.206 / diameter_med
     else:
         d_min = (torch.min(diam)).item()
         # scale = 2.22 / d_min

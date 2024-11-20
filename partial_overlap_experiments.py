@@ -330,17 +330,18 @@ def check_registration_modelnet(model_name):
     cls_args.sampled_points = 20
     cls_args.lap_eigenvalues_dim = 15
     scaling_factors = ["axis"]
-    subsamples = [700,500]
+    subsamples = [700]
     # receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
     # receptive_fields_list = [[1, 3], [1, 3, 5],[1, 5, 9]]
     receptive_fields_list = [[1,3]]
     # scales_list = [2,3,3]
-    scales_list = [1,3]
-    nn_modes = [2,3,4]
-    nn_modes = [4]
-    pcts = [0.1]
-    runsac_iterations = [5000]
-    tri=False
+    scales_list = [2]
+    # nn_modes = [2,3,4]
+    nn_modes = [2]
+    pcts = [1]
+    # runsac_iterations = [5000]
+    runsac_iterations = [2000]
+    tri=True
     for scales, receptive_field in zip(scales_list, receptive_fields_list):
         for amount_of_interest_points in subsamples:
             for scaling_factor in scaling_factors:
@@ -407,9 +408,9 @@ def check_registration_3dmatch(model_name):
     pcts = [0.1]
     thresh_multi_options = [1,3,5]
     # tri_type =[True, False]
-    tri_type =[False]
+    tri_type =[True]
     # ransac_type =[True, False]
-    ransac_type =[True]
+    ransac_type =[False]
     # ransac_type =[True]
     count = 0
     for use_o3d_ransac in ransac_type:
@@ -536,7 +537,9 @@ def viewStabilityWithPartial():
                 print(f'Count: {count} out of {size} shapes are in the top 10')
 if __name__ == '__main__':
 
-    model_name = "3MLP32_eig15_cntr005_std01"
+    # model_name = "3MLP32_eig15_cntr02_std01_rand"
+    model_name = "3MLP32_eig15_cntr03_std01_rand"
+    # model_name = "3MLP32_eig15_cntr015_std01_rand"
     # viewStabilityWithPartial()
     # checkSizeModelnet()
     # checkSizeSynthetic()
@@ -546,8 +549,8 @@ if __name__ == '__main__':
     # exit(0)
     # checkSizeSynthetic()
     # checkSyntheticData()
-    checkDiameterPCLSynthetic()
-    exit(0)
+    # checkDiameterPCLSynthetic()
+    # exit(0)
     # check_registration_modelnet(model_name)
     # check_registration_3dmatch(model_name)
     # exit(0)
@@ -555,12 +558,11 @@ if __name__ == '__main__':
 
     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
     cls_args.output_dim=5
-    cls_args.num_neurons_per_layer = 64
     cls_args.num_neurons_per_layer = 32
     cls_args.sampled_points = 20
     cls_args.lap_eigenvalues_dim = 15
 
-    # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=3, receptive_field=[1, 3,5])
+    # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=3, receptive_field=[1, 3, 5])
     # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=3, receptive_field=[1, 2, 3])
     # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=5, receptive_field=[2, 3, 4, 6, 8])
     # exit(0)
@@ -568,6 +570,6 @@ if __name__ == '__main__':
 
     # visualizeShapesWithEmbeddings3dMatchCorners(model_name=model_name, args_shape=cls_args, scaling_factor="axis", rgb=False)
     visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="axis", rgb=False, add_noise=False)
-    visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor="axis", rgb=True, add_noise=False)
+    # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor="axis", rgb=True, add_noise=False)
     exit(0)
 

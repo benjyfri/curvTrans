@@ -182,7 +182,7 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_
                 first_index = np.random.choice(indices)
                 remaining_indices = indices[indices != first_index]
                 remaining_indices = np.random.permutation(remaining_indices)
-                tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
+                tri_indices = find_triangles(data1, data2, first_index, remaining_indices, 2*dist_threshold)
                 if tri_indices is not None and len(set([first_index, tri_indices[0], tri_indices[1]]))==3:
                     break
             else:
@@ -495,7 +495,9 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         if nn_mode==1:
             emb1_indices, emb2_indices = find_closest_points_best_of_resolutions(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         if nn_mode == 2:
-            emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+            # emb1_indices, emb2_indices = find_closest_points(emb_1[:500,:], emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+            # emb1_indices, emb2_indices = find_closest_points_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=1)
         if nn_mode == 3:
             emb1_indices, emb2_indices = find_closest_points_with_dup(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take))
         if nn_mode == 4:
@@ -503,49 +505,26 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
 
+
+        plot_correspondence_with_classification(src_pcd, tgt_pcd, centered_points_1, centered_points_2,
+                                                emb_1[emb1_indices, :], emb_2[emb2_indices, :], GT_rot, GT_trans)
+
+        # nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(chosen_pcl_1);
+        # closest_neighbor_dist = nbrs.kneighbors(chosen_pcl_1)[0][:, 1];
+        # mean_closest_neighbor_dist = np.mean(closest_neighbor_dist)
         nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(chosen_pcl_1);
         closest_neighbor_dist = nbrs.kneighbors(chosen_pcl_1)[0][:, 1];
-        mean_closest_neighbor_dist = np.mean(closest_neighbor_dist)
-        # mean_closest_neighbor_dist *= 5
-
-
-        # o3d_ransace_corres_with_feats_transformation, corres = ransac_pose_estimation_features(chosen_pcl_1, chosen_pcl_2, emb_1, emb_2, mutual=False, distance_threshold=mean_closest_neighbor_dist, ransac_n=3)
+        mean_closest_neighbor_dist = np.median(closest_neighbor_dist)
+        # mean_closest_neighbor_dist *= 2
 
         failed_ransac = False
         o3d_successful = False
-        # o3d_successful = True
-        # for _ in range(5):
-        #     o3d_ransace_corres_with_paris_transformation, corres = ransac_pose_estimation_correspondences(chosen_pcl_1,
-        #                                                                                                   chosen_pcl_2,
-        #                                                                                                   (np.vstack((
-        #                                                                                                              emb1_indices,
-        #                                                                                                              emb2_indices))).T,
-        #                                                                                                   mutual=False,
-        #                                                                                                   distance_threshold=mean_closest_neighbor_dist,
-        #                                                                                                   ransac_n=3)
-        #     corres[0] = chosen_pcl_1[corres[0]]
-        #     corres[1] = chosen_pcl_2[corres[1]]
-        #     o3d_successful = True
-        #     best_translation = o3d_ransace_corres_with_paris_transformation[:3, 3]
-        #     if np.max(np.abs(best_translation)) > 0.75:
-        #         o3d_successful = False
-        #     if o3d_successful == True:
-        #         best_rotation = o3d_ransace_corres_with_paris_transformation[:3, :3]
-        #         r_pred_euler_deg = dcm2euler(np.array([best_rotation]), seq='xyz')
-        #         # check if magnitude of movement is too big for current setup
-        #         if np.max((r_pred_euler_deg)) >= 0 :
-        #             o3d_successful = False
-        #         if np.max(np.abs(r_pred_euler_deg)) > 45:
-        #             o3d_successful = False
-        #     if o3d_successful == True:
-        #         break
-        print(o3d_successful)
-        # print(o3d_successful)
+
         if o3d_successful == False:
             best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(
                 centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
                 threshold=mean_closest_neighbor_dist, sample=sample, tri=tri,
-                min_inliers=3, nn1_dist=mean_closest_neighbor_dist, max_thresh=(8 * mean_closest_neighbor_dist))
+                min_inliers=4, nn1_dist=mean_closest_neighbor_dist, max_thresh=(2 * mean_closest_neighbor_dist))
             # failed in Ransac
             if best_rotation is None:
                 failed_ransac = True
@@ -561,7 +540,10 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         losses_rot_list.append(residual_rotdeg)
         translation_loss = np.linalg.norm(GT_trans - best_translation)
         losses_trans_list.append(translation_loss)
-
+        corres_emb_1 = np.where((chosen_pcl_1[:, None] == corres[0]).all(axis=2))[0]
+        corres_emb_2 = np.where((chosen_pcl_2[:, None] == corres[1]).all(axis=2))[0]
+        plot_correspondence_with_classification(src_pcd, tgt_pcd, corres[0], corres[1],
+                                                emb_1[corres_emb_1, :], emb_2[corres_emb_2, :], GT_rot, GT_trans, title=f'LOSS: {residual_rotdeg}; ')
         best_rot_trans = np.hstack((best_rotation, best_translation.reshape(3, 1)))
         metrics = compute_metrics({key: torch.tensor(np.expand_dims(val, axis=0)) for key, val in sample.items()},
                                   torch.tensor(np.expand_dims(best_rot_trans, axis=0), dtype=torch.float32))
