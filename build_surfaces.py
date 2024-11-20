@@ -59,12 +59,14 @@ def createDataSet():
     if not os.path.exists(test_path):
         os.makedirs(test_path)
 
-    new_file_path_train = "train_surfaces_with_corners_very_mild_curve.h5"
-    new_file_path_test = "test_surfaces_with_corners_very_mild_curve.h5"
+    # new_file_path_train = "train_surfaces_with_corners_very_mild_curve.h5"
+    # new_file_path_test = "test_surfaces_with_corners_very_mild_curve.h5"
+    new_file_path_train = "train_surfaces_2X2.h5"
+    new_file_path_test = "test_surfaces_2X2.h5"
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
 
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.1, counter=0, amount_of_pcl=10000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.075, counter=0, amount_of_pcl=10000,
                      size_of_pcl=40)
         print(f'Finished train flat surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=0.5, epsilon=0.2, counter=10000, amount_of_pcl=5000,
@@ -79,7 +81,7 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=0.5, epsilon=0.15, counter=25000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train valley surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.5, epsilon=0.2, counter=30000, amount_of_pcl=10000,
+        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.7, epsilon=0.2, counter=30000, amount_of_pcl=10000,
                      size_of_pcl=40)
         print(f'Finished train saddle surfaces')
 
@@ -112,7 +114,7 @@ def createDataSet():
 
     with h5py.File(new_file_path_test, "w") as new_hdf5_test_file:
         point_clouds_group = new_hdf5_test_file.create_group("point_clouds")
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.1, counter=0, amount_of_pcl=1000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.075, counter=0, amount_of_pcl=1000,
                      size_of_pcl=40)
         print(f'Finished test flat surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=0.5, epsilon=0.2, counter=1000, amount_of_pcl=500,
@@ -127,7 +129,7 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=0.5, epsilon=0.15, counter=2500, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test valley surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.5, epsilon=0.2, counter=3000, amount_of_pcl=1000,
+        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.7, epsilon=0.2, counter=3000, amount_of_pcl=1000,
                      size_of_pcl=40)
         print(f'Finished test saddle surfaces')
 

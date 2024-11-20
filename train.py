@@ -59,8 +59,8 @@ def train_and_test(args):
     num_epochs = args.epochs
     learning_rate = args.lr
 
-    train_dataset = BasicPointCloudDataset(file_path="train_surfaces_with_corners_very_mild_curve.h5" , args=args)
-    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners_very_mild_curve.h5' , args=args)
+    train_dataset = BasicPointCloudDataset(file_path="train_surfaces_2X2.h5" , args=args)
+    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_2X2.h5' , args=args)
 
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
@@ -214,7 +214,7 @@ def configArgsPCT():
     return args
 def testPretrainedModel(args, model=None):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_with_corners_very_mild_curve.h5', args=args)
+    test_dataset = BasicPointCloudDataset(file_path='test_surfaces_2X2.h5', args=args)
 
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     if model is None:
