@@ -251,14 +251,14 @@ def create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36'):
     cls_args_shape.batch_size = 1024
     cls_args_shape.num_mlp_layers = 3
     cls_args_shape.num_neurons_per_layer = 32
-    cls_args_shape.sampled_points = 40
+    cls_args_shape.sampled_points = 20
     cls_args_shape.use_second_deg = 1
     cls_args_shape.lpe_normalize = 0
     cls_args_shape.exp = name
     cls_args_shape.lpe_dim = 0
-    cls_args_shape.output_dim = 4
+    cls_args_shape.output_dim = 5
     cls_args_shape.use_lap_reorder = 1
-    cls_args_shape.lap_eigenvalues_dim = 36
+    cls_args_shape.lap_eigenvalues_dim = 15
     return cls_args_shape, 1, 1
 
 def check_pairings_modelnet():
@@ -324,32 +324,27 @@ def check_pairings_3dmatch():
                         dir=run_name)
             plotWorst(worst_losses=worst_losses, dir=run_name)
 def check_registration_modelnet(model_name):
-    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
-    cls_args.output_dim = 5
-    cls_args.num_neurons_per_layer = 32
-    cls_args.sampled_points = 20
-    cls_args.lap_eigenvalues_dim = 15
-    scaling_factors = ["axis"]
-    subsamples = [700]
+    scaling_factors = ["axis", "min"]
+    subsamples = [700,350]
     # receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
     # receptive_fields_list = [[1, 3], [1, 3, 5],[1, 5, 9]]
-    receptive_fields_list = [[1,3]]
+    receptive_fields_list = [[1], [1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
     # scales_list = [2,3,3]
-    scales_list = [2]
-    # nn_modes = [2,3,4]
-    nn_modes = [2]
-    pcts = [1]
+    scales_list = [1,2,3,4,2,3,3]
+    nn_modes = [4]
+    pcts = [1, 0.5]
     # runsac_iterations = [5000]
-    runsac_iterations = [2000]
+    runsac_iterations = [1000]
     tri=True
+    models_names =["3MLP32_eig15_cntr02_std01_rand", "3MLP32_eig15_cntr03_std01_rand", "3MLP32_eig15_cntr015_std01_rand","3MLP32_eig15_cntr005_std01_rand"]
     for scales, receptive_field in zip(scales_list, receptive_fields_list):
         for amount_of_interest_points in subsamples:
             for scaling_factor in scaling_factors:
                 for pct_of_points_2_take in pcts:
-                    for nn_mode in nn_modes:
+                    for model_name in models_names:
                         for num_of_ransac_iter in runsac_iterations:
                             rfield = "_".join(map(str, receptive_field))
-                            run_name = f'rfield_{rfield}_keypoints_{amount_of_interest_points}_pct_{pct_of_points_2_take}_mode_{nn_mode}_rsac_iter_{num_of_ransac_iter}_{scaling_factor}'
+                            run_name = f'rfield_{rfield}_keypoints_{amount_of_interest_points}_pct_{pct_of_points_2_take}_rsac_iter_{num_of_ransac_iter}_{scaling_factor}_{model_name}'
                             print(run_name)
 
                             # cProfile.runctx('test_multi_scale_using_embedding_predator_modelnet(cls_args=cls_args, num_worst_losses=3, scaling_factor=scaling_factor, amount_of_interest_points=amount_of_interest_points, num_of_ransac_iter=num_of_ransac_iter, pct_of_points_2_take=pct_of_points_2_take, max_non_unique_correspondences=max_non_unique_correspondences, scales=scales, receptive_field=receptive_field,  amount_of_samples=20, batch_size=16 )', globals(), locals())
@@ -359,7 +354,7 @@ def check_registration_modelnet(model_name):
                             # stats = pstats.Stats(profiler)
                             # stats.sort_stats(pstats.SortKey.TIME)
                             # stats.print_stats()
-
+                            cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
                             worst_losses, losses_rot, losses_trans, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict = (
                                 test_multi_scale_using_embedding_predator_modelnet(cls_args=cls_args,
                                                                                    tri=tri,
@@ -368,8 +363,8 @@ def check_registration_modelnet(model_name):
                                                                                    amount_of_interest_points=amount_of_interest_points,
                                                                                    num_of_ransac_iter=num_of_ransac_iter,
                                                                                    pct_of_points_2_take=pct_of_points_2_take,
-                                                                                   max_non_unique_correspondences=3,
-                                                                                   nn_mode=nn_mode, scales=scales,
+                                                                                   max_non_unique_correspondences=1,
+                                                                                   nn_mode=4, scales=scales,
                                                                                    receptive_field=receptive_field,
                                                                                    amount_of_samples=50))
                             os.makedirs(run_name, exist_ok=True)
@@ -538,8 +533,9 @@ def viewStabilityWithPartial():
 if __name__ == '__main__':
 
     # model_name = "3MLP32_eig15_cntr02_std01_rand"
-    model_name = "3MLP32_eig15_cntr03_std01_rand"
+    # model_name = "3MLP32_eig15_cntr03_std01_rand"
     # model_name = "3MLP32_eig15_cntr015_std01_rand"
+    model_name = "3MLP32_eig15_cntr005_std01_rand"
     # viewStabilityWithPartial()
     # checkSizeModelnet()
     # checkSizeSynthetic()
@@ -551,9 +547,9 @@ if __name__ == '__main__':
     # checkSyntheticData()
     # checkDiameterPCLSynthetic()
     # exit(0)
-    # check_registration_modelnet(model_name)
+    check_registration_modelnet(model_name)
     # check_registration_3dmatch(model_name)
-    # exit(0)
+    exit(0)
 
 
     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
@@ -562,6 +558,7 @@ if __name__ == '__main__':
     cls_args.sampled_points = 20
     cls_args.lap_eigenvalues_dim = 15
 
+    # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=2, receptive_field=[1, 3])
     # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=3, receptive_field=[1, 3, 5])
     # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=3, receptive_field=[1, 2, 3])
     # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=5, receptive_field=[2, 3, 4, 6, 8])

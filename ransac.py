@@ -159,8 +159,8 @@ def ransac_pose_estimation_features(src_pcd, tgt_pcd, source_feature, tgt_featur
 def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_dist=0.05, max_thresh=1, sample=None, tri=False):
     # failing badly....
     if threshold > max_thresh:
-        print(f'RANSAC FAIL!')
-        print(f'threshold: {threshold}; max_thresh: {max_thresh}')
+        # print(f'RANSAC FAIL!')
+        # print(f'threshold: {threshold}; max_thresh: {max_thresh}')
         return None, None, 0, 1000, [np.array([[1,1,1]]),np.array([[1,1,1]])], threshold
     N = data1.shape[0]
     best_inliers = None
@@ -492,22 +492,15 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
                 emb_1 = np.hstack((emb_1, global_emb_1))
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
-        if nn_mode==1:
-            emb1_indices, emb2_indices = find_closest_points_best_of_resolutions(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-        if nn_mode == 2:
-            # emb1_indices, emb2_indices = find_closest_points(emb_1[:500,:], emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-            # emb1_indices, emb2_indices = find_closest_points_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=1)
-        if nn_mode == 3:
-            emb1_indices, emb2_indices = find_closest_points_with_dup(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take))
+        if nn_mode == 2:emb1_indices, emb2_indices = find_closest_points_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         if nn_mode == 4:
-            emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
 
 
-        plot_correspondence_with_classification(src_pcd, tgt_pcd, centered_points_1, centered_points_2,
-                                                emb_1[emb1_indices, :], emb_2[emb2_indices, :], GT_rot, GT_trans)
+        # plot_correspondence_with_classification(src_pcd, tgt_pcd, centered_points_1, centered_points_2,
+        #                                         emb_1[emb1_indices, :], emb_2[emb2_indices, :], GT_rot, GT_trans)
 
         # nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(chosen_pcl_1);
         # closest_neighbor_dist = nbrs.kneighbors(chosen_pcl_1)[0][:, 1];
@@ -523,7 +516,7 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         if o3d_successful == False:
             best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(
                 centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
-                threshold=mean_closest_neighbor_dist, sample=sample, tri=tri,
+                threshold=mean_closest_neighbor_dist, sample=None, tri=tri,
                 min_inliers=4, nn1_dist=mean_closest_neighbor_dist, max_thresh=(2 * mean_closest_neighbor_dist))
             # failed in Ransac
             if best_rotation is None:
@@ -540,10 +533,10 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         losses_rot_list.append(residual_rotdeg)
         translation_loss = np.linalg.norm(GT_trans - best_translation)
         losses_trans_list.append(translation_loss)
-        corres_emb_1 = np.where((chosen_pcl_1[:, None] == corres[0]).all(axis=2))[0]
-        corres_emb_2 = np.where((chosen_pcl_2[:, None] == corres[1]).all(axis=2))[0]
-        plot_correspondence_with_classification(src_pcd, tgt_pcd, corres[0], corres[1],
-                                                emb_1[corres_emb_1, :], emb_2[corres_emb_2, :], GT_rot, GT_trans, title=f'LOSS: {residual_rotdeg}; ')
+        # corres_emb_1 = np.where((chosen_pcl_1[:, None] == corres[0]).all(axis=2))[0]
+        # corres_emb_2 = np.where((chosen_pcl_2[:, None] == corres[1]).all(axis=2))[0]
+        # plot_correspondence_with_classification(src_pcd, tgt_pcd, corres[0], corres[1],
+        #                                         emb_1[corres_emb_1, :], emb_2[corres_emb_2, :], GT_rot, GT_trans, title=f'LOSS: {residual_rotdeg}; ')
         best_rot_trans = np.hstack((best_rotation, best_translation.reshape(3, 1)))
         metrics = compute_metrics({key: torch.tensor(np.expand_dims(val, axis=0)) for key, val in sample.items()},
                                   torch.tensor(np.expand_dims(best_rot_trans, axis=0), dtype=torch.float32))
@@ -553,10 +546,10 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         else:
             combined_dict = metrics
 
-        print(final_threshold)
-        print(metrics['err_r_deg'][0])
-        print(best_num_of_inliers)
-        print(f'++++')
+        # print(final_threshold)
+        # print(metrics['err_r_deg'][0])
+        # print(best_num_of_inliers)
+        # print(f'++++')
         # Update the worst losses list
         index_of_smallest_loss = np.argmin([worst_losses[i][0] for i in range(len(worst_losses))])
         smallest_loss = worst_losses[index_of_smallest_loss][0]
@@ -641,14 +634,10 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
                 emb_1 = np.hstack((emb_1, global_emb_1))
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
-        if nn_mode==1:
-            emb1_indices, emb2_indices = find_closest_points_best_of_resolutions(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         if nn_mode == 2:
-            emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-        if nn_mode == 3:
-            emb1_indices, emb2_indices = find_closest_points_with_dup(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take))
+            emb1_indices, emb2_indices = find_closest_points_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         if nn_mode == 4:
-            emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
 
@@ -766,14 +755,10 @@ def test_pairings_3dmatch(cls_args=None,num_worst_losses = 3, scaling_factor=Non
                 emb_1 = np.hstack((emb_1, global_emb_1))
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
-        if nn_mode==1:
-            emb1_indices, emb2_indices = find_closest_points_best_of_resolutions(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         if nn_mode == 2:
-            emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-        if nn_mode == 3:
-            emb1_indices, emb2_indices = find_closest_points_with_dup(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take))
+            emb1_indices, emb2_indices = find_closest_points_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         if nn_mode == 4:
-            emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
         save_4_point_clouds(centered_points_1, centered_points_2, centered_points_1, centered_points_2, filename=f"2_{receptive_field}_loss.html", rotation=GT_rot, translation=GT_trans, dist_thresh=5)
@@ -832,14 +817,10 @@ def test_pairings_modelnet(cls_args=None,num_worst_losses = 3, scaling_factor=No
                 emb_1 = np.hstack((emb_1, global_emb_1))
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
-        if nn_mode==1:
-            emb1_indices, emb2_indices = find_closest_points_best_of_resolutions(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         if nn_mode == 2:
-            emb1_indices, emb2_indices = find_closest_points(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
-        if nn_mode == 3:
-            emb1_indices, emb2_indices = find_closest_points_with_dup(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take))
+            emb1_indices, emb2_indices = find_closest_points_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         if nn_mode == 4:
-            emb1_indices, emb2_indices = find_closest_points_best_buddy(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
         save_4_point_clouds(centered_points_1, centered_points_2, centered_points_1, centered_points_2, filename=f"modelnet_2_{receptive_field}_loss.html", rotation=GT_rot, translation=GT_trans, dist_thresh=5)

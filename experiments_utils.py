@@ -867,91 +867,6 @@ def z_score_standardize(distances):
     mean = np.mean(distances)
     std = np.std(distances)
     return (distances - mean) / std
-def find_closest_points_best_of_resolutions(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3):
-    # Initialize NearestNeighbors instances
-    nbrs_1 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, :4])
-    nbrs_5 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, 4:5])
-    nbrs_10 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, 8:12])
-    nbrs_15 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, 12:])
-    nbrs_1_5 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, :5])
-    nbrs_5_10 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:, 4:12])
-    nbrs_5_15 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(np.column_stack((embeddings2[:, 4:5], embeddings2[:, 12:])))
-    nbrs_1_10 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(np.column_stack((embeddings2[:, :4], embeddings2[:, 8:12])))
-    nbrs_1_15 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(np.column_stack((embeddings2[:, :4], embeddings2[:, 12:])))
-    nbrs_10_15 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2[:,8:])
-    nbrs_1_5_10_15 = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(embeddings2)
-
-    # Find the distances and indices of the closest points in embeddings2 for each point in embeddings1
-    distances_1, indices_1 = nbrs_1.kneighbors(embeddings1[:, :4])
-    distances_5, indices_5 = nbrs_5.kneighbors(embeddings1[:, 4:5])
-    distances_10, indices_10 = nbrs_10.kneighbors(embeddings1[:, 8:12])
-    distances_15, indices_15 = nbrs_15.kneighbors(embeddings1[:, 12:])
-    distances_1_5, indices_1_5 = nbrs_1_5.kneighbors(embeddings1[:, :5])
-    distances_1_10, indices_1_10 = nbrs_1_10.kneighbors(np.column_stack((embeddings1[:, :4], embeddings1[:, 8:12])))
-    distances_5_15, indices_5_15 = nbrs_5_15.kneighbors(np.column_stack((embeddings1[:, 4:5], embeddings1[:, 12:])))
-    distances_5_10, indices_5_10 = nbrs_5_10.kneighbors(embeddings1[:, 4:12])
-    distances_1_15, indices_1_15 = nbrs_1_15.kneighbors(np.column_stack((embeddings1[:, :4], embeddings1[:, 12:])))
-    distances_1_5_10_15, indices_1_5_10_15 = nbrs_1_5_10_15.kneighbors(embeddings1)
-    distances_10_15, indices_10_15 = nbrs_10_15.kneighbors(embeddings1[:,8:])
-
-    # # Normalize the distances
-    # distances_5_15 /= np.sqrt(8)
-    # distances_5_10 /= np.sqrt(8)
-    # distances_1 /= np.sqrt(4)
-    # distances_5 /= np.sqrt(4)
-    # distances_10 /= np.sqrt(4)
-    # distances_15 /= np.sqrt(4)
-    # distances_1_5 /= np.sqrt(8)
-    # distances_1_10 /= np.sqrt(8)
-    # distances_1_15 /= np.sqrt(8)
-    # distances_1_5_10_15 /= np.sqrt(16)
-
-    # Normalize the distances
-    distances_5_15 = z_score_standardize(distances_5_15)
-    distances_5_10 = z_score_standardize(distances_5_10)
-    distances_1 = z_score_standardize(distances_1)
-    distances_5 = z_score_standardize(distances_5)
-    distances_10 = z_score_standardize(distances_10)
-    distances_15 = z_score_standardize(distances_15)
-    distances_1_5 = z_score_standardize(distances_1_5)
-    distances_1_10 = z_score_standardize(distances_1_10)
-    distances_1_15 = z_score_standardize(distances_1_15)
-    distances_10_15 = z_score_standardize(distances_10_15)
-    distances_1_5_10_15 = z_score_standardize(distances_1_5_10_15)
-
-    # # Normalize the distances
-    # distances_5_15 = min_max_scale(distances_5_15)
-    # distances_5_10 = min_max_scale(distances_5_10)
-    # distances_1 = min_max_scale(distances_1)
-    # distances_5 = min_max_scale(distances_5)
-    # distances_10 = min_max_scale(distances_10)
-    # distances_15 = min_max_scale(distances_15)
-    # distances_1_5 = min_max_scale(distances_1_5)
-    # distances_1_10 = min_max_scale(distances_1_10)
-    # distances_1_15 = min_max_scale(distances_1_15)
-    # distances_1_5_10_15 = min_max_scale(distances_1_5_10_15)
-
-    # Combine all distances and indices
-    # all_distances = np.concatenate([distances_1_5, distances_1_10, distances_1_15, distances_1_5_10_15, distances_5_10,distances_5_15], axis=1)
-    # all_indices = np.concatenate([indices_1_5, indices_1_10, indices_1_15, indices_1_5_10_15, indices_5_10, indices_5_15], axis=1)
-
-    # all_distances = np.concatenate([distances_1,distances_5,distances_10,distances_15, distances_1_5, distances_1_5_10_15], axis=1)
-    # all_indices = np.concatenate([indices_1,indices_5,indices_10,indices_15, indices_1_5, indices_1_5_10_15], axis=1)
-    all_distances = np.concatenate([distances_1_5, distances_10_15, distances_1_5_10_15], axis=1)
-    all_indices = np.concatenate([indices_1_5, indices_10_15, indices_1_5_10_15], axis=1)
-
-    # Find the minimum distances and their corresponding indices
-    min_distances = np.min(all_distances, axis=1)
-    min_indices = np.argmin(all_distances, axis=1)
-    final_indices = all_indices[np.arange(all_distances.shape[0]), min_indices]
-
-    # Get the indices of the smallest distances
-    smallest_distances_indices = np.argsort(min_distances.flatten())[:num_of_pairs]
-    emb1_indices = smallest_distances_indices.squeeze()
-    emb2_indices = final_indices[smallest_distances_indices].squeeze()
-
-    return emb1_indices, emb2_indices
-
 def find_closest_points_best_buddy(embeddings1, embeddings2, num_of_pairs=40, max_non_unique_correspondences=3):
     classification_1 = np.argmax(embeddings1[:, :5], axis=1)
     classification_2 = np.argmax(embeddings2[:, :5], axis=1)
@@ -1017,60 +932,33 @@ def random_rotation_translation(pointcloud, translation=np.array([0,0,0])):
 def calcDist(src_knn_pcl, scaling_mode):
     pcl = src_knn_pcl[0].permute(1,2,0)
     pairwise_distances = torch.cdist(pcl, pcl, p=2)
-    sum_distances = torch.sum(pairwise_distances, dim=(1, 2))
     num_points = pcl.shape[1]
-    num_pairs = num_points * (num_points - 1)
-
     diam = (((torch.max(pairwise_distances[:, 0, :], dim=1))[0]))
 
     if scaling_mode == "mean":
         d_mean = (torch.mean(diam)).item()
-        # scale = 13.23 / d_mean
-        # scale = 3.275 / d_mean
-        # scale = 1.9 / d_mean
-        # scale = 2.435 / d_mean
         scale = 5.121 / d_mean
 
     elif scaling_mode == "median":
         d_median = (torch.median(diam)).item()
-        # scale = 12.75 / d_median
-        # scale = 12.7 / d_median
-        # scale = 1.83 / d_median
-        # scale = 2.39 / d_median
-        scale = 4.886 / d_median
+        scale = 4.8959 / d_median
 
     elif scaling_mode == "max":
         d_max = (torch.max(diam)).item()
-        # scale = 37.06 / d_max
-        # scale = 37.55 / d_max
-        # scale =  4.16 / d_max
-        # scale =  5.329 / d_max
-        scale =  7.9167 / d_max
+        scale =  13.24 / d_max
 
     elif scaling_mode == "min":
         d_min = (torch.min(diam)).item()
-        # scale = 2.22 / d_min
-        # scale = 2.06 / d_min
-        # scale = 1.07 / d_min
-        # scale = 1.123 / d_min
-        scale = 2.355 / d_min
+        scale = 2.2962 / d_min
     elif scaling_mode == "d_90":
         d_90 = (torch.quantile(diam, 0.9)).item()
-        # scale = 19.13 / d_90
-        # scale = 2.42 / d_90
-        # scale = 3.13 / d_90
-        scale = 3.178 / d_90
+        scale = 6.9937 / d_90
     elif scaling_mode == "axis":
         diameter_med = torch.median(torch.median((torch.max(abs(pcl),dim=1))[0] , dim=0)[0])
-
-        # scale = 1.105 / diameter_med
         scale = 2.206 / diameter_med
     else:
         d_min = (torch.min(diam)).item()
-        # scale = 2.22 / d_min
-        # scale = 1.07 / d_min
-        # scale = 1.123 / d_min
-        scale = 2.3 / d_min
+        scale = 2.2962 / d_min
         scale = scale * scaling_mode
     return scale
 
