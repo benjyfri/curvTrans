@@ -60,14 +60,14 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             k1_orig = H_orig + np.sqrt(discriminant_orig)
             k2_orig = H_orig - np.sqrt(discriminant_orig)
             if class_label==0:
-                min_curve_diff = 0.1
-                max_curve_diff = 0.2
+                min_curve_diff = 0.05
+                max_curve_diff = 0.15
             else:
                 min_curve_diff = 0.1
-                max_curve_diff = 0.5
+                max_curve_diff = 0.2
             count=0
             while True:
-                noise_to_add = np.random.normal(0, 0.2, 5)
+                noise_to_add = np.random.normal(0, 0.1, 5)
                 K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
                 ((c + noise_to_add[2]) ** 2))) / (
                                      (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
@@ -123,8 +123,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             contrastive_point_cloud = torch.tensor((0))
 
 
-    #     if class_label in [0]:
-    # #         # plot_point_clouds(point_cloud1@rot_orig, np.load("10_pcl_noisy.npy")*2, f'class: {class_label}, {k1_orig}, {k2_orig}')
+    #     if class_label in [2]:
+    #         plot_point_clouds(point_cloud1@rot_orig, np.load("10_pcl_noisy.npy")*2, f'class: {class_label}, {k1_orig}, {k2_orig}')
     # #         plot_point_clouds(point_cloud1,point_cloud1, f'class: {class_label}, k1: {k1_orig}, k2: {k2_orig}')
     # #         # plotFunc(info['a'], info['b'], info['c'], info['d'], info['e'],point_cloud1@rot_orig)
     #         a=1
@@ -136,6 +136,41 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
 
         # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
+
+
+def rotatePCLToCanonical(point_cloud, centroid, k):
+    num_points = point_cloud.shape[0]
+
+    # Calculate the covariance matrix
+    cov_matrix = np.cov(point_cloud, rowvar=False)
+
+    # Calculate eigenvalues and eigenvectors
+    eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
+
+    # Find the smallest eigenvector corresponding to the smallest eigenvalue
+    normal_at_centroid = eigenvectors[:, np.argmin(eigenvalues)]
+    normal_at_centroid /= np.linalg.norm(normal_at_centroid)
+
+    # Calculate the rotation matrix to align the normal with the z-axis
+    z_axis = np.array([0, 0, 1])
+    v = np.cross(normal_at_centroid, z_axis)
+    s = np.linalg.norm(v)
+    c = np.dot(normal_at_centroid, z_axis)
+
+    if s == 0:  # Already aligned with z-axis
+        rotation_matrix = np.eye(3)
+    else:
+        vx = np.array([[0, -v[2], v[1]],
+                       [v[2], 0, -v[0]],
+                       [-v[1], v[0], 0]])
+        rotation_matrix = np.eye(3) + vx + (vx @ vx) * ((1 - c) / (s ** 2))
+
+    # Rotate the point cloud and centroid
+    rotated_point_cloud = point_cloud @ rotation_matrix.T
+    rotated_centroid = centroid @ rotation_matrix.T
+
+    return rotated_point_cloud, rotated_centroid, rotation_matrix
+
 def estimate_KH_from_one_ring(point_cloud, centroid, k):
     num_points = point_cloud.shape[0]
 

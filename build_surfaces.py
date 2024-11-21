@@ -65,8 +65,8 @@ def createDataSet():
     new_file_path_test = "test_surfaces_2X2.h5"
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
-
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.075, counter=0, amount_of_pcl=10000,
+        
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.05, counter=0, amount_of_pcl=10000,
                      size_of_pcl=40)
         print(f'Finished train flat surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=0.5, epsilon=0.2, counter=10000, amount_of_pcl=5000,
@@ -75,13 +75,13 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=0.5, epsilon=0.2, counter=15000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train parabolic pit surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=0.5, epsilon=0.15, counter=20000, amount_of_pcl=5000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=0.5, epsilon=0.1, counter=20000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train ridge surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=0.5, epsilon=0.15, counter=25000, amount_of_pcl=5000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=0.5, epsilon=0.1, counter=25000, amount_of_pcl=5000,
                      size_of_pcl=40)
         print(f'Finished train valley surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.7, epsilon=0.2, counter=30000, amount_of_pcl=10000,
+        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.8, epsilon=0.2, counter=30000, amount_of_pcl=10000,
                      size_of_pcl=40)
         print(f'Finished train saddle surfaces')
 
@@ -114,7 +114,7 @@ def createDataSet():
 
     with h5py.File(new_file_path_test, "w") as new_hdf5_test_file:
         point_clouds_group = new_hdf5_test_file.create_group("point_clouds")
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.075, counter=0, amount_of_pcl=1000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.05, counter=0, amount_of_pcl=1000,
                      size_of_pcl=40)
         print(f'Finished test flat surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=0.5, epsilon=0.2, counter=1000, amount_of_pcl=500,
@@ -123,13 +123,13 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=0.5, epsilon=0.2, counter=1500, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test parabolic pit surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=0.5, epsilon=0.15, counter=2000, amount_of_pcl=500,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=0.5, epsilon=0.1, counter=2000, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test ridge surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=0.5, epsilon=0.15, counter=2500, amount_of_pcl=500,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=0.5, epsilon=0.1, counter=2500, amount_of_pcl=500,
                      size_of_pcl=40)
         print(f'Finished test valley surfaces')
-        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.7, epsilon=0.2, counter=3000, amount_of_pcl=1000,
+        addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.8, epsilon=0.2, counter=3000, amount_of_pcl=1000,
                      size_of_pcl=40)
         print(f'Finished test saddle surfaces')
 
@@ -373,7 +373,36 @@ def plotMultiplePcls(parameter_sets,names=[], index=1):
     # Show the plot
     fig.show()
 
+def rotatePCLToCanonical(point_cloud):
+    # Calculate the covariance matrix
+    cov_matrix = np.cov(point_cloud, rowvar=False)
 
+    # Calculate eigenvalues and eigenvectors
+    eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
+
+    # Find the smallest eigenvector corresponding to the smallest eigenvalue
+    normal_at_centroid = eigenvectors[:, np.argmin(eigenvalues)]
+    normal_at_centroid /= np.linalg.norm(normal_at_centroid)
+
+    # Calculate the rotation matrix to align the normal with the z-axis
+    z_axis = np.array([0, 0, 1])
+    v = np.cross(normal_at_centroid, z_axis)
+    s = np.linalg.norm(v)
+    c = np.dot(normal_at_centroid, z_axis)
+
+    if s == 0:  # Already aligned with z-axis
+        rotation_matrix = np.eye(3)
+    else:
+        vx = np.array([[0, -v[2], v[1]],
+                       [v[2], 0, -v[0]],
+                       [-v[1], v[0], 0]])
+        rotation_matrix = np.eye(3) + vx + (vx @ vx) * ((1 - c) / (s ** 2))
+
+    # Rotate the point cloud and centroid
+    rotated_point_cloud = point_cloud @ rotation_matrix.T
+    rotated_centroid = centroid @ rotation_matrix.T
+
+    return rotated_point_cloud
 def fit_surface_quadratic_constrained(points):
     """
     Fits a quadratic surface constrained to f = 0 to a centered point cloud.
@@ -406,7 +435,10 @@ def fit_surface_quadratic_constrained(points):
 
     K = (4 * (a * b) - ((c ** 2))) / ((1 + d ** 2 + e ** 2) ** 2)
     H = (a * (1 + e ** 2) - d * e * c + b * (1 + d ** 2)) / (((d ** 2) + (e ** 2) + 1) ** 1.5)
-    return a, b, c, d, e, K, H
+    discriminant = H ** 2 - K
+    k1 = H + np.sqrt(discriminant)
+    k2 = H - np.sqrt(discriminant)
+    return a, b, c, d, e, K, H, k1, k2
 def accuracyHKdependingOnNumOfPoints(sigma=0):
     H_acc_mean =[]
     H_acc_median =[]
