@@ -11,8 +11,8 @@ def samplePoints(a, b, c, d, e, count):
         return a * x**2 + b * y**2 + c * x * y + d * x + e * y
 
     # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-1, 1, count)
-    y_samples = np.random.uniform(-1, 1, count)
+    x_samples = np.random.uniform(-2, 2, count)
+    y_samples = np.random.uniform(-2, 2, count)
 
     # Evaluate the surface function at the random points
     z_samples = surface_function(x_samples, y_samples)
@@ -63,6 +63,9 @@ def createDataSet():
     # new_file_path_test = "test_surfaces_with_corners_very_mild_curve.h5"
     new_file_path_train = "train_surfaces_2X2.h5"
     new_file_path_test = "test_surfaces_2X2.h5"
+    #for each shpae
+    boundaries =[0.5, 0.5,0,5, 1.8]
+    epsilons = [0.05, 0.2, 0.2, 0.2]
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
         
@@ -299,10 +302,10 @@ def plotPcl(a, b, c, d, e, sample_count=40):
     fig.show()
 
 
-def plotFunc(a, b, c, d, e,sampled_points):
+def plotFunc(a, b, c, d, e,sampled_points=None):
     # Create a grid of points for the surface
-    x = np.linspace(-1, 1, 100)
-    y = np.linspace(-1, 1, 100)
+    x = np.linspace(-2, 2, 100)
+    y = np.linspace(-2, 2, 100)
     x, y = np.meshgrid(x, y)
 
     # Compute the surface using the generated coefficients
@@ -319,11 +322,39 @@ def plotFunc(a, b, c, d, e,sampled_points):
                         color_continuous_scale=['blue', 'red'], title="Generated Surface",
                         labels={'x': 'X', 'y': 'Y', 'z': 'Z'}, range_color=[0, 1])
 
-    for i, point in enumerate(sampled_points):
-        fig.add_trace(go.Scatter3d(x=[point[0]], y=[point[1]], z=[point[2]],
-                                   mode='markers+text', text=[f'{i + 1}'],
-                                   marker=dict(size=25, color='yellow'), name='Point Cloud'),)
+    x_range = np.ptp(x)  # Peak-to-peak range for X
+    y_range = np.ptp(y)  # Peak-to-peak range for Y
+    z_range = np.ptp(z)
+    max_range = max(x_range, y_range, z_range)
+    aspect_ratio = dict(
+        x=x_range / max_range,
+        y=y_range / max_range,
+        z=z_range / max_range
+    )
+    # Determine aspect ratio based on ranges
+    max_range = max(x_range, y_range, z_range)
+    aspect_ratio = dict(
+        x=x_range / max_range,
+        y=y_range / max_range,
+        z=z_range / max_range
+    )
 
+    if sampled_points is not None:
+        for i, point in enumerate(sampled_points):
+            fig.add_trace(go.Scatter3d(x=[point[0]], y=[point[1]], z=[point[2]],
+                                       mode='markers+text', text=[f'{i + 1}'],
+                                       marker=dict(size=25, color='yellow'), name='Point Cloud'),)
+
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(title='X'),
+            yaxis=dict(title='Y'),
+            zaxis=dict(title='Z'),
+        aspectmode='manual',
+        aspectratio=aspect_ratio
+        ),
+        margin=dict(r=20, l=10, b=10, t=50)
+    )
     # Show the plot
     fig.show()
 def plotMultiplePcls(parameter_sets,names=[], index=1):
@@ -400,7 +431,6 @@ def rotatePCLToCanonical(point_cloud):
 
     # Rotate the point cloud and centroid
     rotated_point_cloud = point_cloud @ rotation_matrix.T
-    rotated_centroid = centroid @ rotation_matrix.T
 
     return rotated_point_cloud
 def fit_surface_quadratic_constrained(points):
@@ -439,6 +469,14 @@ def fit_surface_quadratic_constrained(points):
     k1 = H + np.sqrt(discriminant)
     k2 = H - np.sqrt(discriminant)
     return a, b, c, d, e, K, H, k1, k2
+
+def calc_curvatures(a=0,b=0,c=0,d=0,e=0):
+    K = (4 * (a * b) - ((c ** 2))) / ((1 + d ** 2 + e ** 2) ** 2)
+    H = (a * (1 + e ** 2) - d * e * c + b * (1 + d ** 2)) / (((d ** 2) + (e ** 2) + 1) ** 1.5)
+    discriminant = H ** 2 - K
+    k1 = H + np.sqrt(discriminant)
+    k2 = H - np.sqrt(discriminant)
+    return k1, k2, K, H
 def accuracyHKdependingOnNumOfPoints(sigma=0):
     H_acc_mean =[]
     H_acc_median =[]
@@ -636,7 +674,7 @@ def random_rotation(point_cloud):
     if not is_rotation:
         raise ValueError("not a rotation")
     return rotated_point_cloud
-def plot_point_clouds(point_cloud1, point_cloud2):
+def plot_point_clouds(point_cloud1, point_cloud2=None):
     """
     Plot two point clouds in an interactive 3D plot with Plotly.
 
@@ -650,10 +688,15 @@ def plot_point_clouds(point_cloud1, point_cloud2):
         x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
         mode='markers', marker=dict(color='red'), name='Point Cloud 1'
     ))
+    if point_cloud2 is not None:
+        fig.add_trace(go.Scatter3d(
+            x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
+            mode='markers', marker=dict(color='blue'), name='Point Cloud 2'
+        ))
 
     fig.add_trace(go.Scatter3d(
-        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
-        mode='markers', marker=dict(color='blue'), name='Point Cloud 2'
+        x=[0], y=[0], z=[0],
+        mode='markers', marker=dict(color='yellow'), name='Center'
     ))
 
     fig.update_layout(
@@ -701,6 +744,96 @@ def generate_surfaces_angles_and_sample(N, angle):
     points = np.vstack((center,points))
     return points
 
+
+import numpy as np
+
+
+def sample_cylinder_point_cloud(radius, length, num_of_points, edge=False):
+    """
+    Generate a 3D point cloud sampled from a cylindrical surface (without the bases).
+
+    Parameters:
+    - radius (float): Radius of the cylinder.
+    - length (float): Length of the cylinder along the Z-axis.
+    - num_of_points (int): Number of points to sample from the cylindrical surface.
+    - edge (bool): Determines the centering of the point cloud:
+        - If False, centers the cloud around the point closest to many other points (most dense region).
+        - If True, centers the cloud such that a point on the edge of the point cloud is at (0, 0, 0).
+
+    Returns:
+    - numpy.ndarray: A (num_of_points, 3) array representing the sampled 3D point cloud.
+    """
+    # Sample random angles (theta) around the cylinder
+    add = np.random.choice([0.5,1.5])
+    theta = np.random.uniform((add)*np.pi, (add+1)*np.pi, num_of_points)
+
+    # Sample random heights (z) along the length of the cylinder
+    x  = np.random.uniform(0, length, num_of_points)
+
+    # Compute the (x, y) coordinates on the circular cross-section
+    z = radius * np.cos(theta)
+    y = radius * np.sin(theta)
+
+    # Stack the coordinates into a (num_of_points, 3) array
+    point_cloud = np.stack((x, y, z), axis=-1)
+
+    # Adjust centering based on the `edge` parameter
+    if edge:
+        # Center such that a point on the edge of the cloud is at (0, 0, 0)
+        edge_point = point_cloud[np.argmax(np.abs(point_cloud[:,0] - length / 2))]
+        point_cloud -= edge_point
+    else:
+        # Select the point most close to the middle of the cylinder length
+        center_point = point_cloud[np.argmin(np.abs(point_cloud[:,0] - length / 2))]
+        point_cloud -= center_point
+
+    return point_cloud
+
+
+import numpy as np
+
+
+def sample_sphere_point_cloud(radius, num_of_points, top_half=True):
+    """
+    Samples a point cloud from either the top half or bottom half of a sphere.
+
+    Parameters:
+        radius (float): Radius of the sphere.
+        num_of_points (int): Number of points to sample.
+        top_half (bool): Whether to sample the top half of the sphere. If False, samples the bottom half.
+
+    Returns:
+        np.ndarray: An array of shape (num_of_points, 3) with sampled points.
+    """
+    # Sample random angles (theta for azimuthal angle, phi for polar angle)
+    theta = np.random.uniform(0, 2 * np.pi, num_of_points)
+
+    if top_half:
+        phi = np.random.uniform(0, np.pi / 2, num_of_points)  # Top hemisphere
+    else:
+        phi = np.random.uniform(np.pi / 2, np.pi, num_of_points)  # Bottom hemisphere
+
+    # Convert spherical coordinates to Cartesian coordinates
+    x = radius * np.sin(phi) * np.cos(theta)
+    y = radius * np.sin(phi) * np.sin(theta)
+    z = radius * np.cos(phi)
+
+    # Stack the coordinates into a (num_of_points, 3) array
+    point_cloud = np.stack((x, y, z), axis=-1)
+
+    return point_cloud
+
+
 if __name__ == '__main__':
-    createDataSet()
+    # createDataSet()
+    a = 0;
+    b = 1;
+    c = 0;
+    d = 0;
+    e = 0;
+    N = 20;
+    for i in range(10):
+        plot_point_clouds(sample_cylinder_point_cloud(0.5, 4, N+1, False), samplePoints(a,b,c,d,e,N))
+
+    plotFunc(a, b, c, d, e, sample_cylinder_point_cloud(1, 4, 21, False))
     print("yay")
