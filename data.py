@@ -135,6 +135,16 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
     #         a=1
 
         # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
+        # Define the base vertices and height
+        base_vertices = np.array([
+            [1, 0, 1],  # Vertex A
+            [-1, 1, 1],  # Vertex B
+            [-1, -1, 1]  # Vertex C
+        ])
+        height = 10
+        n_points = 1000
+        points = sample_pyramid(base_vertices, height, n_points)
+        AA = discGaussianCurvature(np.array([0,0,0]), base_vertices[0],  base_vertices[1],  base_vertices[2])
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 
 
@@ -255,7 +265,7 @@ def calculate_angle_and_area(a, b, c , d):
 
     return angle_at_a, angle_at_c, angle_at_d, area
 
-def plot_point_clouds(point_cloud1, point_cloud2, title=""):
+def plot_point_clouds(point_cloud1, point_cloud2=None, title=""):
     """
     Plot two point clouds in an interactive 3D plot with Plotly.
 
@@ -270,19 +280,21 @@ def plot_point_clouds(point_cloud1, point_cloud2, title=""):
         x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
         mode='markers', marker=dict(color='red'),opacity=0.8, name='Point Cloud 1'
     ))
-
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
-        mode='markers', marker=dict(color='blue'),opacity=0.8, name='Point Cloud 2'
-    ))
+    all_points = point_cloud1
+    if point_cloud2 is not None:
+        fig.add_trace(go.Scatter3d(
+            x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
+            mode='markers', marker=dict(color='blue'),opacity=0.8, name='Point Cloud 2'
+        ))
+        all_points = np.vstack((point_cloud1, point_cloud2))
     # Add a separate trace for the point (0, 0, 0) in bright pink
     fig.add_trace(go.Scatter3d(
         x=[0], y=[0], z=[0],
         mode='markers', marker=dict(color='rgb(255, 105, 180)'), name='Origin (0, 0, 0)'
     ))
 
-    # Calculate global min and max values for all axes
-    all_points = np.vstack((point_cloud1, point_cloud2))
+    # # Calculate global min and max values for all axes
+    # all_points = np.vstack((point_cloud1, point_cloud2))
     min_val = all_points.min()
     max_val = all_points.max()
 
@@ -306,9 +318,9 @@ def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0]), label=Non
 
     if label == 4:
         return sampleHalfSpacePoints(a, b, c, d, e, count)
-    bias = np.random.uniform(-0.5, 0.5)
-    x_size = 2 + bias
-    y_size = 2 - bias
+    bias = np.random.uniform(-0.25, 0.25)
+    x_size = 1 + bias
+    y_size = 1 - bias
 
     # Generate random points within the range [-1, 1] for both x and y
     x_samples = np.random.uniform(-x_size, x_size, count) + center_point[0]
@@ -329,9 +341,9 @@ def sampleHalfSpacePoints(a, b, c, d, e, count):
     def surface_function(x, y):
         return a * x**2 + b * y**2 + c * x * y + d * x + e * y
 
-    bias = np.random.uniform(-0.5, 0.5)
-    x_size = 2 + bias
-    y_size = 2 - bias
+    bias = np.random.uniform(-0.25, 0.25)
+    x_size = 1 + bias
+    y_size = 1 - bias
 
     # Generate random points within the range [-1, 1] for both x and y
     x_samples = np.random.uniform(-x_size, x_size, count)
@@ -437,6 +449,205 @@ def plotFunc(a, b, c, d, e,sampled_points):
 
     # Show the plot
     fig.show()
+
+def sample_cylinder_point_cloud(radius, length, num_of_points, edge=False):
+    """
+    Generate a 3D point cloud sampled from a cylindrical surface (without the bases).
+
+    Parameters:
+    - radius (float): Radius of the cylinder.
+    - length (float): Length of the cylinder along the Z-axis.
+    - num_of_points (int): Number of points to sample from the cylindrical surface.
+    - edge (bool): Determines the centering of the point cloud:
+        - If False, centers the cloud around the point closest to many other points (most dense region).
+        - If True, centers the cloud such that a point on the edge of the point cloud is at (0, 0, 0).
+
+    Returns:
+    - numpy.ndarray: A (num_of_points, 3) array representing the sampled 3D point cloud.
+    """
+    # Sample random angles (theta) around the cylinder
+    add = np.random.choice([0.5,1.5])
+    theta = np.random.uniform((add)*np.pi, (add+1)*np.pi, num_of_points)
+
+    # Sample random heights (z) along the length of the cylinder
+    x  = np.random.uniform(0, length, num_of_points)
+
+    # Compute the (x, y) coordinates on the circular cross-section
+    z = radius * np.cos(theta)
+    y = radius * np.sin(theta)
+
+    # Stack the coordinates into a (num_of_points, 3) array
+    point_cloud = np.stack((x, y, z), axis=-1)
+
+    # Adjust centering based on the `edge` parameter
+    if edge:
+        # Center such that a point on the edge of the cloud is at (0, 0, 0)
+        edge_point = point_cloud[np.argmax(np.abs(point_cloud[:,0] - length / 2))]
+        point_cloud -= edge_point
+    else:
+        # Select the point most close to the middle of the cylinder length
+        center_point = point_cloud[np.argmin(np.abs(point_cloud[:,0] - length / 2))]
+        point_cloud -= center_point
+
+    return point_cloud
+
+
+def sample_sphere_point_cloud(radius, num_of_points, top_half=True, edge=False):
+    """
+    Samples a point cloud from either the top half or bottom half of a sphere.
+
+    Parameters:
+        radius (float): Radius of the sphere.
+        num_of_points (int): Number of points to sample.
+        top_half (bool): Whether to sample the top half of the sphere. If False, samples the bottom half.
+
+    Returns:
+        np.ndarray: An array of shape (num_of_points, 3) with sampled points.
+    """
+    # Sample random angles (theta for azimuthal angle, phi for polar angle)
+    theta = np.random.uniform(0, 2 * np.pi, num_of_points)
+
+    if top_half:
+        phi = np.random.uniform(0, np.pi / 2, num_of_points)  # Top hemisphere
+    else:
+        phi = np.random.uniform(np.pi / 2, np.pi, num_of_points)  # Bottom hemisphere
+
+    # Convert spherical coordinates to Cartesian coordinates
+    x = radius * np.sin(phi) * np.cos(theta)
+    y = radius * np.sin(phi) * np.sin(theta)
+    z = radius * np.cos(phi)
+
+    # Stack the coordinates into a (num_of_points, 3) array
+    point_cloud = np.stack((x, y, z), axis=-1)
+
+    if edge:
+        # Center such that a point on the edge of the cloud is at (0, 0, 0)
+        if top_half==False:
+            edge_point = point_cloud[np.argmax((point_cloud[:,2]))]
+        else:
+            edge_point = point_cloud[np.argmin((point_cloud[:,2]))]
+        point_cloud -= edge_point
+    else:
+        if top_half==False:
+            center_point = point_cloud[np.argmin((point_cloud[:,2]))]
+        else:
+            center_point = point_cloud[np.argmax((point_cloud[:,2]))]
+        point_cloud -= center_point
+
+    return point_cloud
+
+
+import numpy as np
+
+
+def sample_pyramid(base_vertices, height, n_points):
+    """
+    Sample points uniformly from the surface of a pyramid with the tip at (0,0,0)
+    and a triangular base, excluding the base.
+
+    Parameters:
+        base_vertices (numpy.ndarray): Coordinates of the 3 vertices of the triangular base (3, 3).
+        height (float): Height of the pyramid.
+        n_points (int): Number of points to sample.
+
+    Returns:
+        numpy.ndarray: Array of sampled points (n_points, 3).
+    """
+    # Validate inputs
+    if base_vertices.shape != (3, 3):
+        raise ValueError("base_vertices must be a (3, 3) array representing the 3 base vertices.")
+
+    # Define the pyramid tip
+    tip = np.array([0, 0, 0])
+
+    # Define the three triangular side faces
+    triangles = np.array([
+        [tip, base_vertices[0], base_vertices[1]],  # Side 1
+        [tip, base_vertices[1], base_vertices[2]],  # Side 2
+        [tip, base_vertices[2], base_vertices[0]]  # Side 3
+    ])
+
+    # Calculate areas of the triangular sides
+    def triangle_area(v1, v2, v3):
+        return 0.5 * np.linalg.norm(np.cross(v2 - v1, v3 - v1))
+
+    areas = np.array([
+        triangle_area(*triangles[i]) for i in range(3)
+    ])
+    total_area = areas.sum()
+
+    # Allocate points proportionally to triangle areas
+    points_per_triangle = np.random.multinomial(n_points, areas / total_area)
+
+    # Generate barycentric coordinates for surface sampling
+    u = np.random.rand(n_points)
+    v = np.random.rand(n_points)
+    mask = u + v > 1
+    u[mask] = 1 - u[mask]
+    v[mask] = 1 - v[mask]
+    w = 1 - (u + v)
+
+    # Repeat triangles based on the number of points per triangle
+    triangle_indices = np.repeat(np.arange(3), points_per_triangle)
+    selected_triangles = triangles[triangle_indices]
+
+    # Extract vertices for selected triangles
+    v1 = selected_triangles[:, 0]
+    v2 = selected_triangles[:, 1]
+    v3 = selected_triangles[:, 2]
+
+    # Compute sampled points using barycentric coordinates
+    sampled_points = u[:, None] * v1 + v[:, None] * v2 + w[:, None] * v3
+
+    return sampled_points
+
+def discGaussianCurvature(A, B, C, D):
+    """
+    Calculate the areas and angles of two adjacent triangles ABC and ACD.
+
+    Parameters:
+    vertices: np.ndarray
+        A 4x3 numpy array where each row represents the coordinates of vertices
+        A, B, C, D in 3D space.
+
+    Returns:
+    tuple
+        A tuple containing:
+        - Areas of triangles ABC and ACD
+        - All six angles (in radians) of triangles ABC and ACD.
+    """
+
+    # Helper function: calculate area
+    def triangle_area(p1, p2, p3):
+        vec1 = p2 - p1
+        vec2 = p3 - p1
+        cross_product = np.cross(vec1, vec2)
+        area = 0.5 * np.linalg.norm(cross_product)
+        return area
+
+    # Helper function: calculate angle between two vectors
+    def angle_between(vec1, vec2):
+        dot_product = np.dot(vec1, vec2)
+        norms = np.linalg.norm(vec1) * np.linalg.norm(vec2)
+        return np.arccos(np.clip(dot_product / norms, -1.0, 1.0))
+
+    # Calculate areas of the triangles
+    area_ABC = triangle_area(A, B, C)
+    area_ACD = triangle_area(A, C, D)
+    area_ADB = triangle_area(A, D, B)
+
+    # Calculate angles for triangle ABC
+    AB = B - A
+    AC = C - A
+    AD = D - A
+
+    angle_total = angle_between(AB, AC) + angle_between(AC, AD) + angle_between(AD, AB)
+    area_vornoi = (1/3) * ( area_ABC + area_ACD + area_ADB )
+    # return {"curv": ((2 * np.pi - angle_total) / area_vornoi), "angle": angle_total, "area": area_vornoi}
+    return (2 * np.pi - angle_total)
+
+
+
 def random_rotation(point_cloud):
     rot = R.random().as_matrix()
     rot_mat = torch.tensor(rot, dtype=torch.float32)
