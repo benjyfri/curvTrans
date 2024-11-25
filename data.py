@@ -32,7 +32,11 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                     self.point_clouds_group[point_cloud_name].attrs}
 
         class_label = info['class']
-        point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],count=self.sampled_points,label=class_label)
+        angle = info['angle']
+        radius = info['radius']
+        bias = 0.25
+        length = 1
+        point_cloud = samplePcl(angle,radius,class_label,self.sampled_points, length, bias, info)
 
         point_cloud1 = torch.tensor(point_cloud, dtype=torch.float32)
         if self.rotate_data:
@@ -51,52 +55,57 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud1 = point_cloud1 - point_cloud1[0,:]
 
         if self.contr_loss_weight  != 0:
-            a,b,c,d,e = info['a'], info['b'], info['c'], info['d'],info['e']
-            K_orig = (4 * ((a) * (b)) - (((c) ** 2))) / ((1 + (d) ** 2 + (e) ** 2) ** 2)
-            H_orig = ((a) * (1 + (e) ** 2) - (d) * (e) * (c) + (b) * (1 + (d) ** 2)) / (
-                        (((d) ** 2) + ((e) ** 2) + 1) ** 1.5)
 
-            discriminant_orig = H_orig ** 2 - K_orig
-            k1_orig = H_orig + np.sqrt(discriminant_orig)
-            k2_orig = H_orig - np.sqrt(discriminant_orig)
             if class_label==0:
                 min_curve_diff = 0.05
                 max_curve_diff = 0.15
             else:
                 min_curve_diff = 0.1
                 max_curve_diff = 0.2
-            count=0
-            while True:
-                noise_to_add = np.random.normal(0, 0.1, 5)
-                K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
-                ((c + noise_to_add[2]) ** 2))) / (
-                                     (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
-                H_cont = ((a + noise_to_add[0]) * (1 + (e + noise_to_add[4]) ** 2) - (
-                            d + noise_to_add[3]) * (e + noise_to_add[4]) * (
-                                      c + noise_to_add[2]) + (b + noise_to_add[1]) * (
-                                      1 + (d + noise_to_add[3]) ** 2)) / ((((d + noise_to_add[
-                    3]) ** 2) + ((e + noise_to_add[4]) ** 2) + 1) ** 1.5)
-                discriminant_cont = H_cont ** 2 - K_cont
-                k1_cont = H_cont + np.sqrt(discriminant_cont)
-                k2_cont = H_cont - np.sqrt(discriminant_cont)
 
-                temp_max_diff = abs(k1_cont-k1_orig)
-                temp_min_diff = abs(k2_cont-k2_orig)
+            # if radius == 0 and angle == 0:
+            #
+            #     a,b,c,d,e = info['a'], info['b'], info['c'], info['d'],info['e']
+            #     K_orig = (4 * ((a) * (b)) - (((c) ** 2))) / ((1 + (d) ** 2 + (e) ** 2) ** 2)
+            #     H_orig = ((a) * (1 + (e) ** 2) - (d) * (e) * (c) + (b) * (1 + (d) ** 2)) / (
+            #                 (((d) ** 2) + ((e) ** 2) + 1) ** 1.5)
+            #
+            #     discriminant_orig = H_orig ** 2 - K_orig
+            #     k1_orig = H_orig + np.sqrt(discriminant_orig)
+            #     k2_orig = H_orig - np.sqrt(discriminant_orig)
+            #     count=0
+            #     while True:
+            #         noise_to_add = np.random.normal(0, 0.1, 5)
+            #         K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
+            #         ((c + noise_to_add[2]) ** 2))) / (
+            #                              (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
+            #         H_cont = ((a + noise_to_add[0]) * (1 + (e + noise_to_add[4]) ** 2) - (
+            #                     d + noise_to_add[3]) * (e + noise_to_add[4]) * (
+            #                               c + noise_to_add[2]) + (b + noise_to_add[1]) * (
+            #                               1 + (d + noise_to_add[3]) ** 2)) / ((((d + noise_to_add[
+            #             3]) ** 2) + ((e + noise_to_add[4]) ** 2) + 1) ** 1.5)
+            #         discriminant_cont = H_cont ** 2 - K_cont
+            #         k1_cont = H_cont + np.sqrt(discriminant_cont)
+            #         k2_cont = H_cont - np.sqrt(discriminant_cont)
+            #
+            #         temp_max_diff = abs(k1_cont-k1_orig)
+            #         temp_min_diff = abs(k2_cont-k2_orig)
+            #
+            #         if (( (temp_max_diff > min_curve_diff) or (temp_min_diff > min_curve_diff)) and
+            #                 ((temp_max_diff < max_curve_diff) and (temp_min_diff < max_curve_diff))):
+            #             a = info['a'] + noise_to_add[0]
+            #             b = info['b'] + noise_to_add[1]
+            #             c = info['c'] + noise_to_add[2]
+            #             d = info['d'] + noise_to_add[3]
+            #             e = info['e'] + noise_to_add[4]
+            #             break
+            #         count += 1
+            #     contrastive_point_cloud = samplePoints(a, b, c, d, e, count=self.sampled_points, label=class_label)
+            # else:
 
-                if (( (temp_max_diff > min_curve_diff) or (temp_min_diff > min_curve_diff)) and
-                        ((temp_max_diff < max_curve_diff) and (temp_min_diff < max_curve_diff))):
-                    a = info['a'] + noise_to_add[0]
-                    b = info['b'] + noise_to_add[1]
-                    c = info['c'] + noise_to_add[2]
-                    d = info['d'] + noise_to_add[3]
-                    e = info['e'] + noise_to_add[4]
-                    break
-                count += 1
-
-            contrastive_point_cloud = samplePoints(a, b, c, d, e, count=self.sampled_points, label=class_label)
             positive_point_cloud = point_cloud
             if class_label != 4:
-                positive_point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'], count=self.sampled_points, label=class_label)
+                positive_point_cloud = samplePcl(angle, radius, class_label, self.sampled_points, length, bias, info)
 
             contrastive_point_cloud = torch.tensor(contrastive_point_cloud, dtype=torch.float32)
             neg_rot,contrastive_point_cloud = random_rotation(contrastive_point_cloud)
@@ -135,17 +144,84 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
     #         a=1
 
         # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
-        # Define the base vertices and height
-        base_vertices = np.array([
-            [1, 0, 1],  # Vertex A
-            [-1, 1, 1],  # Vertex B
-            [-1, -1, 1]  # Vertex C
-        ])
-        height = 10
-        n_points = 1000
-        points = sample_pyramid(base_vertices, height, n_points)
-        AA = discGaussianCurvature(np.array([0,0,0]), base_vertices[0],  base_vertices[1],  base_vertices[2])
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
+
+def samplePcl(angle,radius,class_label,sampled_points, length, bias, info):
+    if angle != 0:
+        if class_label == 1:
+            point_cloud = sample_pyramid(length, sampled_points, np.pi, bias=bias)
+        if class_label == 2:
+            point_cloud = generate_surfaces_angles_and_sample(sampled_points, angle, bias=bias)
+
+    elif radius != 0:
+
+        if class_label == 1:
+            point_cloud = sample_sphere_point_cloud(radius=radius, num_of_points=sampled_points)
+        if class_label == 2:
+            point_cloud = sample_cylinder_point_cloud(radius=radius, length=length, num_of_points=sampled_points,
+                                                      bias=bias)
+    else:
+        point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'], count=sampled_points,bias=bias)
+    if class_label == 4:
+        point_cloud = sampleHalfSpacePoints(point_cloud)
+    return point_cloud
+
+def sampleContrastivePcl(angle,radius,class_label,sampled_points, length, bias, info,min_curve_diff, max_curve_diff):
+    curve_diff = np.random.uniform(min_curve_diff, max_curve_diff)
+    if angle != 0:
+        curve = (np.sqrt(2) * np.sin(np.pi - np.radians(angle))) / np.sqrt( 1 - np.cos(np.pi - np.radians(angle)) )
+        if class_label == 1:
+            contrastive_point_cloud = sample_pyramid(length, sampled_points, np.pi, bias=bias)
+        if class_label == 2:
+            contrastive_point_cloud = generate_surfaces_angles_and_sample(sampled_points, angle, bias=bias)
+
+    elif radius != 0:
+
+        if class_label == 1:
+            contrastive_point_cloud = sample_sphere_point_cloud(radius=radius, num_of_points=sampled_points)
+        if class_label == 2:
+            contrastive_point_cloud = sample_cylinder_point_cloud(radius=radius, length=length, num_of_points=sampled_points,
+                                                      bias=bias)
+    else:
+        a, b, c, d, e = info['a'], info['b'], info['c'], info['d'], info['e']
+        K_orig = (4 * ((a) * (b)) - (((c) ** 2))) / ((1 + (d) ** 2 + (e) ** 2) ** 2)
+        H_orig = ((a) * (1 + (e) ** 2) - (d) * (e) * (c) + (b) * (1 + (d) ** 2)) / (
+                (((d) ** 2) + ((e) ** 2) + 1) ** 1.5)
+
+        discriminant_orig = H_orig ** 2 - K_orig
+        k1_orig = H_orig + np.sqrt(discriminant_orig)
+        k2_orig = H_orig - np.sqrt(discriminant_orig)
+        count = 0
+        while True:
+            noise_to_add = np.random.normal(0, 0.1, 5)
+            K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
+                ((c + noise_to_add[2]) ** 2))) / (
+                             (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
+            H_cont = ((a + noise_to_add[0]) * (1 + (e + noise_to_add[4]) ** 2) - (
+                    d + noise_to_add[3]) * (e + noise_to_add[4]) * (
+                              c + noise_to_add[2]) + (b + noise_to_add[1]) * (
+                              1 + (d + noise_to_add[3]) ** 2)) / ((((d + noise_to_add[
+                3]) ** 2) + ((e + noise_to_add[4]) ** 2) + 1) ** 1.5)
+            discriminant_cont = H_cont ** 2 - K_cont
+            k1_cont = H_cont + np.sqrt(discriminant_cont)
+            k2_cont = H_cont - np.sqrt(discriminant_cont)
+
+            temp_max_diff = abs(k1_cont - k1_orig)
+            temp_min_diff = abs(k2_cont - k2_orig)
+
+            if (((temp_max_diff > min_curve_diff) or (temp_min_diff > min_curve_diff)) and
+                    ((temp_max_diff < max_curve_diff) and (temp_min_diff < max_curve_diff))):
+                a = info['a'] + noise_to_add[0]
+                b = info['b'] + noise_to_add[1]
+                c = info['c'] + noise_to_add[2]
+                d = info['d'] + noise_to_add[3]
+                e = info['e'] + noise_to_add[4]
+                break
+            count += 1
+        contrastive_point_cloud = samplePoints(a, b, c, d, e, count=sampled_points, label=class_label)
+    if class_label == 4:
+        contrastive_point_cloud = sampleHalfSpacePoints(contrastive_point_cloud)
+    return contrastive_point_cloud
 
 
 def rotatePCLToCanonical(point_cloud, centroid, k):
@@ -312,15 +388,13 @@ def plot_point_clouds(point_cloud1, point_cloud2=None, title=""):
 
     fig.show()
 
-def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0]), label=None):
+def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0]), bias=0.0):
     def surface_function(x, y):
         return a * x**2 + b * y**2 + c * x * y + d * x + e * y
 
-    if label == 4:
-        return sampleHalfSpacePoints(a, b, c, d, e, count)
-    bias = np.random.uniform(-0.25, 0.25)
-    x_size = 1 + bias
-    y_size = 1 - bias
+    add = np.random.uniform(-bias, bias)
+    x_size = 1 + add
+    y_size = 1 - add
 
     # Generate random points within the range [-1, 1] for both x and y
     x_samples = np.random.uniform(-x_size, x_size, count) + center_point[0]
@@ -337,47 +411,24 @@ def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0]), label=Non
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
 
     return sampled_points_with_centroid
-def sampleHalfSpacePoints(a, b, c, d, e, count):
-    def surface_function(x, y):
-        return a * x**2 + b * y**2 + c * x * y + d * x + e * y
-
-    bias = np.random.uniform(-0.25, 0.25)
-    x_size = 1 + bias
-    y_size = 1 - bias
-
-    # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-x_size, x_size, count)
-    y_samples = np.random.uniform(-y_size, y_size, count)
-
-    # Evaluate the surface function at the random points
-    z_samples = surface_function(x_samples, y_samples)
-
-    # Create an array with the sampled points
-    sampled_points = np.column_stack((x_samples, y_samples, z_samples))
-
-    # Concatenate the centroid [0, 0, 0] to the beginning of the array
-    centroid = np.array([[0, 0, 0]])
-    sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
+def sampleHalfSpacePoints(sampled_points_with_centroid):
     center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-10,0))]
-    # center_point_idx = np.argsort(np.linalg.norm(sampled_points, axis=1))[-1]
     sampled_points_with_centroid = sampled_points_with_centroid - sampled_points_with_centroid[center_point_idx, :]
     sampled_points_with_centroid[center_point_idx, :] = (sampled_points_with_centroid[0, :]).copy()
     sampled_points_with_centroid[0, :] = np.array([[0, 0, 0]])
-
     return sampled_points_with_centroid
 
-def generate_room_corner_with_points(N):
-    upper_bound1, upper_bound2, upper_bound3 = [
-        np.clip(np.random.normal(loc=2.04, scale=0.4), 1, 6) * np.cos(np.radians(45)) for _ in range(3)]
 
-    # upper_bound = 1
+def generate_room_corner_with_points(n_points, bias=0.0):
+    upper_bound1, upper_bound2, upper_bound3 = np.random.uniform(1 - bias, 1 + bias, 3)
 
-    N1, N2, N3 = np.random.multinomial(N-3, [1/3, 1/3, 1/3]) + np.array([1,1,1])
+    N1, N2, N3 = np.random.multinomial(n_points-3, [1/3, 1/3, 1/3]) + np.array([1,1,1])
     center = np.array([0, 0, 0])
     points1 = np.stack((np.random.uniform(0, upper_bound1, N1), np.random.uniform(0, upper_bound1, N1), np.zeros(N1)), axis=-1)
     points2 = np.stack((np.zeros(N2), np.random.uniform(0, upper_bound2, N2), -np.random.uniform(0, upper_bound2, N2)), axis=-1)
     points3 = np.stack((np.random.uniform(0, upper_bound3, N3), np.zeros(N3), -np.random.uniform(0, upper_bound3, N3)), axis=-1)
     points = np.vstack((center, points1,points2,points3))
+
     center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
     points = points - points[center_point_idx, :]
 
@@ -385,12 +436,11 @@ def generate_room_corner_with_points(N):
     points[center_point_idx, :] = (points[0, :]).copy()
     points[0, :] = np.array([[0, 0, 0]])
     return points
-def generate_surfaces_angles_and_sample(N, angle):
+def generate_surfaces_angles_and_sample(N, angle, bias=0.0):
     angle_rad = np.radians((180 - angle) / 2)
-    value = np.random.normal(loc=2, scale=0.4)
-    value = np.clip(value, 1, 6)
-    upper_bound_y = np.clip(np.random.normal(loc=1, scale=0.3), min(0.2, value), value - 0.1)
-    upper_bound_x = np.sqrt( ( value**2 ) - ( upper_bound_y**2 ) ) * np.cos(angle_rad)
+    value = np.random.uniform(0.5-bias, 0.5+bias)
+    upper_bound_y = np.random.uniform(0.5, 0.5+bias)
+    upper_bound_x = np.random.uniform(0.5, 0.5+bias)
     # upper_bound = 1
     # 1. Generate a random angle between 0 and 30 degrees
 
@@ -450,27 +500,15 @@ def plotFunc(a, b, c, d, e,sampled_points):
     # Show the plot
     fig.show()
 
-def sample_cylinder_point_cloud(radius, length, num_of_points, edge=False):
-    """
-    Generate a 3D point cloud sampled from a cylindrical surface (without the bases).
-
-    Parameters:
-    - radius (float): Radius of the cylinder.
-    - length (float): Length of the cylinder along the Z-axis.
-    - num_of_points (int): Number of points to sample from the cylindrical surface.
-    - edge (bool): Determines the centering of the point cloud:
-        - If False, centers the cloud around the point closest to many other points (most dense region).
-        - If True, centers the cloud such that a point on the edge of the point cloud is at (0, 0, 0).
-
-    Returns:
-    - numpy.ndarray: A (num_of_points, 3) array representing the sampled 3D point cloud.
-    """
-    # Sample random angles (theta) around the cylinder
-    add = np.random.choice([0.5,1.5])
-    theta = np.random.uniform((add)*np.pi, (add+1)*np.pi, num_of_points)
+def sample_cylinder_point_cloud(radius, length, num_of_points,top_half=True, bias=0.0):
+    length = np.random.uniform(length-bias, length+bias)
+    if top_half:
+        theta = np.random.uniform(-0.5*np.pi, 0.5*np.pi, num_of_points)
+    else:
+        theta = np.random.uniform(0.5*np.pi, 1.5*np.pi, num_of_points)
 
     # Sample random heights (z) along the length of the cylinder
-    x  = np.random.uniform(0, length, num_of_points)
+    x = np.random.uniform(0, length, num_of_points)
 
     # Compute the (x, y) coordinates on the circular cross-section
     z = radius * np.cos(theta)
@@ -479,32 +517,16 @@ def sample_cylinder_point_cloud(radius, length, num_of_points, edge=False):
     # Stack the coordinates into a (num_of_points, 3) array
     point_cloud = np.stack((x, y, z), axis=-1)
 
-    # Adjust centering based on the `edge` parameter
-    if edge:
-        # Center such that a point on the edge of the cloud is at (0, 0, 0)
-        edge_point = point_cloud[np.argmax(np.abs(point_cloud[:,0] - length / 2))]
-        point_cloud -= edge_point
-    else:
-        # Select the point most close to the middle of the cylinder length
-        center_point = point_cloud[np.argmin(np.abs(point_cloud[:,0] - length / 2))]
-        point_cloud -= center_point
-
-    return point_cloud
+    centering = radius if top_half else -radius
+    points = np.vstack([(np.array([0, 0, 0])).reshape(1, 3), point_cloud - (np.array([length/2,0,centering]))])
+    # center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    # points = points - points[center_point_idx, :]
+    # points[center_point_idx, :] = (points[0, :]).copy()
+    # points[0, :] = np.array([[0, 0, 0]])
+    return points
 
 
-def sample_sphere_point_cloud(radius, num_of_points, top_half=True, edge=False):
-    """
-    Samples a point cloud from either the top half or bottom half of a sphere.
-
-    Parameters:
-        radius (float): Radius of the sphere.
-        num_of_points (int): Number of points to sample.
-        top_half (bool): Whether to sample the top half of the sphere. If False, samples the bottom half.
-
-    Returns:
-        np.ndarray: An array of shape (num_of_points, 3) with sampled points.
-    """
-    # Sample random angles (theta for azimuthal angle, phi for polar angle)
+def sample_sphere_point_cloud(radius, num_of_points, top_half=True):
     theta = np.random.uniform(0, 2 * np.pi, num_of_points)
 
     if top_half:
@@ -520,46 +542,43 @@ def sample_sphere_point_cloud(radius, num_of_points, top_half=True, edge=False):
     # Stack the coordinates into a (num_of_points, 3) array
     point_cloud = np.stack((x, y, z), axis=-1)
 
-    if edge:
-        # Center such that a point on the edge of the cloud is at (0, 0, 0)
-        if top_half==False:
-            edge_point = point_cloud[np.argmax((point_cloud[:,2]))]
-        else:
-            edge_point = point_cloud[np.argmin((point_cloud[:,2]))]
-        point_cloud -= edge_point
-    else:
-        if top_half==False:
-            center_point = point_cloud[np.argmin((point_cloud[:,2]))]
-        else:
-            center_point = point_cloud[np.argmax((point_cloud[:,2]))]
-        point_cloud -= center_point
+    centering = radius if top_half else -radius
+    points = np.vstack([(np.array([0, 0, 0])).reshape(1, 3), point_cloud - (np.array([0,0,centering]))])
 
-    return point_cloud
+    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    points = points - points[center_point_idx, :]
+    points[center_point_idx, :] = (points[0, :]).copy()
+    points[0, :] = np.array([[0, 0, 0]])
+    return points
+
+def equilateral_triangle_coordinates(h, a):
+    beta = np.tan(a / 2)
+    edge_len = ( np.sqrt( ( 12 * (beta**2) ) / ( 3 - beta**2) ) ) * h
+    r = edge_len / np.sqrt(3)
+
+    # Calculate the 2D coordinates of the vertices of an equilateral triangle
+    # Centered at (0, 0) in the x-y plane
+    vertices = [np.array([0,0,0])]
+    for i in range(3):
+        angle = 2 * np.pi * i / 3  # 120-degree steps
+        x = r * np.cos(angle)
+        y = r * np.sin(angle)
+        vertices.append((x, y, h))
+
+    return np.array(vertices)
 
 
-import numpy as np
+# def sample_pyramid(base_vertices, n_points, gauss_curv):
+def sample_pyramid(h, n_points, gauss_curv, bias=0.0):
+    sum_of_tip_angles = gauss_curv - 2 * np.pi
 
-
-def sample_pyramid(base_vertices, height, n_points):
-    """
-    Sample points uniformly from the surface of a pyramid with the tip at (0,0,0)
-    and a triangular base, excluding the base.
-
-    Parameters:
-        base_vertices (numpy.ndarray): Coordinates of the 3 vertices of the triangular base (3, 3).
-        height (float): Height of the pyramid.
-        n_points (int): Number of points to sample.
-
-    Returns:
-        numpy.ndarray: Array of sampled points (n_points, 3).
-    """
-    # Validate inputs
-    if base_vertices.shape != (3, 3):
-        raise ValueError("base_vertices must be a (3, 3) array representing the 3 base vertices.")
+    base_vertices = equilateral_triangle_coordinates(h, sum_of_tip_angles / 3 )[1:,:]
 
     # Define the pyramid tip
     tip = np.array([0, 0, 0])
-
+    base_vertices[0] *= (np.random.uniform(1-bias, 1+bias))
+    base_vertices[1] *= (np.random.uniform(1-bias, 1+bias))
+    base_vertices[2] *= (np.random.uniform(1-bias, 1+bias))
     # Define the three triangular side faces
     triangles = np.array([
         [tip, base_vertices[0], base_vertices[1]],  # Side 1
@@ -599,53 +618,13 @@ def sample_pyramid(base_vertices, height, n_points):
     # Compute sampled points using barycentric coordinates
     sampled_points = u[:, None] * v1 + v[:, None] * v2 + w[:, None] * v3
 
-    return sampled_points
+    points = np.vstack([tip.reshape(1,3), sampled_points])
 
-def discGaussianCurvature(A, B, C, D):
-    """
-    Calculate the areas and angles of two adjacent triangles ABC and ACD.
-
-    Parameters:
-    vertices: np.ndarray
-        A 4x3 numpy array where each row represents the coordinates of vertices
-        A, B, C, D in 3D space.
-
-    Returns:
-    tuple
-        A tuple containing:
-        - Areas of triangles ABC and ACD
-        - All six angles (in radians) of triangles ABC and ACD.
-    """
-
-    # Helper function: calculate area
-    def triangle_area(p1, p2, p3):
-        vec1 = p2 - p1
-        vec2 = p3 - p1
-        cross_product = np.cross(vec1, vec2)
-        area = 0.5 * np.linalg.norm(cross_product)
-        return area
-
-    # Helper function: calculate angle between two vectors
-    def angle_between(vec1, vec2):
-        dot_product = np.dot(vec1, vec2)
-        norms = np.linalg.norm(vec1) * np.linalg.norm(vec2)
-        return np.arccos(np.clip(dot_product / norms, -1.0, 1.0))
-
-    # Calculate areas of the triangles
-    area_ABC = triangle_area(A, B, C)
-    area_ACD = triangle_area(A, C, D)
-    area_ADB = triangle_area(A, D, B)
-
-    # Calculate angles for triangle ABC
-    AB = B - A
-    AC = C - A
-    AD = D - A
-
-    angle_total = angle_between(AB, AC) + angle_between(AC, AD) + angle_between(AD, AB)
-    area_vornoi = (1/3) * ( area_ABC + area_ACD + area_ADB )
-    # return {"curv": ((2 * np.pi - angle_total) / area_vornoi), "angle": angle_total, "area": area_vornoi}
-    return (2 * np.pi - angle_total)
-
+    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    points = points - points[center_point_idx, :]
+    points[center_point_idx, :] = (points[0, :]).copy()
+    points[0, :] = np.array([[0, 0, 0]])
+    return points
 
 
 def random_rotation(point_cloud):
@@ -653,3 +632,8 @@ def random_rotation(point_cloud):
     rot_mat = torch.tensor(rot, dtype=torch.float32)
     rotated_point_cloud = torch.matmul(point_cloud, rot_mat.T)
     return rot, rotated_point_cloud
+
+if __name__ == '__main__':
+    sampleContrastivePcl(angle=45,radius=0,class_label=0,sampled_points=0, length=0, bias=0, info=0,min_curve_diff=0, max_curve_diff=0)
+    plot_point_clouds(sample_cylinder_point_cloud(2, 1, 250, False, 0.5))
+    a =1
