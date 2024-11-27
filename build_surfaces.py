@@ -68,7 +68,7 @@ def createDataSet():
     epsilons = [0.05, 0.2, 0.2, 0.2]
     with h5py.File(new_file_path_train, "w") as new_hdf5_train_file:
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
-        
+
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=0.5, epsilon=0.05, counter=0, amount_of_pcl=10000)
         print(f'Finished train flat surfaces')
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=0.5, epsilon=0.2, counter=10000, amount_of_pcl=2500)
@@ -102,9 +102,9 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4,boundary=0.5, epsilon=0.2, counter=43125, amount_of_pcl=625)
         print(f'Finished train HALFSPACE parabolic pit surfaces')
 
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4,boundary=0.5, epsilon=0.2, counter=43750, amount_of_pcl=625, angle=1)
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4,boundary=0.5, epsilon=0.2, counter=43750, amount_of_pcl=625, angle=1, edge=1)
         print(f'Finished train HALFSPACE parabolic CORNERS')
-        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4,boundary=0.5, epsilon=0.2, counter=44375, amount_of_pcl=625, radius=1)
+        addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4,boundary=0.5, epsilon=0.2, counter=44375, amount_of_pcl=625, radius=1, edge=1)
         print(f'Finished train HALFSPACE parabolic SPHERES')
 
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4,boundary=0.5, epsilon=0.2, counter=45000, amount_of_pcl=625)
@@ -112,9 +112,9 @@ def createDataSet():
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4,boundary=0.5, epsilon=0.2, counter=45625, amount_of_pcl=625)
         print(f'Finished train HALFSPACE valley surfaces')
 
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4,boundary=0.5, epsilon=0.2, counter=46250, amount_of_pcl=625, angle=1)
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4,boundary=0.5, epsilon=0.2, counter=46250, amount_of_pcl=625, angle=1, edge=2)
         print(f'Finished train HALFSPACE ridge ANGLES')
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4,boundary=0.5, epsilon=0.2, counter=46875, amount_of_pcl=625, radius=1)
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4,boundary=0.5, epsilon=0.2, counter=46875, amount_of_pcl=625, radius=1, edge=2)
         print(f'Finished train HALFSPACE valley CYLINDERS')
 
         addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=0.5, epsilon=0.2, counter=47500, amount_of_pcl=2500)
@@ -169,10 +169,10 @@ def createDataSet():
         print(f'Finished test HALFSPACE parabolic pit surfaces')
 
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=0.5, epsilon=0.2, counter=4376,
-                     amount_of_pcl=63, angle=1)
+                     amount_of_pcl=63, angle=1, edge=1)
         print(f'Finished test HALFSPACE parabolic CORNERS')
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=0.5, epsilon=0.2,
-                     counter=4439, amount_of_pcl=63, radius=1)
+                     counter=4439, amount_of_pcl=63, radius=1, edge=1)
         print(f'Finished test HALFSPACE parabolic SPHERES')
 
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=0.5, epsilon=0.2, counter=4502,
@@ -183,24 +183,41 @@ def createDataSet():
         print(f'Finished test HALFSPACE valley surfaces')
 
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=0.5, epsilon=0.2, counter=4628,
-                     amount_of_pcl=63, angle=1)
+                     amount_of_pcl=63, angle=1, edge=2)
         print(f'Finished test HALFSPACE ridge ANGLES')
         addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=0.5, epsilon=0.2,
-                     counter=4701, amount_of_pcl=63, radius=1)
+                     counter=4691, amount_of_pcl=63, radius=1, edge=2)
         print(f'Finished test HALFSPACE valley CYLINDERS')
 
         addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=0.5, epsilon=0.2,
-                     counter=4765, amount_of_pcl=250)
+                     counter=4754, amount_of_pcl=250)
         print(f'Finished test HALFSPACE saddle surfaces')
 
-def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, boundary, epsilon, angle=0, radius=0):
+def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, boundary, epsilon, angle=0, radius=0, edge=0):
+    constant = 1.05
+    max_curv = 2
     for k in range(amount_of_pcl):
         if angle!=0 or radius!=0:
             a=b=c=d=e=H=K = 0
-            if angle==1:
-                angle = np.random.uniform(45,135)
+            if angle>0:
+                if label==1 or edge==1:
+                    max_angle_rad = (2*np.pi - boundary**2 ) / 3
+                    min_angle_rad = (2*np.pi - max_curv**2 ) / 3
+                    angle_rad = np.random.uniform(min_angle_rad, max_angle_rad)
+                    cur_curve = np.sqrt(2*np.pi - 3*angle_rad)
+                    K = cur_curve * cur_curve
+                    H = cur_curve + cur_curve
+                    angle = np.degrees(angle_rad)
+                if label==2 or edge==2:
+                    max_angle_rad = 2 * np.arccos(boundary / (2 * constant))
+                    min_angle_rad = 2 * np.arccos(max_curv / (2 * constant))
+                    angle_rad = np.random.uniform(min_angle_rad, max_angle_rad)
+                    cur_curve = constant * (2 * np.cos(angle_rad / 2))
+                    H = cur_curve
+                    angle = np.degrees(angle_rad)
             if radius==1:
-                radius = np.random.uniform(1/3 ,1 / boundary)
+                curv = np.random.uniform(boundary ,max_curv)
+                radius = 1 / curv
         else:
             a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=boundary, epsilon=epsilon)
         point_clouds_group.create_dataset(f"point_cloud_{counter + k}", data=np.array([0, 0, 0]).reshape(1, 3))
@@ -214,6 +231,7 @@ def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, a
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['angle'] = angle
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['radius'] = radius
         point_clouds_group[f"point_cloud_{counter+k}"].attrs['class'] = label
+        point_clouds_group[f"point_cloud_{counter+k}"].attrs['edge'] = edge
 def addDataCornersToSet(point_clouds_group,angle, label, counter, amount_of_pcl, size_of_pcl=40):
     sampling_cur = generate_surfaces_angles_and_sample
     # room corner situation
