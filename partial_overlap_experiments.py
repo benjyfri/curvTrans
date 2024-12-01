@@ -16,28 +16,22 @@ from benchmark_modelnet import dcm2euler
 
 import numpy as np
 from scipy.spatial import KDTree
+from data import samplePcl
 
 
-
-def samplePoints(a, b, c, d, e, count, center_point=np.array([0, 0, 0]), sample_box=2, label=None):
+def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0]), label=None):
     def surface_function(x, y):
-        return a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y
+        return a * x**2 + b * y**2 + c * x * y + d * x + e * y
 
-    if label is not None:
-        if label == 4:
-            return sampleHalfSpacePoints(a, b, c, d, e, count, sample_box=np.random.uniform(1.7, 2.5))
-        if label == 0:
-            sample_box = np.random.uniform(2.5, 4)
-        if label == 1:
-            sample_box = np.random.uniform(1.8, 2.1)
-        if label == 2:
-            sample_box = np.random.uniform(1.7, 2.7)
-        if label == 3:
-            sample_box = np.random.uniform(1.7, 2.9)
+    if label == 4:
+        return sampleHalfSpacePoints(a, b, c, d, e, count)
+    bias = np.random.uniform(-0.5, 0.5)
+    x_size = 2 + bias
+    y_size = 2 - bias
 
     # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-sample_box, sample_box, count) + center_point[0]
-    y_samples = np.random.uniform(-sample_box, sample_box, count) + center_point[1]
+    x_samples = np.random.uniform(-x_size, x_size, count) + center_point[0]
+    y_samples = np.random.uniform(-y_size, y_size, count) + center_point[1]
 
     # Evaluate the surface function at the random points
     z_samples = surface_function(x_samples, y_samples)
@@ -50,15 +44,17 @@ def samplePoints(a, b, c, d, e, count, center_point=np.array([0, 0, 0]), sample_
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
 
     return sampled_points_with_centroid
-
-
-def sampleHalfSpacePoints(a, b, c, d, e, count, sample_box=2):
+def sampleHalfSpacePoints(a, b, c, d, e, count):
     def surface_function(x, y):
-        return a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y
+        return a * x**2 + b * y**2 + c * x * y + d * x + e * y
+
+    bias = np.random.uniform(-0.5, 0.5)
+    x_size = 2 + bias
+    y_size = 2 - bias
 
     # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-sample_box, sample_box, count)
-    y_samples = np.random.uniform(-sample_box, sample_box, count)
+    x_samples = np.random.uniform(-x_size, x_size, count)
+    y_samples = np.random.uniform(-y_size, y_size, count)
 
     # Evaluate the surface function at the random points
     z_samples = surface_function(x_samples, y_samples)
@@ -69,8 +65,7 @@ def sampleHalfSpacePoints(a, b, c, d, e, count, sample_box=2):
     # Concatenate the centroid [0, 0, 0] to the beginning of the array
     centroid = np.array([[0, 0, 0]])
     sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
-    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[
-        np.random.choice(np.arange(-10, 0))]
+    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-10,0))]
     # center_point_idx = np.argsort(np.linalg.norm(sampled_points, axis=1))[-1]
     sampled_points_with_centroid = sampled_points_with_centroid - sampled_points_with_centroid[center_point_idx, :]
     sampled_points_with_centroid[center_point_idx, :] = (sampled_points_with_centroid[0, :]).copy()
@@ -78,8 +73,10 @@ def sampleHalfSpacePoints(a, b, c, d, e, count, sample_box=2):
 
     return sampled_points_with_centroid
 
+
 def checkSizeSynthetic():
     hdf5_file = h5py.File("train_surfaces_with_corners_very_mild_curve.h5" , 'r')
+    hdf5_file = h5py.File("train_surfaces_1X1.h5" , 'r')
     point_clouds_group = hdf5_file['point_clouds']
     num_point_clouds = len(point_clouds_group)
     indices = list(range(num_point_clouds))
@@ -88,6 +85,7 @@ def checkSizeSynthetic():
     total_diam_med = 0
     total_max_dist_from_center = 0
     yay_max = 0
+    counter_list = [0,0,0,0,0]
     for idx in range(num_point_clouds):
         if idx%10000 ==0:
             print(f'------------{idx}------------')
@@ -95,32 +93,35 @@ def checkSizeSynthetic():
 
         info = {key: point_clouds_group[point_cloud_name].attrs[key] for key in
                 point_clouds_group[point_cloud_name].attrs}
-        # point_cloud = point_clouds_group[point_cloud_name]
-        # point_cloud_orig = np.array(point_cloud, dtype=np.float32)
-        if info['class'] <= 3:
-            point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
-                                       count=20)
-        else:
-            point_cloud = sampleHalfSpacePoints(info['a'], info['b'], info['c'], info['d'], info['e'],
-                                                count=20)
-        distances = cdist(point_cloud, point_cloud)
-
-        max_ax = np.max(np.abs(point_cloud))
-        if yay_max < max_ax:
-            yay_max = max_ax
-        # Replace the diagonal with infinity to ignore self-distances
-        np.fill_diagonal(distances, np.inf)
-
-        # Find the minimum distance to the closest point for each point
-        closest_distances = np.min(distances, axis=1)
-        median_closest_distance = np.median(closest_distances)
-        mean_closest_distance = np.mean(closest_distances)
-        total_sum_median += np.mean(median_closest_distance)
-        total_sum_mean += np.mean(mean_closest_distance)
-        total_diam_med += np.median(np.max(np.abs(point_cloud),axis=0))
-        total_max_dist_from_center += np.max(np.linalg.norm(point_cloud,axis=1))
+        class_label = info['class']
+        counter_list[class_label] = counter_list[class_label] + 1
+        # angle = info['angle']
+        # radius = info['radius']
+        # edge_label = info['edge']
+        # bias = 0.25
+        # length = 1
+        # point_cloud = samplePcl(angle, radius, class_label, 20, length, bias, info,
+        #                         edge_label=edge_label)
+        # distances = cdist(point_cloud, point_cloud)
+        #
+        # max_ax = np.max(np.abs(point_cloud))
+        # if yay_max < max_ax:
+        #     yay_max = max_ax
+        # # Replace the diagonal with infinity to ignore self-distances
+        # np.fill_diagonal(distances, np.inf)
+        #
+        # # Find the minimum distance to the closest point for each point
+        # closest_distances = np.min(distances, axis=1)
+        # median_closest_distance = np.median(closest_distances)
+        # mean_closest_distance = np.mean(closest_distances)
+        # total_sum_median += np.mean(median_closest_distance)
+        # total_sum_mean += np.mean(mean_closest_distance)
+        # total_diam_med += np.median(np.max(np.abs(point_cloud),axis=0))
+        # total_max_dist_from_center += np.max(np.linalg.norm(point_cloud,axis=1))
     print(f'++++++++++++++++++++++++++++++++++')
     print(f'SYNTHETIC')
+    print(f'++++++++++++++++++++++++++++++++++')
+    print(counter_list)
     print(f'++++++++++++++++++++++++++++++++++')
     print(f'max value in any axis {yay_max}')
     print(f'MEDIAN point distance synthetic: {total_sum_median / num_point_clouds}')
@@ -161,7 +162,9 @@ def checkSizeModelnet():
     total_sum_mean = 0
     total_diam_med = 0
     total_max_dist_from_center = 0
+    total_vol_mean = 0
     yay_max = 0
+    vol_list = []
     size = len(test_dataset)
     for i in range(size):
         if i%1000 ==0:
@@ -173,12 +176,16 @@ def checkSizeModelnet():
         num_of_points = pcl.shape[1]
         cur_sum_median=0
         cur_sum_mean=0
+        cur_vol_sum=0
         cur_sum_max_dist_from_center=0
         cur_diam_med = np.median(np.max(np.abs(pcl),axis=0))
         total_diam_med += cur_diam_med
         for i in range(num_of_points):
             point_cloud = pcl[:,i,:]
-
+            axis_size = (np.abs(np.max(point_cloud, axis=0) -np.min(point_cloud, axis=0)))
+            volume = axis_size[0]*axis_size[1]*axis_size[2]
+            vol_list.append(volume)
+            cur_vol_sum +=volume
             distances = cdist(point_cloud, point_cloud)
 
             max_ax = np.max(np.abs(point_cloud))
@@ -198,6 +205,7 @@ def checkSizeModelnet():
         total_sum_median += cur_sum_median/num_of_points
         total_sum_mean += cur_sum_mean/num_of_points
         total_max_dist_from_center += cur_sum_max_dist_from_center/num_of_points
+        total_vol_mean += cur_vol_sum/num_of_points
     print(f'++++++++++++++++++++++++++++++++++')
     print(f'MODELNET')
     print(f'++++++++++++++++++++++++++++++++++')
@@ -207,6 +215,12 @@ def checkSizeModelnet():
     print(f'mean of MEDIAN diameter modelnet: {total_diam_med / size}')
     print(f'total_max_dist_from_center: {total_max_dist_from_center}, size: {size}')
     print(f'MEAN max distance from center: {total_max_dist_from_center / size}')
+    print(f'MEAN volume of each local patch: {total_vol_mean / size}')
+    vol_list = np.array(vol_list)
+    print(f'vol mean {np.mean(vol_list)}')
+    print(f'vol median {np.median(vol_list)}')
+    print(f'vol max {np.max(vol_list)}')
+    print(f'vol min {np.min(vol_list)}')
 
 def test_predator_data(matching=False, partial_p_keep=[0.7, 0.7]):
     # partial_p_keep= [0.5, 0.5]
@@ -328,15 +342,16 @@ def check_registration_modelnet(model_name):
     subsamples = [700,350]
     # receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
     # receptive_fields_list = [[1, 3], [1, 3, 5],[1, 5, 9]]
-    receptive_fields_list = [[1], [1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
+    receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
     # scales_list = [2,3,3]
-    scales_list = [1,2,3,4,2,3,3]
+    scales_list = [2,3,4,2,3,3]
     nn_modes = [4]
-    pcts = [1, 0.5]
+    pcts = [0.5]
     # runsac_iterations = [5000]
     runsac_iterations = [1000]
     tri=True
     models_names =["3MLP32_eig15_cntr02_std01_rand", "3MLP32_eig15_cntr03_std01_rand", "3MLP32_eig15_cntr015_std01_rand","3MLP32_eig15_cntr005_std01_rand"]
+    models_names =["b_cntr03_std01_rand"]
     for scales, receptive_field in zip(scales_list, receptive_fields_list):
         for amount_of_interest_points in subsamples:
             for scaling_factor in scaling_factors:
@@ -395,12 +410,13 @@ def check_registration_3dmatch(model_name):
 
     # receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
     receptive_fields_list = [ [1,10,20,30,40]]
-    scales_list = [5]
+    receptive_fields_list = [ [1,3,5]]
+    scales_list = [3]
     # scales_list = [2,3,4,6,5,8]
     # scales_list = [2,3,4,2,3,3]
     # nn_modes = [2,3,4]
-    nn_modes = [2]
-    pcts = [0.1]
+    nn_modes = [4]
+    pcts = [1]
     thresh_multi_options = [1,3,5]
     # tri_type =[True, False]
     tri_type =[True]
@@ -434,7 +450,7 @@ def check_registration_3dmatch(model_name):
                                                                                            num_of_ransac_iter=1000,
                                                                                            use_o3d_ransac=use_o3d_ransac,
                                                                                            pct_of_points_2_take=pct_of_points_2_take,
-                                                                                           max_non_unique_correspondences=3,
+                                                                                           max_non_unique_correspondences=1,
                                                                                            nn_mode=nn_mode, scales=scales,
                                                                                            receptive_field=receptive_field,
                                                                                            thresh_multi=thresh_multi,
@@ -530,12 +546,45 @@ def viewStabilityWithPartial():
                         count += 1
                 print(f'{pyr_layers}')
                 print(f'Count: {count} out of {size} shapes are in the top 10')
-if __name__ == '__main__':
+import os
+import re
 
+def find_lowest_mean_image_dir(base_path):
+    lowest_mean = float('inf')
+    lowest_mean_dir = None
+
+    # Regular expression to extract mean value from the file name
+    pattern = re.compile(r"err_r_deg_Mean_(\d+\.\d+)_Median_")
+
+    # Iterate through each subdirectory
+    for subdir in os.listdir(base_path):
+        subdir_path = os.path.join(base_path, subdir)
+        if os.path.isdir(subdir_path):
+            # Search for the PNG file in the directory
+            for file in os.listdir(subdir_path):
+                if file.endswith('.png'):
+                    match = pattern.search(file)
+                    if match:
+                        mean_value = float(match.group(1))
+                        if mean_value < lowest_mean:
+                            lowest_mean = mean_value
+                            lowest_mean_dir = subdir
+
+    # Print the directory with the lowest mean and the mean value
+    if lowest_mean_dir is not None:
+        print(f"The directory with the lowest mean is: {lowest_mean_dir}")
+        print(f"The lowest mean value is: {lowest_mean}")
+    else:
+        print("No valid image files were found.")
+
+
+if __name__ == '__main__':
     # model_name = "3MLP32_eig15_cntr02_std01_rand"
     # model_name = "3MLP32_eig15_cntr03_std01_rand"
     # model_name = "3MLP32_eig15_cntr015_std01_rand"
-    model_name = "3MLP32_eig15_cntr005_std01_rand"
+    # model_name = "b_cntr03_std01_rand"
+    # model_name = "c_cntr05_std01_rand"
+    model_name = "d_cntr0005_std001"
     # viewStabilityWithPartial()
     # checkSizeModelnet()
     # checkSizeSynthetic()
@@ -543,13 +592,13 @@ if __name__ == '__main__':
 
     # example_usage()
     # exit(0)
-    # checkSizeSynthetic()
+    checkSizeSynthetic()
     # checkSyntheticData()
     # checkDiameterPCLSynthetic()
-    # exit(0)
-    check_registration_modelnet(model_name)
-    # check_registration_3dmatch(model_name)
     exit(0)
+    # check_registration_modelnet(model_name)
+    # check_registration_3dmatch(model_name)
+    # exit(0)
 
 
     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
@@ -566,7 +615,8 @@ if __name__ == '__main__':
 
 
     # visualizeShapesWithEmbeddings3dMatchCorners(model_name=model_name, args_shape=cls_args, scaling_factor="axis", rgb=False)
-    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="axis", rgb=False, add_noise=False)
-    # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor="axis", rgb=True, add_noise=False)
-    exit(0)
+    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="axis", rgb=False, add_noise=False)
+    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="one", rgb=False, add_noise=False)
+    # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor="axis", rgb=True, add_noise=True)
+    # exit(0)
 
