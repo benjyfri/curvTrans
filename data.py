@@ -45,8 +45,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         bias = 0.25
 
         # [min_len, max_len] = [0.5, 1] if np.random.uniform(0, 1) < 0.5 else [1, 2]
-        [min_len, max_len] = [0.5, 2]
-        upper_bound_x, upper_bound_y, point_cloud = samplePcl(angle=angle, radius=radius,class_label=class_label,sampled_points=self.sampled_points,min_len=min_len,max_len=max_len, bias=bias, info=info)
+        [min_len, max_len] = [0.5, 1.5]
+        upper_bound_x, upper_bound_y, point_cloud = samplePcl(angle=angle, radius=radius,class_label=class_label,sampled_points=self.sampled_points,min_len=min_len,max_len=max_len, bias=bias, info=info, edge_label=edge_label)
 
         point_cloud1 = torch.tensor(point_cloud, dtype=torch.float32)
         if self.rotate_data:
@@ -83,7 +83,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             if class_label != 4:
                 upper_bound_x_pos, upper_bound_y_pos,positive_point_cloud = samplePcl(angle=angle, radius=radius, class_label=class_label,
                                                           sampled_points=self.sampled_points, min_len=min_len,max_len=max_len, bias=bias,
-                                                          info=info, upper_bound_x=upper_bound_x, upper_bound_y=upper_bound_y)
+                                                          info=info, upper_bound_x=upper_bound_x, upper_bound_y=upper_bound_y,edge_label=edge_label)
 
             contrastive_point_cloud = torch.tensor(contrastive_point_cloud, dtype=torch.float32)
             neg_rot,contrastive_point_cloud = random_rotation(contrastive_point_cloud)
@@ -118,9 +118,9 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
     #     plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, f'pos; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}')
     #     plot_point_clouds(point_cloud1@rot_orig, contrastive_point_cloud@neg_rot,f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
     #     a=1
-    #     if class_label in [1, 2] and (angle + radius) > 0:
-    #         plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, contrastive_point_cloud@neg_rot,title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-    #         a=1
+        if class_label in [4] and (angle + radius) > 0:
+            plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, contrastive_point_cloud@neg_rot,title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+            a=1
 
         # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
@@ -166,7 +166,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             cur_curve = np.sqrt(cur_gauss_curv)
             old_k1 = old_k2 = cur_curve
             angle_vals = []
-            boundaries = np.clip(min_curve, max_curve, [cur_curve+max_curve_diff, cur_curve+min_curve_diff,cur_curve-max_curve_diff, cur_curve-min_curve_diff])
+            boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
             for cur_val in boundaries:
                 new_angle_rad = (2 * np.pi - cur_val**2) / 3
                 angle_vals.append(new_angle_rad)
@@ -193,7 +193,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             old_k1 = cur_curve
             old_k2 = 0
             angle_vals = []
-            boundaries = np.clip(min_curve, max_curve, [cur_curve+max_curve_diff, cur_curve+min_curve_diff,cur_curve-max_curve_diff, cur_curve-min_curve_diff])
+            boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
             for cur_val in boundaries:
                 x = np.clip(cur_val / (2 * constant),-1,1)
                 new_angle_rad = 2 *  np.arccos(x)
@@ -215,9 +215,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         cur_curve = 1 / radius
         old_k1 = old_k2 = cur_curve
         rad_vals = []
-        boundaries = np.clip(min_curve, max_curve,
-                             [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,
-                              cur_curve - min_curve_diff])
+        boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
         for cur_val in boundaries:
             rad_vals.append(1/cur_val)
         a, b, c, d = rad_vals
@@ -701,8 +699,8 @@ def sample_pyramid(n_points, gauss_curv, min_len,max_len, bias=0.0, r=None):
 
     points = np.vstack([tip.reshape(1,3), sampled_points])
 
-    # center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
-    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0])]
+    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    # center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0,1])]
     points = points - points[center_point_idx, :]
     points[center_point_idx, :] = (points[0, :]).copy()
     points[0, :] = np.array([[0, 0, 0]])
