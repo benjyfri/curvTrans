@@ -249,7 +249,7 @@ def createDataSetOld():
         addDataToSet(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.8, epsilon=0.2, counter=30000, amount_of_pcl=10000)
         print(f'Finished train saddle surfaces')
 
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4,boundary=0.5, epsilon=0.1, counter=40000, amount_of_pcl=2500)
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4,boundary=0.5, epsilon=0.05, counter=40000, amount_of_pcl=2500)
         print(f'Finished train HALFSPACE flat surfaces')
 
         addDataToSet(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4,boundary=0.5, epsilon=0.2, counter=42500, amount_of_pcl=625)
@@ -336,7 +336,7 @@ def createDataSetOld():
                      counter=3000, amount_of_pcl=1000)
         print(f'Finished test saddle surfaces')
 
-        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, boundary=0.5, epsilon=0.1, counter=4000,
+        addDataToSet(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, boundary=0.5, epsilon=0.05, counter=4000,
                      amount_of_pcl=250)
         print(f'Finished test HALFSPACE flat surfaces')
 
@@ -384,21 +384,26 @@ def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, a
                     min_angle_rad = (2*np.pi - max_curv**2 ) / 3
                     angle_rad = np.random.uniform(min_angle_rad, max_angle_rad)
                     cur_curve = np.sqrt(2*np.pi - 3*angle_rad)
-                    K = cur_curve * cur_curve
-                    H = cur_curve + cur_curve
+                    k1 = k2 = cur_curve
                     angle = np.degrees(angle_rad)
                 if label==2 or edge==2:
                     max_angle_rad = 2 * np.arccos(boundary / (2 * constant))
                     min_angle_rad = 2 * np.arccos(max_curv / (2 * constant))
                     angle_rad = np.random.uniform(min_angle_rad, max_angle_rad)
                     cur_curve = constant * (2 * np.cos(angle_rad / 2))
-                    H = cur_curve
+                    k1 = cur_curve
+                    k2 = 0
                     angle = np.degrees(angle_rad)
             if radius > 0:
-                curv = np.random.uniform(boundary ,max_curv)
-                radius = 1 / curv
+                cur_curve = np.random.uniform(boundary ,max_curv)
+                radius = 1 / cur_curve
+                if label==1 or edge==1:
+                    k1 = k2 = cur_curve
+                if label==2 or edge==2:
+                    k1 = cur_curve
+                    k2 = 0
         else:
-            a, b, c, d, e, _, H, K = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=boundary, epsilon=epsilon)
+            a, b, c, d, e, _, k1, k2 = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=boundary, epsilon=epsilon)
         dataset_name = f"point_cloud_{counter + k}"
         if update == True:
             del point_clouds_group[dataset_name]
@@ -408,30 +413,12 @@ def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, a
         point_cloud.attrs['c'] = c
         point_cloud.attrs['d'] = d
         point_cloud.attrs['e'] = e
-        point_cloud.attrs['H'] = H
-        point_cloud.attrs['K'] = K
+        point_cloud.attrs['k1'] = k1
+        point_cloud.attrs['k2'] = k2
         point_cloud.attrs['angle'] = angle
         point_cloud.attrs['radius'] = radius
         point_cloud.attrs['class'] = label
         point_cloud.attrs['edge'] = edge
-def addDataCornersToSet(point_clouds_group,angle, label, counter, amount_of_pcl, size_of_pcl=40):
-    sampling_cur = generate_surfaces_angles_and_sample
-    # room corner situation
-    if angle ==360:
-        sampling_cur=generate_room_corner_with_points
-    for k in range(amount_of_pcl):
-        rand_angle = np.random.uniform(angle-10, angle+10)
-        point_cloud = sampling_cur(size_of_pcl, rand_angle)
-        # point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=point_cloud)
-        point_clouds_group.create_dataset(f"point_cloud_{counter+k}", data=np.array([0,0,0]).reshape(1,3))
-        point_clouds_group[f"point_cloud_{counter+k}"].attrs['a'] = rand_angle
-        point_clouds_group[f"point_cloud_{counter+k}"].attrs['b'] = rand_angle
-        point_clouds_group[f"point_cloud_{counter+k}"].attrs['c'] = rand_angle
-        point_clouds_group[f"point_cloud_{counter+k}"].attrs['d'] = rand_angle
-        point_clouds_group[f"point_cloud_{counter+k}"].attrs['e'] = rand_angle
-        point_clouds_group[f"point_cloud_{counter+k}"].attrs['H'] = rand_angle
-        point_clouds_group[f"point_cloud_{counter+k}"].attrs['K'] = rand_angle
-        point_clouds_group[f"point_cloud_{counter+k}"].attrs['class'] = label
 
 def createFunction(gaussian_curv, mean_curv, boundary=0.5, epsilon=0.2):
     if gaussian_curv==1 and mean_curv==0:
@@ -496,7 +483,7 @@ def createFunction(gaussian_curv, mean_curv, boundary=0.5, epsilon=0.2):
                     okFunc=False
                     continue
 
-    return a, b, c, d, e, count , H , K
+    return a, b, c, d, e, count , k1, k2
 
 
 def plotPcl(a, b, c, d, e, sample_count=40):
@@ -815,99 +802,6 @@ def accuracyHKdependingOnNumOfPoints(sigma=0):
     plt.tight_layout()  # Tight layout adjustment
     plt.show()
 
-def testNoiseEffect(sigma=0):
-    options = [(0, 0), (1, 1), (1, -1), (0, 1), (0, -1), (-1, -33)]
-    names = ["plane", "pit", "peak", "valley", "ridge", "saddle"]
-    for setup, name in zip(options, names):
-        H_list = []
-        K_list = []
-        H2_list = []
-        K2_list = []
-        a1, b1, c1, d1, e1, _, H, K = createFunction(gaussian_curv=setup[0], mean_curv=setup[1],
-                                                     boundary=5, epsilon=0.2)
-        point_cloud = samplePoints(a1, b1, c1, d1, e1, count=40)
-        for _ in range(30):
-            noised_point_cloud = point_cloud + np.random.normal(loc=0, scale=sigma, size=point_cloud.shape)
-            noised_point_cloud_centered = noised_point_cloud - noised_point_cloud[0, :]
-            a2, b2, c2, d2, e2, K2, H2 = fit_surface_quadratic_constrained(noised_point_cloud_centered)
-            H_list.append(H)
-            K_list.append(K)
-            H2_list.append(H2)
-            K2_list.append(K2)
-        fig = plt.figure(figsize=(16, 12))
-
-        # Plot H and H2
-        ax1 = fig.add_subplot(2, 2, 1)
-        ax1.plot(H_list, label='H')
-        ax1.plot(H2_list, label='H2')
-        ax1.set_xlabel('Setup Index')
-        ax1.set_ylabel('Values')
-        ax1.set_title(f'Comparison of H and H2_estimate')
-        ax1.legend()
-
-        # Plot K and K2
-        ax2 = fig.add_subplot(2, 2, 2)
-        ax2.plot(K_list, label='K')
-        ax2.plot(K2_list, label='K2')
-        ax2.set_xlabel('Setup Index')
-        ax2.set_ylabel('Values')
-        ax2.set_title(f'Comparison of K and K2_estimate')
-        ax2.legend()
-
-        # Plot 3D function
-        ax3 = fig.add_subplot(2, 2, 3, projection='3d')
-        x = np.linspace(-5, 5, 100)
-        y = np.linspace(-5, 5, 100)
-        X, Y = np.meshgrid(x, y)
-        Z = a1 * X ** 2 + b1 * Y ** 2 + c1 * X * Y + d1 * X + e1 * Y
-        ax3.plot_surface(X, Y, Z, cmap='viridis', edgecolor='none')
-        ax3.set_xlabel('X')
-        ax3.set_ylabel('Y')
-        ax3.set_zlabel('Z')
-        ax3.set_title('Original Function Plot')
-
-        # Plot clean point cloud
-        ax4 = fig.add_subplot(2, 2, 4, projection='3d')
-        ax4.scatter(point_cloud[:, 0], point_cloud[:, 1], point_cloud[:, 2], c='b', marker='.', s=150)
-        ax4.scatter(noised_point_cloud_centered[:, 0], noised_point_cloud_centered[:, 1], noised_point_cloud_centered[:, 2], c='r', marker='.', s=150)
-        ax4.set_xlabel('X')
-        ax4.set_ylabel('Y')
-        ax4.set_zlabel('Z')
-        ax4.set_title('Original (blue) and noised (red) pcl')
-
-        plt.tight_layout()
-        plt.show()
-
-
-def random_rotation(point_cloud):
-    # Generate random rotation angles around x, y, and z axes
-    theta_x = np.random.uniform(0, 2 * np.pi)
-    theta_y = np.random.uniform(0, 2 * np.pi)
-    theta_z = np.random.uniform(0, 2 * np.pi)
-
-    # Rotation matrices around x, y, and z axes
-    Rx = np.array([[1, 0, 0],
-                   [0, np.cos(theta_x), -np.sin(theta_x)],
-                   [0, np.sin(theta_x), np.cos(theta_x)]])
-
-    Ry = np.array([[np.cos(theta_y), 0, np.sin(theta_y)],
-                   [0, 1, 0],
-                   [-np.sin(theta_y), 0, np.cos(theta_y)]])
-
-    Rz = np.array([[np.cos(theta_z), -np.sin(theta_z), 0],
-                   [np.sin(theta_z), np.cos(theta_z), 0],
-                   [0, 0, 1]])
-
-    # Combine rotation matrices
-    R = np.dot(Rz, np.dot(Ry, Rx))
-
-    # Apply rotation to point cloud
-    rotated_point_cloud = np.dot(point_cloud, R.T)
-    # plot_point_clouds(point_cloud, rotated_point_cloud)
-    is_rotation = np.allclose(np.eye(3), np.dot(R, R.T))
-    if not is_rotation:
-        raise ValueError("not a rotation")
-    return rotated_point_cloud
 def plot_point_clouds(point_cloud1, point_cloud2=None):
     """
     Plot two point clouds in an interactive 3D plot with Plotly.
@@ -944,44 +838,12 @@ def plot_point_clouds(point_cloud1, point_cloud2=None):
 
     fig.show()
 
-def generate_room_corner_with_points(N, angle=None):
-    N1, N2, N3 = np.random.multinomial(N-3, [1/3, 1/3, 1/3]) + np.array([1,1,1])
-
-    x_coords1 = np.random.uniform(0, 1, N)
-    y_coords1 = np.random.uniform(0, 1, N)
-
-    center = np.array([0, 0, 0])
-    points1 = np.stack((np.random.uniform(0, 1, N1), np.random.uniform(0, 1, N1), np.zeros(N1)), axis=-1)
-    points2 = np.stack((np.zeros(N2), np.random.uniform(0, 1, N2), -np.random.uniform(0, 1, N2)), axis=-1)
-    points3 = np.stack((np.random.uniform(0, 1, N3), np.zeros(N3), -np.random.uniform(0, 1, N3)), axis=-1)
-    points = np.vstack((center, points1,points2,points3))
-    return points
-def generate_surfaces_angles_and_sample(N, angle):
-    # 1. Generate a random angle between 0 and 30 degrees
-    angle_rad = np.radians((180 - angle)/2)
-
-    # 2. Compute the slopes (m1 and m2) for the surfaces
-    m1 = np.tan(angle_rad)  # slope for the left surface (x < 0)
-    m2 = -m1  # slope for the right surface (x >= 0)
-
-    # 3. Generate N random points in the square [-1, 1] x [-1, 1]
-    x_coords = np.random.uniform(-1, 1, N)
-    y_coords = np.random.uniform(-1, 1, N)
-
-    # 4. Calculate the corresponding z values based on the surfaces
-    z_coords = np.where(x_coords < 0, m1 * x_coords, m2 * x_coords)
-    # z_coords = np.abs(x_coords)
-
-    # 5. Stack the points into a single array
-    points = np.stack((x_coords, y_coords, z_coords), axis=-1)
-    center = np.array([0,0,0])
-    points = np.vstack((center,points))
-    return points
-
-
 
 if __name__ == '__main__':
+    updateDataSet(label_to_update=0)
     updateDataSet(label_to_update=1)
     updateDataSet(label_to_update=2)
+    updateDataSet(label_to_update=3)
     updateDataSet(label_to_update=4)
+    # createDataSetOld()
     a = 0

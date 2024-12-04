@@ -37,6 +37,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
+        info['idx']= self.indices[idx]
 
         class_label = info['class']
         angle = info['angle']
@@ -118,9 +119,9 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
     #     plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, f'pos; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}')
     #     plot_point_clouds(point_cloud1@rot_orig, contrastive_point_cloud@neg_rot,f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
     #     a=1
-        if class_label in [4] and (angle + radius) > 0:
-            plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, contrastive_point_cloud@neg_rot,title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-            a=1
+    #     if class_label in [2] :#and (angle + radius) > 0:
+    #         plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, contrastive_point_cloud@neg_rot,title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+    #         a=1
 
         # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
