@@ -217,13 +217,6 @@ def testPretrainedModel(args, model=None):
     test_dataset = BasicPointCloudDataset(file_path='test_surfaces_1X1.h5', args=args)
 
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
-    if model is None:
-        model = MLP(input_size=36 * (args.sampled_points + 1), num_layers=args.num_mlp_layers,
-                    num_neurons_per_layer=args.num_neurons_per_layer, output_size=args.output_dim).to(device)
-
-        # Load the saved state dictionary
-        model_path = r"best.pt"  # Update with the path to your saved model
-        model.load_state_dict(torch.load(model_path))
     num_params = sum(p.numel() for p in model.parameters())
     print(f'Num of parameters in NN: {num_params}')
     # Set the model to evaluation mode
@@ -233,8 +226,11 @@ def testPretrainedModel(args, model=None):
     label_correct = {label: 0 for label in range(5)}
     label_total = {label: 0 for label in range(5)}
     wrong_preds = {label: [] for label in range(5)}
-    wrong_H_values = {label: [] for label in range(5)}
-    wrong_K_values = {label: [] for label in range(5)}
+    wrong_idx = {label: [] for label in range(5)}
+    wrong_pcl = {label: [] for label in range(5)}
+    wrong_pred_class = {label: [] for label in range(5)}
+    wrong_K1_values = {label: [] for label in range(5)}
+    wrong_K2_values = {label: [] for label in range(5)}
 
     with torch.no_grad():
         for batch in test_dataloader:
@@ -249,8 +245,11 @@ def testPretrainedModel(args, model=None):
             for i, (pred, actual_label) in enumerate(zip(preds, label.cpu().numpy())):
                 if pred != actual_label:
                     wrong_preds[actual_label].append(pred.item())
-                    wrong_H_values[actual_label].append(info['H'][i].item())
-                    wrong_K_values[actual_label].append(info['K'][i].item())
+                    wrong_idx[actual_label].append(info['idx'][i].item())
+                    wrong_pcl[actual_label].append(pcl[i,:,:])
+                    wrong_pred_class[actual_label].append(preds[i])
+                    wrong_K1_values[actual_label].append((info['k1'][i].item()))
+                    wrong_K2_values[actual_label].append((info['k2'][i].item()))
 
             count += 1
 
@@ -273,12 +272,30 @@ def testPretrainedModel(args, model=None):
         if len(wrong_preds[label]) > 0:
             print(f"Label {label}:")
             print(f"  - Most frequent wrong prediction: {max(wrong_preds[label], key=wrong_preds[label].count)}")
-            print(f"  - Average H for wrong predictions: {np.mean(wrong_H_values[label])}")
-            print(f"  - Average K for wrong predictions: {np.mean(wrong_K_values[label])}")
-            print(f"  - median H for wrong predictions: {np.median(wrong_H_values[label])}")
-            print(f"  - median K for wrong predictions: {np.median(wrong_K_values[label])}")
+            print(f"  - Average K1 for wrong predictions: {np.mean(wrong_K1_values[label])}")
+            print(f"  - Average K for wrong predictions: {np.mean(wrong_K2_values[label])}")
+            print(f"  - median K1 for wrong predictions: {np.median(wrong_K1_values[label])}")
+            print(f"  - median K for wrong predictions: {np.median(wrong_K2_values[label])}")
+            print(f"+++++")
+            argmax_K1_index = (np.argmax(np.abs(wrong_K1_values[label])))
+            print(f"  - biggest abs wrong K1 pcl idx: {wrong_idx[label][argmax_K1_index]}")
+            print(f"  - biggest abs wrong K1 pcl val: {wrong_K1_values[label][argmax_K1_index]}")
+            np.save(f"{label}_max_K1_pcl_{wrong_pred_class[label][argmax_K1_index]}.npy", (wrong_pcl[label][argmax_K1_index]).cpu().numpy() )
 
-    # return test_acc, label_accuracies, wrong_predictions_stats
+            argmin_K1_index = (np.argmin(np.abs(wrong_K1_values[label])))
+            print(f"  - smallest abs wrong K1 pcl idx: {wrong_idx[label][argmin_K1_index]}")
+            print(f"  - smallest abs wrong K1 pcl val: {wrong_K1_values[label][argmin_K1_index]}")
+            np.save(f"{label}_min_K1_pcl_{wrong_pred_class[label][argmin_K1_index]}.npy", (wrong_pcl[label][argmin_K1_index]).cpu().numpy())
+
+            argmax_K2_index = (np.argmax(np.abs(wrong_K2_values[label])))
+            print(f"  - biggest abs wrong K2 pcl idx: {wrong_idx[label][argmax_K2_index]}")
+            print(f"  - biggest abs wrong K2 pcl val: {wrong_K2_values[label][argmax_K2_index]}")
+            np.save(f"{label}_max_K2_pcl_{wrong_pred_class[label][argmax_K2_index]}.npy", (wrong_pcl[label][argmax_K2_index]).cpu().numpy())
+
+            argmin_K2_index = (np.argmin(np.abs(wrong_K2_values[label])))
+            print(f"  - smallest abs wrong K2 pcl idx: {wrong_idx[label][argmin_K2_index]}")
+            print(f"  - smallest abs wrong K2 pcl val: {wrong_K2_values[label][argmin_K2_index]}")
+            np.save(f"{label}_min_K2_pcl_{wrong_pred_class[label][argmin_K2_index]}.npy", (wrong_pcl[label][argmin_K2_index]).cpu().numpy())
 
 if __name__ == '__main__':
     args = configArgsPCT()
