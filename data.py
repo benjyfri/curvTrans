@@ -129,7 +129,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
     cur_class_label = class_label
     if bounds is not None:
-        bounds = [bound + np.random.uniform(-0.1, 0.1) for bound in bounds]
+        bounds = [bound * (1 + np.random.uniform(-0.1, 0.1)) for bound in bounds]
     if angle != 0:
         if cur_class_label == 1 or edge_label == 1:
             r_tri, point_cloud = sample_pyramid(n_points=sampled_points, gauss_curv=(2 * np.pi - np.radians(angle) * 3), bias=bias,min_len=min_len,max_len=max_len, bounds=bounds)
@@ -153,7 +153,7 @@ def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, in
 def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,min_curve_diff, max_curve_diff, constant,max_curve, min_curve,  edge_label=0, bounds=None):
     cur_class_label = class_label
     if bounds is not None:
-        bounds = [bound + np.random.uniform(-0.1, 0.1) for bound in bounds]
+        bounds = [bound * (1 + np.random.uniform(-0.1, 0.1)) for bound in bounds]
     if angle != 0:
         if cur_class_label == 1 or edge_label==1:
             angle_rad = np.radians(angle)
@@ -453,17 +453,29 @@ def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0]), min_len=0
     def surface_function(x, y):
         return a * x**2 + b * y**2 + c * x * y + d * x + e * y
     if bounds is None:
-        upper_bound_x = np.random.uniform(0, max_len)
-        lower_bound_x = np.random.uniform(-min_len, 0)
-        upper_bound_y = np.random.uniform(0, max_len)
-        lower_bound_y = np.random.uniform(-min_len, 0)
+        size_x = np.random.uniform(min_len, max_len)
+        pct_pos_x = np.random.uniform(0.2, 0.8)
+        upper_bound_x = np.random.uniform(0, size_x * pct_pos_x)
+        lower_bound_x = np.random.uniform(-(size_x *(1- pct_pos_x)), 0)
+        size_y = np.random.uniform(min_len, max_len)
+        pct_pos_y = np.random.uniform(0.2, 0.8)
+        upper_bound_y = np.random.uniform(0, size_y * pct_pos_y)
+        lower_bound_y = np.random.uniform(-(size_y *(1- pct_pos_y)), 0)
     else:
         [lower_bound_x,upper_bound_x,lower_bound_y,upper_bound_y] = bounds
         
+    alpha_x = np.clip(np.random.normal(loc=0.5, scale=0.2), 0.1, 0.9)
+    N1_x, N2_x = np.random.multinomial(count - 4, [alpha_x, 1-alpha_x]) + np.array([2, 2])
+    # 3. Generate N random points in the square [-1, 1] x [-1, 1]
+    x_coords_neg = np.random.uniform(lower_bound_x, 0, N1_x)
+    x_coords_pos = np.random.uniform(0, upper_bound_x, N2_x)
+    x_samples = np.concatenate((x_coords_neg,x_coords_pos))
+    alpha_y = np.clip(np.random.normal(loc=0.5, scale=0.2), 0.1, 0.9)
+    N1_y, N2_y = np.random.multinomial(count - 4, [alpha_y, 1-alpha_y]) + np.array([2, 2])
+    y_coords_neg = np.random.uniform(lower_bound_y, 0, N1_y)
+    y_coords_pos = np.random.uniform(0, upper_bound_y, N2_y)
+    y_samples = np.concatenate((y_coords_neg, y_coords_pos))
 
-    # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(lower_bound_x, upper_bound_x, count) + center_point[0]
-    y_samples = np.random.uniform(lower_bound_y , upper_bound_y, count) + center_point[1]
 
     # Evaluate the surface function at the random points
     z_samples = surface_function(x_samples, y_samples)
@@ -505,11 +517,14 @@ def generate_room_corner_with_points(n_points, bias=0.0):
 def generate_surfaces_angles_and_sample(N, angle,min_len,max_len, bounds=None):
     angle_rad = np.radians((180 - angle) / 2)
     if bounds is None:
-        upper_bound_y = np.random.uniform(0, max_len)
-        lower_bound_y = np.random.uniform(-min_len, 0)
-        upper_bound_x = np.random.uniform(0, max_len)
-        lower_bound_x = np.random.uniform(-min_len, 0)
-        bounds = [lower_bound_x,upper_bound_x,lower_bound_y, upper_bound_y]
+        size_x = np.random.uniform(min_len, max_len)
+        pct_pos_x = np.random.uniform(0.2, 0.8)
+        upper_bound_x = np.random.uniform(0, size_x * pct_pos_x)
+        lower_bound_x = np.random.uniform(-(size_x *(1- pct_pos_x)), 0)
+        size_y = np.random.uniform(min_len, max_len)
+        pct_pos_y = np.random.uniform(0.2, 0.8)
+        upper_bound_y = np.random.uniform(0, size_y * pct_pos_y)
+        lower_bound_y = np.random.uniform(-(size_y *(1- pct_pos_y)), 0)
     else:
         [lower_bound_x,upper_bound_x,lower_bound_y, upper_bound_y] = bounds
 
@@ -574,10 +589,14 @@ def plotFunc(a, b, c, d, e,sampled_points):
 
 def sample_cylinder_point_cloud(radius, min_len,max_len, num_of_points,top_half=True, bounds=None):
     if bounds is None:
-        upper_bound_x = np.random.uniform(0, max_len)
-        lower_bound_x = np.random.uniform(-min_len, 0)
-        upper_bound_y = np.random.uniform(0, max_len)
-        lower_bound_y = np.random.uniform(-min_len, 0)
+        size_x = np.random.uniform(min_len, max_len)
+        pct_pos_x = np.random.uniform(0.2, 0.8)
+        upper_bound_x = np.random.uniform(0, size_x * pct_pos_x)
+        lower_bound_x = np.random.uniform(-(size_x *(1- pct_pos_x)), 0)
+        size_y = np.random.uniform(min_len, max_len)
+        pct_pos_y = np.random.uniform(0.2, 0.8)
+        upper_bound_y = np.random.uniform(0, size_y * pct_pos_y)
+        lower_bound_y = np.random.uniform(-(size_y *(1- pct_pos_y)), 0)
     else:
         [lower_bound_x,upper_bound_x,lower_bound_y,upper_bound_y] = bounds
 
