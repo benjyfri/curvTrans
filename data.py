@@ -124,6 +124,23 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
     #         a=1
 
         # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
+        # if (radius) > 0:
+        #     axis_limits = {
+        #             "x": [-2, 2],
+        #             "y": [-2, 2],
+        #             "z": [-2, 2]
+        #     }
+        #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, axis_range=axis_limits,
+        #                       title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        #     a =1
+        # axis_limits = {
+        #     "x": [-2, 2],
+        #     "y": [-2, 2],
+        #     "z": [-2, 2]
+        # }
+        # plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, axis_range=axis_limits,
+        #                   title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        # a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
@@ -390,14 +407,20 @@ def calculate_angle_and_area(a, b, c , d):
 
     return angle_at_a, angle_at_c, angle_at_d, area
 
+import numpy as np
+import plotly.graph_objects as go
+import torch  # If PyTorch tensors are expected
 
-def plot_point_clouds(*point_clouds, title=""):
+def plot_point_clouds(*point_clouds, title="", axis_range=None):
     """
     Plots multiple point clouds in 3D space, each with a different color.
 
     Parameters:
         *point_clouds: Variable number of point cloud arrays. Each array should be of shape (N, 3).
         title (str): Title of the plot.
+        axis_range (dict): Dictionary specifying exact axis ranges as:
+                           {"x": [xmin, xmax], "y": [ymin, ymax], "z": [zmin, zmax]}.
+                           Axes will be set to these values no matter the data.
     """
     # List of colors for the point clouds
     colors = [
@@ -406,11 +429,12 @@ def plot_point_clouds(*point_clouds, title=""):
 
     # Extend colors if there are more point clouds than predefined colors
     if len(point_clouds) > len(colors):
-        colors += [f'rgba({np.random.randint(0, 256)}, {np.random.randint(0, 256)}, {np.random.randint(0, 256)}, 1)'
-                   for _ in range(len(point_clouds) - len(colors))]
+        colors += [
+            f'rgba({np.random.randint(0, 256)}, {np.random.randint(0, 256)}, {np.random.randint(0, 256)}, 1)'
+            for _ in range(len(point_clouds) - len(colors))
+        ]
 
     fig = go.Figure()
-
 
     for i, point_cloud in enumerate(point_clouds):
         # Convert to numpy if it's a PyTorch tensor
@@ -424,23 +448,28 @@ def plot_point_clouds(*point_clouds, title=""):
             z=point_cloud[:, 2],
             mode='markers',
             marker=dict(size=5, color=colors[i % len(colors)]),
-            name=f'Point Cloud {i + 1}'
+            name=f'PCL_{i + 1}: {len(point_cloud)} points'
         ))
+
+    # Optionally add the origin as a center marker
     fig.add_trace(go.Scatter3d(
         x=[0],
         y=[0],
         z=[0],
         mode='markers',
         marker=dict(size=5, color='pink'),
-        name=f'CENTER'
+        name='CENTER'
     ))
-    # Update layout for the plot
+
+    # Set the scene configuration
+    scene_config = dict(
+        xaxis=dict(title='X', range=axis_range["x"] if axis_range and "x" in axis_range else None),
+        yaxis=dict(title='Y', range=axis_range["y"] if axis_range and "y" in axis_range else None),
+        zaxis=dict(title='Z', range=axis_range["z"] if axis_range and "z" in axis_range else None),
+    )
+
     fig.update_layout(
-        scene=dict(
-            xaxis=dict(title='X'),
-            yaxis=dict(title='Y'),
-            zaxis=dict(title='Z'),
-        ),
+        scene=scene_config,
         margin=dict(r=20, l=10, b=10, t=50),
         title=title
     )
@@ -448,33 +477,34 @@ def plot_point_clouds(*point_clouds, title=""):
     # Display the plot
     fig.show()
 
-
 def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0]), min_len=0.5,max_len=2,bounds=None):
     def surface_function(x, y):
         return a * x**2 + b * y**2 + c * x * y + d * x + e * y
     if bounds is None:
-        size_x = np.random.uniform(min_len, max_len)
+        size_x = np.random.uniform( 2 * min_len,  2 * max_len)
         pct_pos_x = np.random.uniform(0.2, 0.8)
-        upper_bound_x = np.random.uniform(0, size_x * pct_pos_x)
-        lower_bound_x = np.random.uniform(-(size_x *(1- pct_pos_x)), 0)
-        size_y = np.random.uniform(min_len, max_len)
+        upper_bound_x = size_x * pct_pos_x
+        lower_bound_x = -(size_x *(1- pct_pos_x))
+        size_y = np.random.uniform( 2 * min_len,  2 * max_len)
         pct_pos_y = np.random.uniform(0.2, 0.8)
-        upper_bound_y = np.random.uniform(0, size_y * pct_pos_y)
-        lower_bound_y = np.random.uniform(-(size_y *(1- pct_pos_y)), 0)
+        upper_bound_y = size_y * pct_pos_y
+        lower_bound_y = -(size_y *(1- pct_pos_y))
     else:
         [lower_bound_x,upper_bound_x,lower_bound_y,upper_bound_y] = bounds
         
-    alpha_x = np.clip(np.random.normal(loc=0.5, scale=0.2), 0.1, 0.9)
-    N1_x, N2_x = np.random.multinomial(count - 4, [alpha_x, 1-alpha_x]) + np.array([2, 2])
+    alpha_x = np.clip(np.random.normal(loc=0.5, scale=0.1), 0.2, 0.8)
+    N1_x, N2_x = np.random.multinomial(count - 10, [alpha_x, 1-alpha_x]) + np.array([5, 5])
     # 3. Generate N random points in the square [-1, 1] x [-1, 1]
     x_coords_neg = np.random.uniform(lower_bound_x, 0, N1_x)
     x_coords_pos = np.random.uniform(0, upper_bound_x, N2_x)
     x_samples = np.concatenate((x_coords_neg,x_coords_pos))
-    alpha_y = np.clip(np.random.normal(loc=0.5, scale=0.2), 0.1, 0.9)
-    N1_y, N2_y = np.random.multinomial(count - 4, [alpha_y, 1-alpha_y]) + np.array([2, 2])
+    x_samples = x_samples[np.random.permutation(x_samples.shape[0])]
+    alpha_y = np.clip(np.random.normal(loc=0.5, scale=0.1), 0.2, 0.8)
+    N1_y, N2_y = np.random.multinomial(count - 10, [alpha_y, 1-alpha_y]) + np.array([5, 5])
     y_coords_neg = np.random.uniform(lower_bound_y, 0, N1_y)
     y_coords_pos = np.random.uniform(0, upper_bound_y, N2_y)
     y_samples = np.concatenate((y_coords_neg, y_coords_pos))
+    y_samples = y_samples[np.random.permutation(y_samples.shape[0])]
 
 
     # Evaluate the surface function at the random points
@@ -517,14 +547,14 @@ def generate_room_corner_with_points(n_points, bias=0.0):
 def generate_surfaces_angles_and_sample(N, angle,min_len,max_len, bounds=None):
     angle_rad = np.radians((180 - angle) / 2)
     if bounds is None:
-        size_x = np.random.uniform(min_len, max_len)
+        size_x = np.random.uniform(2* min_len, 2* max_len)
         pct_pos_x = np.random.uniform(0.2, 0.8)
-        upper_bound_x = np.random.uniform(0, size_x * pct_pos_x)
-        lower_bound_x = np.random.uniform(-(size_x *(1- pct_pos_x)), 0)
-        size_y = np.random.uniform(min_len, max_len)
+        upper_bound_x = size_x * pct_pos_x
+        lower_bound_x = -(size_x *(1- pct_pos_x))
+        size_y = np.random.uniform(2* min_len, 2* max_len)
         pct_pos_y = np.random.uniform(0.2, 0.8)
-        upper_bound_y = np.random.uniform(0, size_y * pct_pos_y)
-        lower_bound_y = np.random.uniform(-(size_y *(1- pct_pos_y)), 0)
+        upper_bound_y = size_y * pct_pos_y
+        lower_bound_y = -(size_y *(1- pct_pos_y))
     else:
         [lower_bound_x,upper_bound_x,lower_bound_y, upper_bound_y] = bounds
 
@@ -532,14 +562,14 @@ def generate_surfaces_angles_and_sample(N, angle,min_len,max_len, bounds=None):
     m1 = np.tan(angle_rad)  # slope for the left surface (x < 0)
     m2 = -m1  # slope for the right surface (x >= 0)
 
-    alpha_x = np.clip(np.random.normal(loc=0.5, scale=0.2), 0.1, 0.9)
-    N1_x, N2_x = np.random.multinomial(N - 4, [alpha_x, 1-alpha_x]) + np.array([2, 2])
+    alpha_x = np.clip(np.random.normal(loc=0.5, scale=0.1), 0.2, 0.8)
+    N1_x, N2_x = np.random.multinomial(N - 10, [alpha_x, 1-alpha_x]) + np.array([5, 5])
     # 3. Generate N random points in the square [-1, 1] x [-1, 1]
     x_coords_neg = np.random.uniform(lower_bound_x, 0, N1_x)
     x_coords_pos = np.random.uniform(0, upper_bound_x, N2_x)
     x_coords = np.concatenate((x_coords_neg,x_coords_pos))
-    alpha_y = np.clip(np.random.normal(loc=0.5, scale=0.2), 0.1, 0.9)
-    N1_y, N2_y = np.random.multinomial(N - 4, [alpha_y, 1-alpha_y]) + np.array([2, 2])
+    alpha_y = np.clip(np.random.normal(loc=0.5, scale=0.1), 0.2, 0.8)
+    N1_y, N2_y = np.random.multinomial(N - 10, [alpha_y, 1-alpha_y]) + np.array([5, 5])
     y_coords_neg = np.random.uniform(lower_bound_y, 0, N1_y)
     y_coords_pos = np.random.uniform(0, upper_bound_y, N2_y)
     y_coords = np.concatenate((y_coords_neg, y_coords_pos))
@@ -549,7 +579,7 @@ def generate_surfaces_angles_and_sample(N, angle,min_len,max_len, bounds=None):
     # z_coords = np.abs(x_coords)
 
     # 5. Stack the points into a single array
-    points = np.stack((x_coords, y_coords, z_coords), axis=-1) - np.array([0, (np.random.uniform(-(upper_bound_y / 2 ), (upper_bound_y / 2 ))), 0])
+    points = np.stack((x_coords, y_coords, z_coords), axis=-1)
     center = np.array([0,0,0])
     points = np.vstack((center,points))
     center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
@@ -589,14 +619,14 @@ def plotFunc(a, b, c, d, e,sampled_points):
 
 def sample_cylinder_point_cloud(radius, min_len,max_len, num_of_points,top_half=True, bounds=None):
     if bounds is None:
-        size_x = np.random.uniform(min_len, max_len)
+        size_x = np.random.uniform(2* min_len, 2* max_len)
         pct_pos_x = np.random.uniform(0.2, 0.8)
-        upper_bound_x = np.random.uniform(0, size_x * pct_pos_x)
-        lower_bound_x = np.random.uniform(-(size_x *(1- pct_pos_x)), 0)
-        size_y = np.random.uniform(min_len, max_len)
+        upper_bound_x =  size_x * pct_pos_x
+        lower_bound_x = -(size_x *(1- pct_pos_x))
+        size_y = np.random.uniform(2* min_len, 2* max_len)
         pct_pos_y = np.random.uniform(0.2, 0.8)
-        upper_bound_y = np.random.uniform(0, size_y * pct_pos_y)
-        lower_bound_y = np.random.uniform(-(size_y *(1- pct_pos_y)), 0)
+        upper_bound_y = size_y * pct_pos_y
+        lower_bound_y = -(size_y *(1- pct_pos_y))
     else:
         [lower_bound_x,upper_bound_x,lower_bound_y,upper_bound_y] = bounds
 
@@ -607,8 +637,8 @@ def sample_cylinder_point_cloud(radius, min_len,max_len, num_of_points,top_half=
         theta = np.random.uniform(0.5*np.pi, 1.5*np.pi, num_of_points)
 
     # Sample random heights (z) along the length of the cylinder
-    alpha = np.clip(np.random.normal(loc=0.5, scale=0.2), 0.1, 0.9)
-    N1, N2 = np.random.multinomial(num_of_points - 4, [alpha, 1-alpha]) + np.array([2, 2])
+    alpha = np.clip(np.random.normal(loc=0.5, scale=0.1), 0.2, 0.8)
+    N1, N2 = np.random.multinomial(num_of_points - 10, [alpha, 1-alpha]) + np.array([5, 5])
     # 3. Generate N random points in the square [-1, 1] x [-1, 1]
     x_coords_neg = np.random.uniform(lower_bound_x, 0, N1)
     x_coords_pos = np.random.uniform(0, upper_bound_x, N2)
@@ -636,8 +666,8 @@ def sample_cylinder_point_cloud(radius, min_len,max_len, num_of_points,top_half=
 
 def sample_sphere_point_cloud(radius, num_of_points, top_half=True, bounds=None):
     if bounds is not None:
-        if radius > bounds[0]:
-            radius = bounds[0]
+        if radius > abs(bounds[0]):
+            radius = abs(bounds[0])
     theta = np.random.uniform(0, 2 * np.pi, num_of_points)
 
     if top_half:
@@ -686,7 +716,7 @@ def sample_pyramid(n_points, gauss_curv, min_len,max_len, bias=0.0, bounds=None)
     if bounds is None:
         r = np.random.uniform(min_len, max_len)
     else:
-        r = bounds[0]
+        r = abs(bounds[0])
 
     sum_of_tip_angles = gauss_curv - 2 * np.pi
 
