@@ -67,13 +67,15 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
 
         if self.contr_loss_weight  != 0:
 
-            if class_label==0:
-                min_curve_diff = 0.1
-                max_curve_diff = 0.3
-            else:
-                min_curve_diff = 0.3
-                max_curve_diff = 0.5
+            # if class_label==0:
+            #     min_curve_diff = 0.1
+            #     max_curve_diff = 0.3
+            # else:
+            #     min_curve_diff = 0.3
+            #     max_curve_diff = 0.5
 
+            min_curve_diff = 0.1
+            max_curve_diff = 0.3
             old_k1, old_k2, new_k1, new_k2, bounds, contrastive_point_cloud = sampleContrastivePcl(angle=angle,radius=radius,class_label=class_label,sampled_points=self.sampled_points,
                                                            min_len=min_len,max_len=max_len, bias=bias, info=info,min_curve_diff=min_curve_diff,
                                                            max_curve_diff=max_curve_diff, constant=self.constant,edge_label=edge_label,
