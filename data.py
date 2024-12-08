@@ -46,7 +46,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         bias = 0.25
 
         # [min_len, max_len] = [0.5, 1] if np.random.uniform(0, 1) < 0.5 else [1, 2]
-        [min_len, max_len] = [0.5, 1.5]
+        [min_len, max_len] = [0.5, 1]
         bounds, point_cloud = samplePcl(angle=angle, radius=radius,class_label=class_label,sampled_points=self.sampled_points,min_len=min_len,max_len=max_len, bias=bias, info=info, edge_label=edge_label)
 
         point_cloud1 = torch.tensor(point_cloud, dtype=torch.float32)
@@ -134,9 +134,9 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #                       title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #     a =1
         # axis_limits = {
-        #     "x": [-2, 2],
-        #     "y": [-2, 2],
-        #     "z": [-2, 2]
+        #     "x": [-1, 1],
+        #     "y": [-1, 1],
+        #     "z": [-1, 1]
         # }
         # plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, axis_range=axis_limits,
         #                   title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
