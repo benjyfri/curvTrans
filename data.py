@@ -25,8 +25,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.max_curve = 3
         self.min_curve = 1
         self.smallest_angle = 30
-        self.max_curve_diff = 0.15
-        self.min_curve_diff = 0.05
+        self.max_curve_diff = 0.2
+        self.min_curve_diff = 0.1
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
     def __len__(self):
         return self.num_point_clouds
@@ -101,16 +101,16 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
 
-
-        # axis_limits = {
-        #     "x": [-1, 1],
-        #     "y": [-1, 1],
-        #     "z": [-1, 1]
-        # }
-        # plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
-        #                   np.load("one_clean.npy"), axis_range=axis_limits,
-        #                   title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        # a =1
+        # if (radius > 0 or angle>0):
+        #     axis_limits = {
+        #         "x": [-1, 1],
+        #         "y": [-1, 1],
+        #         "z": [-1, 1]
+        #     }
+        #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
+        #                       np.load("one_clean.npy"), axis_range=axis_limits,
+        #                       title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        #     a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
