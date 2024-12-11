@@ -23,12 +23,11 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.contr_loss_weight = args.contr_loss_weight
         self.sampled_points = args.sampled_points
         self.max_curve = 3
-        self.min_curve = 0.5
+        self.min_curve = 1
         self.smallest_angle = 30
-        self.max_curve_diff = 0.2
-        self.min_curve_diff = 0.1
-        # self.constant = (self.max_curve + self.max_curve_diff )/(2 * np.cos(np.radians(self.smallest_angle) / 2) )
-        self.constant = self.max_curve / (2 * np.cos(np.radians(30) / 2)) + 0.05
+        self.max_curve_diff = 0.15
+        self.min_curve_diff = 0.05
+        self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
     def __len__(self):
         return self.num_point_clouds
 
@@ -66,19 +65,9 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud1 = point_cloud1 - point_cloud1[0,:]
 
         if self.contr_loss_weight  != 0:
-
-            # if class_label==0:
-            #     min_curve_diff = 0.1
-            #     max_curve_diff = 0.3
-            # else:
-            #     min_curve_diff = 0.3
-            #     max_curve_diff = 0.5
-
-            min_curve_diff = 0.05
-            max_curve_diff = 0.15
             count, old_k1, old_k2, new_k1, new_k2, bounds, contrastive_point_cloud = sampleContrastivePcl(angle=angle,radius=radius,class_label=class_label,sampled_points=self.sampled_points,
-                                                           min_len=min_len,max_len=max_len, bias=bias, info=info,min_curve_diff=min_curve_diff,
-                                                           max_curve_diff=max_curve_diff, constant=self.constant,edge_label=edge_label,
+                                                           min_len=min_len,max_len=max_len, bias=bias, info=info,min_curve_diff=self.min_curve_diff,
+                                                           max_curve_diff=self.max_curve_diff, constant=self.constant,edge_label=edge_label,
                                                            bounds=bounds,  min_curve=self.min_curve, max_curve=self.max_curve)
 
 
@@ -113,29 +102,6 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             contrastive_point_cloud = torch.tensor((0))
 
 
-    #     if class_label in [1,2] and (angle+radius)>0:
-    # #         plot_point_clouds(point_cloud1@rot_orig, np.load("one_dirty.npy"), f'class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}')
-    # # # #         plot_point_clouds(point_cloud1,point_cloud1, f'class: {class_label}, k1: {k1_orig}, k2: {k2_orig}')
-    # # # #         # plotFunc(info['a'], info['b'], info['c'], info['d'], info['e'],point_cloud1@rot_orig)
-    # # #         a=1
-    #     plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, f'pos; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}')
-    #     plot_point_clouds(point_cloud1@rot_orig, contrastive_point_cloud@neg_rot,f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-    #     a=1
-    #     if class_label in [2] :#and (angle + radius) > 0:
-    #         plot_point_clouds(point_cloud1@rot_orig, point_cloud2@pos_rot, contrastive_point_cloud@neg_rot,title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-    #         a=1
-
-        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
-        # if (radius) > 0:
-        #     axis_limits = {
-        #             "x": [-2, 2],
-        #             "y": [-2, 2],
-        #             "z": [-2, 2]
-        #     }
-        #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, axis_range=axis_limits,
-        #                       title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        #     a =1
-        #
         # axis_limits = {
         #     "x": [-1, 1],
         #     "y": [-1, 1],
@@ -523,7 +489,7 @@ def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0]), min_len=0
 
     return [lower_bound_x,upper_bound_x,lower_bound_y,upper_bound_y],sampled_points_with_centroid
 def sampleHalfSpacePoints(sampled_points_with_centroid):
-    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-10,0))]
+    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-5,0))]
     sampled_points_with_centroid = sampled_points_with_centroid - sampled_points_with_centroid[center_point_idx, :]
     sampled_points_with_centroid[center_point_idx, :] = (sampled_points_with_centroid[0, :]).copy()
     sampled_points_with_centroid[0, :] = np.array([[0, 0, 0]])
