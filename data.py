@@ -22,13 +22,13 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.rotate_data = args.rotate_data
         self.contr_loss_weight = args.contr_loss_weight
         self.sampled_points = args.sampled_points
-        self.max_curve = 2
+        self.max_curve = 3
         self.min_curve = 0.5
         self.smallest_angle = 30
         self.max_curve_diff = 0.2
         self.min_curve_diff = 0.1
         # self.constant = (self.max_curve + self.max_curve_diff )/(2 * np.cos(np.radians(self.smallest_angle) / 2) )
-        self.constant = 1.05
+        self.constant = self.max_curve / (2 * np.cos(np.radians(30) / 2)) + 0.05
     def __len__(self):
         return self.num_point_clouds
 
@@ -46,7 +46,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         bias = 0.25
 
         # [min_len, max_len] = [0.5, 1] if np.random.uniform(0, 1) < 0.5 else [1, 2]
-        [min_len, max_len] = [0.5, 1]
+        [min_len, max_len] = [0.5, 0.75]
         bounds, point_cloud = samplePcl(angle=angle, radius=radius,class_label=class_label,sampled_points=self.sampled_points,min_len=min_len,max_len=max_len, bias=bias, info=info, edge_label=edge_label)
 
         point_cloud1 = torch.tensor(point_cloud, dtype=torch.float32)
@@ -74,9 +74,9 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             #     min_curve_diff = 0.3
             #     max_curve_diff = 0.5
 
-            min_curve_diff = 0.1
-            max_curve_diff = 0.3
-            old_k1, old_k2, new_k1, new_k2, bounds, contrastive_point_cloud = sampleContrastivePcl(angle=angle,radius=radius,class_label=class_label,sampled_points=self.sampled_points,
+            min_curve_diff = 0.05
+            max_curve_diff = 0.15
+            count, old_k1, old_k2, new_k1, new_k2, bounds, contrastive_point_cloud = sampleContrastivePcl(angle=angle,radius=radius,class_label=class_label,sampled_points=self.sampled_points,
                                                            min_len=min_len,max_len=max_len, bias=bias, info=info,min_curve_diff=min_curve_diff,
                                                            max_curve_diff=max_curve_diff, constant=self.constant,edge_label=edge_label,
                                                            bounds=bounds,  min_curve=self.min_curve, max_curve=self.max_curve)
@@ -135,13 +135,15 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, axis_range=axis_limits,
         #                       title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #     a =1
+        #
         # axis_limits = {
         #     "x": [-1, 1],
         #     "y": [-1, 1],
         #     "z": [-1, 1]
         # }
-        # plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, axis_range=axis_limits,
-        #                   title=f'neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        # plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
+        #                   np.load("one_clean.npy"), axis_range=axis_limits,
+        #                   title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         # a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 
@@ -171,6 +173,7 @@ def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, in
 
 def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,min_curve_diff, max_curve_diff, constant,max_curve, min_curve,  edge_label=0, bounds=None):
     cur_class_label = class_label
+    count = 0
     if bounds is not None:
         bounds = [bound * (1 + np.random.uniform(-0.1, 0.1)) for bound in bounds]
     if angle != 0:
@@ -254,10 +257,9 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         discriminant_orig = H_orig ** 2 - K_orig
         k1_orig = H_orig + np.sqrt(discriminant_orig)
         k2_orig = H_orig - np.sqrt(discriminant_orig)
-        count = 0
         while True:
             # noise_to_add = np.random.normal(0, 0.1, 5)
-            noise_to_add = np.random.normal(0, 0.5, 5)
+            noise_to_add = np.random.normal(0, 0.2, 5)
             K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
                 ((c + noise_to_add[2]) ** 2))) / (
                              (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
@@ -289,7 +291,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         old_k2 = k2_orig
     if class_label == 4:
         contrastive_point_cloud = sampleHalfSpacePoints(contrastive_point_cloud)
-    return old_k1, old_k2, new_k1, new_k2, bounds, contrastive_point_cloud
+    return count, old_k1, old_k2, new_k1, new_k2, bounds, contrastive_point_cloud
 
 
 def rotatePCLToCanonical(point_cloud, centroid, k):

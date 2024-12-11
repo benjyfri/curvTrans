@@ -65,57 +65,57 @@ def updateDataSet(label_to_update=4,new_file_path_train = "train_surfaces_1X1.h5
             point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
 
         # Train data generation for each label
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=1, epsilon=0.2, counter=0, amount_of_pcl=10000)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=1, epsilon=0.1, counter=0, amount_of_pcl=10000)
         print(f'Finished train flat surfaces')
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=1, epsilon=0.2, counter=10000, amount_of_pcl=2500)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=1, epsilon=0.1, counter=10000, amount_of_pcl=2500)
         print(f'Finished train parabolic peak surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=12500, amount_of_pcl=2500)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=12500, amount_of_pcl=2500)
         print(f'Finished train parabolic pit surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=15000, amount_of_pcl=2500, angle=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=15000, amount_of_pcl=2500, angle=1)
         print(f'Finished train parabolic CORNERS')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=17500, amount_of_pcl=2500, radius=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=17500, amount_of_pcl=2500, radius=1)
         print(f'Finished train parabolic SPHERES')
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.2, counter=20000, amount_of_pcl=2500)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.1, counter=20000, amount_of_pcl=2500)
         print(f'Finished train ridge surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.2, counter=22500, amount_of_pcl=2500)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.1, counter=22500, amount_of_pcl=2500)
         print(f'Finished train valley surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.2, counter=25000, amount_of_pcl=2500, angle=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.1, counter=25000, amount_of_pcl=2500, angle=1)
         print(f'Finished train ridge ANGLES')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.2, counter=27500, amount_of_pcl=2500, radius=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.1, counter=27500, amount_of_pcl=2500, radius=1)
         print(f'Finished train valley Cylinders')
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.8, epsilon=0.2, counter=30000, amount_of_pcl=10000)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=2, epsilon=0.1, counter=30000, amount_of_pcl=10000)
         print(f'Finished train saddle surfaces')
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.2, counter=40000, amount_of_pcl=2500)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.1, counter=40000, amount_of_pcl=2500)
         print(f'Finished train HALFSPACE flat surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=42500, amount_of_pcl=625)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=42500, amount_of_pcl=625)
         print(f'Finished train HALFSPACE parabolic peak surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=43125, amount_of_pcl=625)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=43125, amount_of_pcl=625)
         print(f'Finished train HALFSPACE parabolic pit surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=43750, amount_of_pcl=625, angle=1, edge=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=43750, amount_of_pcl=625, angle=1, edge=1)
         print(f'Finished train HALFSPACE parabolic CORNERS')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=44375, amount_of_pcl=625, radius=1, edge=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=44375, amount_of_pcl=625, radius=1, edge=1)
         print(f'Finished train HALFSPACE parabolic SPHERES')
-        # addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=43750, amount_of_pcl=625)
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=43750, amount_of_pcl=625)
         # print(f'Finished train HALFSPACE parabolic CORNERS')
-        # addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=44375, amount_of_pcl=625)
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=44375, amount_of_pcl=625)
         # print(f'Finished train HALFSPACE parabolic SPHERES')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=45000, amount_of_pcl=625)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=45000, amount_of_pcl=625)
         print(f'Finished train HALFSPACE ridge surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=45625, amount_of_pcl=625)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=45625, amount_of_pcl=625)
         print(f'Finished train HALFSPACE valley surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=46250, amount_of_pcl=625, angle=1, edge=2)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=46250, amount_of_pcl=625, angle=1, edge=2)
         print(f'Finished train HALFSPACE ridge ANGLES')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=46875, amount_of_pcl=625, radius=1, edge=2)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=46875, amount_of_pcl=625, radius=1, edge=2)
         print(f'Finished train HALFSPACE valley CYLINDERS')
-        # addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=46250, amount_of_pcl=625)
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=46250, amount_of_pcl=625)
         # print(f'Finished train HALFSPACE ridge ANGLES')
-        # addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=46875, amount_of_pcl=625)
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=46875, amount_of_pcl=625)
         # print(f'Finished train HALFSPACE valley CYLINDERS')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=1, epsilon=0.2, counter=47500, amount_of_pcl=2500)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=1, epsilon=0.1, counter=47500, amount_of_pcl=2500)
         print(f'Finished train HALFSPACE saddle surfaces')
 
     with h5py.File(new_file_path_test, "r+") as new_hdf5_test_file:
@@ -124,57 +124,57 @@ def updateDataSet(label_to_update=4,new_file_path_train = "train_surfaces_1X1.h5
             point_clouds_group = new_hdf5_test_file.create_group("point_clouds")
 
         # Test data generation for each label
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=1, epsilon=0.2, counter=0, amount_of_pcl=1000)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=1, epsilon=0.1, counter=0, amount_of_pcl=1000)
         print(f'Finished test flat surfaces')
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=1, epsilon=0.2, counter=1000, amount_of_pcl=250)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=1, boundary=1, epsilon=0.1, counter=1000, amount_of_pcl=250)
         print(f'Finished test parabolic peak surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=1250, amount_of_pcl=250)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=1250, amount_of_pcl=250)
         print(f'Finished test parabolic pit surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=1500, amount_of_pcl=250, angle=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=1500, amount_of_pcl=250, angle=1)
         print(f'Finished test parabolic CORNERS')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=1750, amount_of_pcl=250, radius=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=1750, amount_of_pcl=250, radius=1)
         print(f'Finished test parabolic SPHERES')
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.2, counter=2000, amount_of_pcl=250)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.1, counter=2000, amount_of_pcl=250)
         print(f'Finished test ridge surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.2, counter=2250, amount_of_pcl=250)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.1, counter=2250, amount_of_pcl=250)
         print(f'Finished test valley surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.2, counter=2500, amount_of_pcl=250, angle=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.1, counter=2500, amount_of_pcl=250, angle=1)
         print(f'Finished test ridge ANGLES')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.2, counter=2750, amount_of_pcl=250, radius=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.1, counter=2750, amount_of_pcl=250, radius=1)
         print(f'Finished test valley Cylinders')
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.8, epsilon=0.2, counter=3000, amount_of_pcl=1000)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=2, epsilon=0.1, counter=3000, amount_of_pcl=1000)
         print(f'Finished test saddle surfaces')
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.2, counter=4000, amount_of_pcl=250)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.1, counter=4000, amount_of_pcl=250)
         print(f'Finished test HALFSPACE flat surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=4250, amount_of_pcl=63)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=4250, amount_of_pcl=63)
         print(f'Finished test HALFSPACE parabolic peak surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=4313, amount_of_pcl=63)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=4313, amount_of_pcl=63)
         print(f'Finished test HALFSPACE parabolic pit surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=4376, amount_of_pcl=63, angle=1, edge=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=4376, amount_of_pcl=63, angle=1, edge=1)
         print(f'Finished test HALFSPACE parabolic CORNERS')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=4439, amount_of_pcl=63, radius=1, edge=1)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=4439, amount_of_pcl=63, radius=1, edge=1)
         print(f'Finished test HALFSPACE parabolic SPHERES')
-        # addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=4376, amount_of_pcl=63)
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=4376, amount_of_pcl=63)
         # print(f'Finished test HALFSPACE parabolic CORNERS')
-        # addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=4439, amount_of_pcl=63)
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=4439, amount_of_pcl=63)
         # print(f'Finished test HALFSPACE parabolic SPHERES')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=4502, amount_of_pcl=63)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=4502, amount_of_pcl=63)
         print(f'Finished test HALFSPACE ridge surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=4565, amount_of_pcl=63)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=4565, amount_of_pcl=63)
         print(f'Finished test HALFSPACE valley surfaces')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=4628, amount_of_pcl=63, angle=1, edge=2)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=4628, amount_of_pcl=63, angle=1, edge=2)
         print(f'Finished test HALFSPACE ridge ANGLES')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=4691, amount_of_pcl=63, radius=1, edge=2)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=4691, amount_of_pcl=63, radius=1, edge=2)
         print(f'Finished test HALFSPACE valley CYLINDERS')
-        # addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=4628, amount_of_pcl=63)
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=4628, amount_of_pcl=63)
         # print(f'Finished test HALFSPACE ridge ANGLES')
-        # addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=4691, amount_of_pcl=63)
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=4691, amount_of_pcl=63)
         # print(f'Finished test HALFSPACE valley CYLINDERS')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=1, epsilon=0.2, counter=4754, amount_of_pcl=250)
+        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=1, epsilon=0.1, counter=4754, amount_of_pcl=250)
         print(f'Finished test HALFSPACE saddle surfaces')
 
 def createDataSetOld():
@@ -187,130 +187,130 @@ def createDataSetOld():
         point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
 
         # Train data generation for each label
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=0, label=0, boundary=1, epsilon=0.2, counter=0, amount_of_pcl=10000)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=0, label=0, boundary=1, epsilon=0.1, counter=0, amount_of_pcl=10000)
         print(f'Finished train flat surfaces')
 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=1, boundary=1, epsilon=0.2, counter=10000,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=1, boundary=1, epsilon=0.1, counter=10000,
                      amount_of_pcl=2500)
         print(f'Finished train parabolic peak surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=12500,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=12500,
                      amount_of_pcl=2500)
         print(f'Finished train parabolic pit surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=15000,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=15000,
                      amount_of_pcl=2500, angle=1)
         print(f'Finished train parabolic CORNERS')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=17500,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=17500,
                      amount_of_pcl=2500, radius=1)
         print(f'Finished train parabolic SPHERES')
 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.2, counter=20000,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.1, counter=20000,
                      amount_of_pcl=2500)
         print(f'Finished train ridge surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.2, counter=22500,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.1, counter=22500,
                      amount_of_pcl=2500)
         print(f'Finished train valley surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.2, counter=25000,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.1, counter=25000,
                      amount_of_pcl=2500, angle=1)
         print(f'Finished train ridge ANGLES')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.2, counter=27500,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.1, counter=27500,
                      amount_of_pcl=2500, radius=1)
         print(f'Finished train valley Cylinders')
 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.8, epsilon=0.2, counter=30000,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=3, boundary=2, epsilon=0.1, counter=30000,
                      amount_of_pcl=10000)
         print(f'Finished train saddle surfaces')
 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.2, counter=40000,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.1, counter=40000,
                      amount_of_pcl=2500)
         print(f'Finished train HALFSPACE flat surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=42500, amount_of_pcl=625)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=42500, amount_of_pcl=625)
         print(f'Finished train HALFSPACE parabolic peak surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=43125,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=43125,
                      amount_of_pcl=625)
         print(f'Finished train HALFSPACE parabolic pit surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=43750, amount_of_pcl=625,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=43750, amount_of_pcl=625,
                      angle=1, edge=1)
         print(f'Finished train HALFSPACE parabolic CORNERS')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=44375,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=44375,
                      amount_of_pcl=625, radius=1, edge=1)
         print(f'Finished train HALFSPACE parabolic SPHERES') 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=45000, amount_of_pcl=625)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=45000, amount_of_pcl=625)
         print(f'Finished train HALFSPACE ridge surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=45625,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=45625,
                      amount_of_pcl=625)
         print(f'Finished train HALFSPACE valley surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=46250, amount_of_pcl=625,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=46250, amount_of_pcl=625,
                      angle=1, edge=2)
         print(f'Finished train HALFSPACE ridge ANGLES')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=46875,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=46875,
                      amount_of_pcl=625, radius=1, edge=2)
         print(f'Finished train HALFSPACE valley CYLINDERS')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=4, boundary=1, epsilon=0.2, counter=47500,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=4, boundary=1, epsilon=0.1, counter=47500,
                      amount_of_pcl=2500)
         print(f'Finished train HALFSPACE saddle surfaces')
 
     with h5py.File(new_file_path_test, "w") as new_hdf5_test_file:
         point_clouds_group = new_hdf5_test_file.create_group("point_clouds")
         # Test data generation for each label
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=0, label=0, boundary=1, epsilon=0.2, counter=0, amount_of_pcl=1000)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=0, label=0, boundary=1, epsilon=0.1, counter=0, amount_of_pcl=1000)
         print(f'Finished test flat surfaces')
 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=1, boundary=1, epsilon=0.2, counter=1000, amount_of_pcl=250)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=1, boundary=1, epsilon=0.1, counter=1000, amount_of_pcl=250)
         print(f'Finished test parabolic peak surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=1250, amount_of_pcl=250)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=1250, amount_of_pcl=250)
         print(f'Finished test parabolic pit surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=1500, amount_of_pcl=250,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=1500, amount_of_pcl=250,
                      angle=1)
         print(f'Finished test parabolic CORNERS')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.2, counter=1750, amount_of_pcl=250,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.1, counter=1750, amount_of_pcl=250,
                      radius=1)
         print(f'Finished test parabolic SPHERES')
 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.2, counter=2000, amount_of_pcl=250)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.1, counter=2000, amount_of_pcl=250)
         print(f'Finished test ridge surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.2, counter=2250, amount_of_pcl=250)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.1, counter=2250, amount_of_pcl=250)
         print(f'Finished test valley surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.2, counter=2500, amount_of_pcl=250,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=2, boundary=1, epsilon=0.1, counter=2500, amount_of_pcl=250,
                      angle=1)
         print(f'Finished test ridge ANGLES')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.2, counter=2750, amount_of_pcl=250,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.1, counter=2750, amount_of_pcl=250,
                      radius=1)
         print(f'Finished test valley Cylinders')
 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=3, boundary=1.8, epsilon=0.2, counter=3000,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=3, boundary=2, epsilon=0.1, counter=3000,
                      amount_of_pcl=1000)
         print(f'Finished test saddle surfaces')
 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.2, counter=4000, amount_of_pcl=250)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.1, counter=4000, amount_of_pcl=250)
         print(f'Finished test HALFSPACE flat surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=4250, amount_of_pcl=63)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=4250, amount_of_pcl=63)
         print(f'Finished test HALFSPACE parabolic peak surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=4313, amount_of_pcl=63)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=4313, amount_of_pcl=63)
         print(f'Finished test HALFSPACE parabolic pit surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=4376, amount_of_pcl=63,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=4376, amount_of_pcl=63,
                      angle=1, edge=1)
         print(f'Finished test HALFSPACE parabolic CORNERS')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=4439, amount_of_pcl=63,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=1, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=4439, amount_of_pcl=63,
                      radius=1, edge=1)
         print(f'Finished test HALFSPACE parabolic SPHERES')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=4502, amount_of_pcl=63)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=4502, amount_of_pcl=63)
         print(f'Finished test HALFSPACE ridge surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=4565, amount_of_pcl=63)
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=4565, amount_of_pcl=63)
         print(f'Finished test HALFSPACE valley surfaces')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.2, counter=4628, amount_of_pcl=63,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=1, label=4, boundary=1, epsilon=0.1, counter=4628, amount_of_pcl=63,
                      angle=1, edge=2)
         print(f'Finished test HALFSPACE ridge ANGLES')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.2, counter=4691, amount_of_pcl=63,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.1, counter=4691, amount_of_pcl=63,
                      radius=1, edge=2)
         print(f'Finished test HALFSPACE valley CYLINDERS')
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=4, boundary=1, epsilon=0.2, counter=4754,
+        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=4, boundary=1, epsilon=0.1, counter=4754,
                      amount_of_pcl=250)
         print(f'Finished test HALFSPACE saddle surfaces')
 
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, boundary, epsilon, angle=0, radius=0, edge=0, update=False):
-    constant = 1.05
-    max_curv = 2
+    max_curv = 3
+    constant = max_curv / (2 * np.cos(np.radians(30) / 2)) + 0.05 # make sure that highest angle is 30 + add epsilon for corner cases
     for k in range(amount_of_pcl):
         if angle!=0 or radius!=0:
             a=b=c=d=e=H=K = 0
@@ -327,6 +327,7 @@ def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, a
                     min_angle_rad = 2 * np.arccos(max_curv / (2 * constant))
                     angle_rad = np.random.uniform(min_angle_rad, max_angle_rad)
                     cur_curve = constant * (2 * np.cos(angle_rad / 2))
+                    constant = cur_curve / (2 * np.cos(angle_rad / 2))
                     k1 = cur_curve
                     k2 = 0
                     angle = np.degrees(angle_rad)
@@ -339,7 +340,7 @@ def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, a
                     k1 = cur_curve
                     k2 = 0
         else:
-            a, b, c, d, e, _, k1, k2 = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=boundary, epsilon=epsilon)
+            a, b, c, d, e, _, k1, k2 = createFunction(gaussian_curv=gaussian_curv, mean_curv=mean_curv, boundary=boundary, epsilon=epsilon, max_curv=max_curv)
         dataset_name = f"point_cloud_{counter + k}"
         if update == True:
             del point_clouds_group[dataset_name]
@@ -356,7 +357,7 @@ def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, a
         point_cloud.attrs['class'] = label
         point_cloud.attrs['edge'] = edge
 
-def createFunction(gaussian_curv, mean_curv, boundary=1, epsilon=0.2):
+def createFunction(gaussian_curv, mean_curv, max_curv, boundary=1, epsilon=0.1):
     if gaussian_curv==1 and mean_curv==0:
         raise ValueError("gaussian_curv==1 and mean_curv==0 is impossible")
     okFunc = False
@@ -365,7 +366,7 @@ def createFunction(gaussian_curv, mean_curv, boundary=1, epsilon=0.2):
         okFunc=True
         count += 1
         # a, b, c, d, e = np.random.uniform(-1.3, 1.3, 5)
-        a, b, c, d, e = np.random.uniform(-1, 1, 5)
+        a, b, c, d, e = np.random.uniform(-1.5, 1.5, 5)
         K = (4*(a*b)-((c**2))) / ((1 + d**2 + e**2)**2)
         H = (a*(1 + e**2)-d*e*c +b*(1 + d**2)) / ( ( (d**2) + (e**2) + 1 )**1.5)
 
@@ -378,7 +379,7 @@ def createFunction(gaussian_curv, mean_curv, boundary=1, epsilon=0.2):
         temp_min = k1 if abs(k1) < abs(k2) else k2
 
         # Not to steep
-        if abs(temp_max)> 2:
+        if abs(temp_max) > max_curv:
             okFunc = False
             continue
 
@@ -662,7 +663,7 @@ def accuracyHKdependingOnNumOfPoints(sigma=0):
                 print(f'j: {j}')
             random_setup = random.choice(options)
             a1, b1, c1, d1, e1, _, H, K = createFunction(gaussian_curv=random_setup[0], mean_curv=random_setup[1],
-                                                         boundary=5, epsilon=0.2)
+                                                         boundary=5, epsilon=0.1)
             point_cloud = samplePoints(a1, b1, c1, d1, e1, count=i)
             noised_point_cloud = point_cloud + np.random.normal(loc=0, scale=sigma, size=point_cloud.shape)
             noised_point_cloud_centered = noised_point_cloud - noised_point_cloud[0,:]
