@@ -310,21 +310,23 @@ def createDataSetOld():
 
 def addDataToSet(point_clouds_group, gaussian_curv, mean_curv, label, counter, amount_of_pcl, boundary, epsilon, angle=0, radius=0, edge=0, update=False):
     max_curv = 3
-    constant = max_curv / (2 * np.cos(np.radians(30) / 2)) + 0.05 # make sure that highest angle is 30 + add epsilon for corner cases
+    max_angle = 120
+    min_angle = 30
+    constant = max_curv / (2 * np.cos(np.radians( min_angle ) / 2)) + 0.05 # make sure that highest angle is 30 + add epsilon for corner cases
     for k in range(amount_of_pcl):
         if angle!=0 or radius!=0:
             a=b=c=d=e=H=K = 0
             if angle>0:
                 if label==1 or edge==1:
-                    max_angle_rad = (2*np.pi - boundary**2 ) / 3
+                    max_angle_rad = ((2*np.pi - boundary**2 ) / 3)
                     min_angle_rad = (2*np.pi - max_curv**2 ) / 3
                     angle_rad = np.random.uniform(min_angle_rad, max_angle_rad)
                     cur_curve = np.sqrt(2*np.pi - 3*angle_rad)
                     k1 = k2 = cur_curve
                     angle = np.degrees(angle_rad)
                 if label==2 or edge==2:
-                    max_angle_rad = 2 * np.arccos(boundary / (2 * constant))
-                    min_angle_rad = 2 * np.arccos(max_curv / (2 * constant))
+                    max_angle_rad = np.clip(2 * np.arccos(boundary / (2 * constant)), np.radians(min_angle), np.radians(max_angle))
+                    min_angle_rad = np.clip(2 * np.arccos(max_curv / (2 * constant)), np.radians(min_angle), np.radians(max_angle))
                     angle_rad = np.random.uniform(min_angle_rad, max_angle_rad)
                     cur_curve = constant * (2 * np.cos(angle_rad / 2))
                     constant = cur_curve / (2 * np.cos(angle_rad / 2))
