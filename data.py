@@ -25,6 +25,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.max_curve = 3
         self.min_curve = 2
         self.smallest_angle = 30
+        self.max_angle = 120
         self.max_curve_diff = 0.15
         self.min_curve_diff = 0.05
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
@@ -102,13 +103,14 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             contrastive_point_cloud = torch.tensor((0))
 
         # if (class_label==1 and angle>0) :
+        # # if (class_label==0) :
         #     axis_limits = {
         #         "x": [-1, 1],
         #         "y": [-1, 1],
         #         "z": [-1, 1]
         #     }
         #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
-        #                       np.load("one_clean.npy"), axis_range=axis_limits,
+        #                       np.load("one_clean.npy"), axis_range=None,
         #                       title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #     a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
@@ -119,7 +121,7 @@ def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, in
         bounds = [bound * (1 + np.random.uniform(-0.1, 0.1)) for bound in bounds]
     if angle != 0:
         if cur_class_label == 1 or edge_label == 1:
-            r_tri, point_cloud = sample_pyramid(n_points=sampled_points, gauss_curv=(2 * np.pi - np.radians(angle) * 3), bias=bias,min_len=min_len,max_len=max_len, bounds=bounds)
+            r_tri, point_cloud = sample_pyramid(n_points=sampled_points, head_angle_rad=np.radians(angle), bias=bias,min_len=min_len,max_len=max_len, bounds=bounds)
             bounds = [-r_tri,r_tri,-r_tri,r_tri]
         if cur_class_label == 2 or edge_label == 2:
             bounds, point_cloud = generate_surfaces_angles_and_sample(sampled_points, angle, min_len=min_len,max_len=max_len,bounds=bounds)
@@ -165,7 +167,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             interval = int_1 if np.random.uniform(0, 1) < prob else int_2
             new_angle_rad = np.random.uniform(interval[0],interval[1])
 
-            r_tri, contrastive_point_cloud = sample_pyramid(n_points=sampled_points, gauss_curv=(2 * np.pi - new_angle_rad * 3), bias=bias,min_len=min_len,max_len=max_len,bounds=bounds)
+            r_tri, contrastive_point_cloud = sample_pyramid(n_points=sampled_points, head_angle_rad=np.radians(angle), bias=bias,min_len=min_len,max_len=max_len,bounds=bounds)
             bounds = [-r_tri, r_tri, -r_tri, r_tri]
             new_k1 = new_k2 = np.sqrt(2 * np.pi - new_angle_rad * 3)
 
@@ -665,11 +667,7 @@ def sample_sphere_point_cloud(radius, num_of_points, top_half=True, bounds=None)
 # def equilateral_triangle_coordinates(h, a):
 def equilateral_triangle_coordinates(r, a):
     beta = np.tan(a / 2)
-    h = (r * np.sqrt(3)) / ( np.sqrt( ( 12 * (beta**2) ) / ( 3 - beta**2) ) )
-
-    # beta = np.tan(a / 2)
-    # edge_len = ( np.sqrt( ( 12 * (beta**2) ) / ( 3 - beta**2) ) ) * h
-    # r = edge_len / np.sqrt(3)
+    h = r * np.sqrt((4 / ( 3 * beta ))-0.25)
 
     # Calculate the 2D coordinates of the vertices of an equilateral triangle
     # Centered at (0, 0) in the x-y plane
@@ -682,15 +680,12 @@ def equilateral_triangle_coordinates(r, a):
 
     return h, np.array(vertices)
 
-def sample_pyramid(n_points, gauss_curv, min_len,max_len, bias=0.0, bounds=None):
+def sample_pyramid(n_points, head_angle_rad, min_len,max_len, bias=0.0, bounds=None):
     if bounds is None:
-        r = np.random.uniform(min_len, max_len)
+        r = np.random.uniform(min_len, max_len) * (4/3)
     else:
         r = abs(bounds[0])
-    #assume surface area is 2
-    sum_of_tip_angles =  2 * np.pi - ( gauss_curv / 2 )
-
-    h, base_vertices = equilateral_triangle_coordinates(r * 3, sum_of_tip_angles / 3 )
+    h, base_vertices = equilateral_triangle_coordinates(r , head_angle_rad )
     base_vertices = base_vertices[1:,:]
 
     # Define the pyramid tip
