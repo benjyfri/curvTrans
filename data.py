@@ -23,10 +23,10 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.contr_loss_weight = args.contr_loss_weight
         self.sampled_points = args.sampled_points
         self.max_curve = 3
-        self.min_curve = 1
+        self.min_curve = 2
         self.smallest_angle = 30
-        self.max_curve_diff = 0.2
-        self.min_curve_diff = 0.1
+        self.max_curve_diff = 0.15
+        self.min_curve_diff = 0.05
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
     def __len__(self):
         return self.num_point_clouds
@@ -45,7 +45,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         bias = 0.25
 
         # [min_len, max_len] = [0.5, 1] if np.random.uniform(0, 1) < 0.5 else [1, 2]
-        [min_len, max_len] = [0.5, 0.75]
+        [min_len, max_len] = [0.45, 0.55]
         bounds, point_cloud = samplePcl(angle=angle, radius=radius,class_label=class_label,sampled_points=self.sampled_points,min_len=min_len,max_len=max_len, bias=bias, info=info, edge_label=edge_label)
 
         point_cloud1 = torch.tensor(point_cloud, dtype=torch.float32)
@@ -101,7 +101,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
 
-        # if (radius > 0 or angle>0):
+        # if (class_label==1 and angle>0) :
         #     axis_limits = {
         #         "x": [-1, 1],
         #         "y": [-1, 1],
@@ -687,10 +687,10 @@ def sample_pyramid(n_points, gauss_curv, min_len,max_len, bias=0.0, bounds=None)
         r = np.random.uniform(min_len, max_len)
     else:
         r = abs(bounds[0])
+    #assume surface area is 2
+    sum_of_tip_angles =  2 * np.pi - ( gauss_curv / 2 )
 
-    sum_of_tip_angles = gauss_curv - 2 * np.pi
-
-    h, base_vertices = equilateral_triangle_coordinates(r, sum_of_tip_angles / 3 )
+    h, base_vertices = equilateral_triangle_coordinates(r * 3, sum_of_tip_angles / 3 )
     base_vertices = base_vertices[1:,:]
 
     # Define the pyramid tip
