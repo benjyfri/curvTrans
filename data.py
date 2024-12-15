@@ -664,8 +664,8 @@ def sample_sphere_point_cloud(radius, num_of_points, top_half=True, bounds=None)
     points[0, :] = np.array([[0, 0, 0]])
     return points
 
-# def equilateral_triangle_coordinates(h, a):
 def equilateral_triangle_coordinates(r, a):
+    # pythagoras thm on height of pyr and height of face:  h^2 + 0.25R^2 = 0.75R^2 * 1 / (tan(alpha/2))^2;
     beta = np.tan(a / 2)
     h = r * np.sqrt((4 / ( 3 * beta ))-0.25)
 
