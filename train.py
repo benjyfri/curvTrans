@@ -178,15 +178,15 @@ def configArgsPCT():
                         help='0 is -dist; 1 is -dist^2; 2 is -dist dvided by largest dist')
     parser.add_argument('--use_lap_reorder', type=int, default=1, metavar='N',
                         help='reorder points by laplacian order ')
-    parser.add_argument('--lap_eigenvalues_dim', type=int, default=0, metavar='N',
+    parser.add_argument('--lap_eigenvalues_dim', type=int, default=15, metavar='N',
                         help='use eigenvalues in as input')
     parser.add_argument('--use_second_deg', type=int, default=1, metavar='N',
                         help='use second degree embedding ')
     parser.add_argument('--lpe_normalize', type=int, default=0, metavar='N',
                         help='use PCT transformer version')
-    parser.add_argument('--std_dev', type=float, default=0.07, metavar='N',
+    parser.add_argument('--std_dev', type=float, default=0.01, metavar='N',
                         help='amount of noise to add to data')
-    parser.add_argument('--clip', type=float, default=0.15, metavar='N',
+    parser.add_argument('--clip', type=float, default=0.05, metavar='N',
                         help='clip noise')
     parser.add_argument('--contr_loss_weight', type=float, default=0.0, metavar='N',
                         help='weight of contrastive loss')
@@ -200,11 +200,11 @@ def configArgsPCT():
                         help='use rotated data')
     parser.add_argument('--cube', type=int, default=0, metavar='N',
                         help='Normalize data into 1 cube')
-    parser.add_argument('--num_neurons_per_layer', type=int, default=32, metavar='N',
+    parser.add_argument('--num_neurons_per_layer', type=int, default=64, metavar='N',
                         help='how many neurons per layer to use')
     parser.add_argument('--num_mlp_layers', type=int, default=3, metavar='N',
                         help='how many mlp layers to use')
-    parser.add_argument('--output_dim', type=int, default=4, metavar='N',
+    parser.add_argument('--output_dim', type=int, default=5, metavar='N',
                         help='how many labels are used')
     parser.add_argument('--lr_jumps', type=int, default=15, metavar='N',
                         help='Lower lr *0.1 every amount of jumps')

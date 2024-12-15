@@ -22,8 +22,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.rotate_data = args.rotate_data
         self.contr_loss_weight = args.contr_loss_weight
         self.sampled_points = args.sampled_points
-        self.max_curve = 3
-        self.min_curve = 2
+        self.max_curve = 5
+        self.min_curve = 3
         self.smallest_angle = 30
         self.max_angle = 120
         self.max_curve_diff = 0.15
@@ -37,6 +37,11 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
+
+        #enforce basic plane patch 50 pct of the time
+        if info['class']==0:
+            if np.random.rand() < 0.5:
+                info = {k: 0 for k, v in info.items()}
         info['idx']= self.indices[idx]
 
         class_label = info['class']
@@ -45,7 +50,6 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         edge_label = info['edge']
         bias = 0.25
 
-        # [min_len, max_len] = [0.5, 1] if np.random.uniform(0, 1) < 0.5 else [1, 2]
         [min_len, max_len] = [0.45, 0.55]
         bounds, point_cloud = samplePcl(angle=angle, radius=radius,class_label=class_label,sampled_points=self.sampled_points,min_len=min_len,max_len=max_len, bias=bias, info=info, edge_label=edge_label)
 
@@ -102,17 +106,18 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
 
-        # if (class_label==1 and angle>0) :
-        # # if (class_label==0) :
-        #     axis_limits = {
-        #         "x": [-1, 1],
-        #         "y": [-1, 1],
-        #         "z": [-1, 1]
-        #     }
-        #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
-        #                       np.load("one_clean.npy"), axis_range=None,
-        #                       title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        #     a =1
+        # # if (class_label==1 and radius>0) :
+        # # if ((class_label in[0,2]) and not (angle>0 or radius>0)):
+        # # if (not (angle>0 or radius>0)):
+        # axis_limits = {
+        #     "x": [-1, 1],
+        #     "y": [-1, 1],
+        #     "z": [-1, 1]
+        # }
+        # plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
+        #                   np.load("one_clean.npy"), axis_range=None,
+        #                   title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        # a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
@@ -136,7 +141,8 @@ def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, in
     else:
         bounds, point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'], count=sampled_points, min_len=min_len,max_len=max_len,bounds=bounds)
     if class_label == 4:
-        point_cloud = sampleHalfSpacePoints(point_cloud)
+        # point_cloud = sampleHalfSpacePoints(point_cloud)
+        point_cloud = find_representative_point(point_cloud)
     return bounds, point_cloud
 
 def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,min_curve_diff, max_curve_diff, constant,max_curve, min_curve,  edge_label=0, bounds=None):
@@ -227,7 +233,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         k2_orig = H_orig - np.sqrt(discriminant_orig)
         while True:
             # noise_to_add = np.random.normal(0, 0.1, 5)
-            noise_to_add = np.random.normal(0, 0.2, 5)
+            noise_to_add = np.random.normal(0, 0.4, 5)
             K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
                 ((c + noise_to_add[2]) ** 2))) / (
                              (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
@@ -258,7 +264,8 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         old_k1 = k1_orig
         old_k2 = k2_orig
     if class_label == 4:
-        contrastive_point_cloud = sampleHalfSpacePoints(contrastive_point_cloud)
+        # contrastive_point_cloud = sampleHalfSpacePoints(contrastive_point_cloud)
+        contrastive_point_cloud = find_representative_point(contrastive_point_cloud)
     return count, old_k1, old_k2, new_k1, new_k2, bounds, contrastive_point_cloud
 
 
@@ -497,6 +504,30 @@ def sampleHalfSpacePoints(sampled_points_with_centroid):
     sampled_points_with_centroid[0, :] = np.array([[0, 0, 0]])
     return sampled_points_with_centroid
 
+
+def find_representative_point(point_cloud):
+    # Find min and max points for each axis
+    min_idx = [np.argmin(point_cloud[:, i]) for i in range(3)]
+    max_idx = [np.argmax(point_cloud[:, i]) for i in range(3)]
+    full_list = min_idx + max_idx
+
+    # Compute norms and find the threshold for the 5 smallest points
+    norms = np.linalg.norm(point_cloud, axis=1)
+    smallest_norms = sorted(norms)
+    min_value = smallest_norms[5]
+
+    # Filter out indices of points that are in the top 5 smallest norms
+    filtered_indices = [idx for idx in full_list if norms[idx] > min_value]
+    if not filtered_indices:
+        raise ValueError("No points left after filtering the top 5 smallest norms.")
+    # Find the index with the smallest norm among the remaining indices
+    center_point_idx = min(filtered_indices, key=lambda idx: norms[idx])
+
+    point_cloud = point_cloud - point_cloud[center_point_idx, :]
+    point_cloud[center_point_idx, :] = (point_cloud[0, :]).copy()
+    point_cloud[0, :] = np.array([[0, 0, 0]])
+
+    return point_cloud
 
 def generate_room_corner_with_points(n_points, bias=0.0):
     upper_bound1, upper_bound2, upper_bound3 = np.random.uniform(1 - bias, 1 + bias, 3)
