@@ -38,13 +38,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
 
-        #enforce basic plane patch 50 pct of the time
-        if info['class']==0:
-            if np.random.rand() < 0.5:
+        # enforce basic plane patch 25 pct of the time for planes and for edges
+        class_label = info['class']
+        if class_label in [0,4]:
+            if np.random.rand() < 0.25:
                 info = {k: 0 for k, v in info.items()}
         info['idx']= self.indices[idx]
-
-        class_label = info['class']
         angle = info['angle']
         radius = info['radius']
         edge_label = info['edge']
@@ -114,11 +113,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #     "y": [-1, 1],
         #     "z": [-1, 1]
         # }
-        # if (angle>0 or radius>0):
-        # plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
-        #                   axis_range=None,
-        #                   title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        # a =1
+        # if (class_label==4):
+        # if class_label in [0,4]:
+        #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
+        #                       np.load('one_clean.npy'),axis_range=None,
+        #                       title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        #     a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
