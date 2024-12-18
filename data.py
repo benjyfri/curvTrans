@@ -26,7 +26,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.min_curve = 3
         self.smallest_angle = 30
         self.max_angle = 120
-        self.max_curve_diff = 0.15
+        self.max_curve_diff = 0.1
         self.min_curve_diff = 0.05
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
     def __len__(self):
@@ -107,17 +107,18 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             contrastive_point_cloud = torch.tensor((0))
 
         # # if (class_label==1 and radius>0) :
-        # # if ((class_label in[0,2]) and not (angle>0 or radius>0)):
+        # #
         # # if (not (angle>0 or radius>0)):
         # axis_limits = {
         #     "x": [-1, 1],
         #     "y": [-1, 1],
         #     "z": [-1, 1]
         # }
-        # plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
-        #                   np.load("one_clean.npy"), axis_range=None,
-        #                   title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        # a =1
+        # if ((class_label in [0,2])):
+        #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
+        #                       np.load("one_clean.npy"), axis_range=None,
+        #                       title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        #     a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
@@ -233,7 +234,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         k2_orig = H_orig - np.sqrt(discriminant_orig)
         while True:
             # noise_to_add = np.random.normal(0, 0.1, 5)
-            noise_to_add = np.random.normal(0, 0.4, 5)
+            noise_to_add = np.random.normal(0, 0.09, 5)
             K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
                 ((c + noise_to_add[2]) ** 2))) / (
                              (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
