@@ -114,11 +114,11 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #     "y": [-1, 1],
         #     "z": [-1, 1]
         # }
-        # if ((class_label in [0,2])):
-        #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
-        #                       np.load("one_clean.npy"), axis_range=None,
-        #                       title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        #     a =1
+        # if (angle>0 or radius>0):
+        # plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
+        #                   axis_range=None,
+        #                   title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        # a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
@@ -158,7 +158,8 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             cur_curve = np.sqrt(cur_gauss_curv)
             old_k1 = old_k2 = cur_curve
             angle_vals = []
-            boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
+            # boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
+            boundaries = [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff]
             for cur_val in boundaries:
                 new_angle_rad = (2 * np.pi - cur_val**2) / 3
                 angle_vals.append(new_angle_rad)
