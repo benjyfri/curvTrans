@@ -38,10 +38,10 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
 
-        # enforce basic plane patch 25 pct of the time for planes and for edges
+        # enforce basic plane patch 5 pct of the time for planes and for edges
         class_label = info['class']
         if class_label in [0,4]:
-            if np.random.rand() < 0.25:
+            if np.random.rand() < 0.05:
                 info = {k: 0 for k, v in info.items()}
         info['idx']= self.indices[idx]
         angle = info['angle']
@@ -105,20 +105,22 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
 
-        # # if (class_label==1 and radius>0) :
-        # #
-        # # if (not (angle>0 or radius>0)):
-        # axis_limits = {
-        #     "x": [-1, 1],
-        #     "y": [-1, 1],
-        #     "z": [-1, 1]
-        # }
-        # if (class_label==4):
-        # if class_label in [0,4]:
-        #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
-        #                       np.load('one_clean.npy'),axis_range=None,
-        #                       title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        #     a =1
+        # if class_label in [4]:
+        #     if  (not (angle>0 or radius>0)) or True:
+        #         axis_limits = {
+        #             "x": [-0.75, 0.75],
+        #             "y": [-0.75, 0.75],
+        #             "z": [-0.75, 0.75]
+        #         }
+        #         plot_point_clouds(point_cloud1 @ rot_orig,axis_range=axis_limits,
+        #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        #         a =1
+        # if class_label in [4]:
+        #     if  (not (angle>0 or radius>0)) or True:
+        #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
+        #                           np.load('one_clean.npy'),axis_range=None,
+        #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        #         a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
@@ -185,7 +187,8 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             old_k1 = cur_curve
             old_k2 = 0
             angle_vals = []
-            boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
+            # boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
+            boundaries = [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff]
             for cur_val in boundaries:
                 x = np.clip(cur_val / (2 * constant),-1,1)
                 new_angle_rad = 2 *  np.arccos(x)
