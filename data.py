@@ -115,12 +115,13 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #         plot_point_clouds(point_cloud1 @ rot_orig,axis_range=axis_limits,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #         a =1
-        if class_label in [0,1,2,3]:
-            if  (not (angle>0 or radius>0)) or True:
-                plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,axis_range=None,
-                                  title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-                a =1
+        # if class_label in [0]:
+        #     if  ((angle>0 or radius>0)) or True:
+        #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, np.load("one_clean.npy"),axis_range=None,
+        #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+        #         a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
+
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
     cur_class_label = class_label
@@ -228,51 +229,47 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             new_k2 = 0
     else:
         a, b, c, d, e = info['a'], info['b'], info['c'], info['d'], info['e']
-        K_orig = (4 * ((a) * (b)) - (((c) ** 2))) / ((1 + (d) ** 2 + (e) ** 2) ** 2)
-        H_orig = ((a) * (1 + (e) ** 2) - (d) * (e) * (c) + (b) * (1 + (d) ** 2)) / (
-                (((d) ** 2) + ((e) ** 2) + 1) ** 1.5)
+        K_orig, H_orig = compute_curvatures([a,b,c,d,e])
 
         discriminant_orig = H_orig ** 2 - K_orig
         old_k1 = H_orig + np.sqrt(discriminant_orig)
         old_k2 = H_orig - np.sqrt(discriminant_orig)
-        # KK, HH = compute_curvatures([a,b,c,d,e])
-        sign1, sign2= np.random.choice([-1,1],2)
-        new_k1 = old_k1 + ( sign1 * np.random.uniform(min_curve_diff, max_curve_diff) )
-        new_k2 = old_k2 + ( sign2 * np.random.uniform(min_curve_diff, max_curve_diff) )
-        a,b,c,d,e = update_coefficients(a, b, c, d, e, new_k1, new_k2)
+        # # KK, HH = compute_curvatures([a,b,c,d,e])
+        # sign1, sign2= np.random.choice([-1,1],2)
+        # new_k1 = old_k1 + ( sign1 * np.random.uniform(min_curve_diff, max_curve_diff) )
+        # new_k2 = old_k2 + ( sign2 * np.random.uniform(min_curve_diff, max_curve_diff) )
+        # a,b,c,d,e = update_coefficients(a, b, c, d, e, new_k1, new_k2)
         # a=-2
-        # while True:
-        #     # noise_to_add = np.random.normal(0, 0.1, 5)
-        #     noise_to_add = np.random.normal(0, 0.09, 5)
-        #     K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
-        #         ((c + noise_to_add[2]) ** 2))) / (
-        #                      (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
-        #     H_cont = ((a + noise_to_add[0]) * (1 + (e + noise_to_add[4]) ** 2) - (
-        #             d + noise_to_add[3]) * (e + noise_to_add[4]) * (
-        #                       c + noise_to_add[2]) + (b + noise_to_add[1]) * (
-        #                       1 + (d + noise_to_add[3]) ** 2)) / ((((d + noise_to_add[
-        #         3]) ** 2) + ((e + noise_to_add[4]) ** 2) + 1) ** 1.5)
-        #     discriminant_cont = H_cont ** 2 - K_cont
-        #     k1_cont = H_cont + np.sqrt(discriminant_cont)
-        #     k2_cont = H_cont - np.sqrt(discriminant_cont)
-        #
-        #     temp_max_diff = abs(k1_cont - k1_orig)
-        #     temp_min_diff = abs(k2_cont - k2_orig)
-        #
-        #     if (((temp_max_diff > min_curve_diff) or (temp_min_diff > min_curve_diff)) and
-        #             ((temp_max_diff < max_curve_diff) and (temp_min_diff < max_curve_diff))):
-        #         a = info['a'] + noise_to_add[0]
-        #         b = info['b'] + noise_to_add[1]
-        #         c = info['c'] + noise_to_add[2]
-        #         d = info['d'] + noise_to_add[3]
-        #         e = info['e'] + noise_to_add[4]
-        #         break
-        #     count += 1
+        while True:
+            # noise_to_add = np.random.normal(0, 0.1, 5)
+            noise_to_add = np.random.normal(0, 0.02, 5)
+            K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
+                ((c + noise_to_add[2]) ** 2))) / (
+                             (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
+            H_cont = ((a + noise_to_add[0]) * (1 + (e + noise_to_add[4]) ** 2) - (
+                    d + noise_to_add[3]) * (e + noise_to_add[4]) * (
+                              c + noise_to_add[2]) + (b + noise_to_add[1]) * (
+                              1 + (d + noise_to_add[3]) ** 2)) / ((((d + noise_to_add[
+                3]) ** 2) + ((e + noise_to_add[4]) ** 2) + 1) ** 1.5)
+            discriminant_cont = H_cont ** 2 - K_cont
+            k1_cont = H_cont + np.sqrt(discriminant_cont)
+            k2_cont = H_cont - np.sqrt(discriminant_cont)
+
+            temp_max_diff = abs(k1_cont - old_k1)
+            temp_min_diff = abs(k2_cont - old_k2)
+
+            if (((temp_max_diff > min_curve_diff) or (temp_min_diff > min_curve_diff)) and
+                    ((temp_max_diff < max_curve_diff) and (temp_min_diff < max_curve_diff))):
+                a = info['a'] + noise_to_add[0]
+                b = info['b'] + noise_to_add[1]
+                c = info['c'] + noise_to_add[2]
+                d = info['d'] + noise_to_add[3]
+                e = info['e'] + noise_to_add[4]
+                break
+            count += 1
         bounds, contrastive_point_cloud = samplePoints(a, b, c, d, e, count=sampled_points, min_len=min_len,max_len=max_len, bounds=bounds)
-        # new_k1 = k1_cont
-        # new_k2 = k2_cont
-        # old_k1 = k1_orig
-        # old_k2 = k2_orig
+        new_k1 = k1_cont
+        new_k2 = k2_cont
     if class_label == 4:
         # contrastive_point_cloud = sampleHalfSpacePoints(contrastive_point_cloud)
         contrastive_point_cloud = find_representative_point(contrastive_point_cloud)
