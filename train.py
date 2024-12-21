@@ -73,7 +73,7 @@ def train_and_test(args):
     milestones = [args.lr_jumps * (i) for i in range(1,num_epochs//args.lr_jumps + 1)]
     scheduler = MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
 
-    tripletMarginLoss = nn.TripletMarginLoss(margin=2.0)
+    tripletMarginLoss = nn.TripletMarginLoss(margin=3.0)
     criterion = nn.CrossEntropyLoss(reduction='mean')
     mseLoss = nn.MSELoss()
     contr_loss_weight = args.contr_loss_weight
@@ -297,8 +297,18 @@ def testPretrainedModel(args, model=None):
             print(f"  - smallest abs wrong K2 pcl val: {wrong_K2_values[label][argmin_K2_index]}")
             np.save(f"{label}_min_K2_pcl_{wrong_pred_class[label][argmin_K2_index]}.npy", (wrong_pcl[label][argmin_K2_index]).cpu().numpy())
 
+import cProfile
+import pstats
 if __name__ == '__main__':
     args = configArgsPCT()
+    # cProfile.runctx('train_and_test(args)')
+    # args.epochs=1
+    # profiler = cProfile.Profile()
+    # cProfile.runctx('train_and_test(args=args)', globals(), locals(), sort='tottime')
+    # stats = pstats.Stats(profiler)
+    # stats.sort_stats(pstats.SortKey.TIME)
+    # stats.print_stats()
+    # exit(0)
     model = train_and_test(args)
     torch.save(model.state_dict(), f'{args.exp_name}.pt')
     # model = input_visualized_importance()

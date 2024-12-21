@@ -26,8 +26,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.min_curve = 3
         self.smallest_angle = 30
         self.max_angle = 120
-        self.max_curve_diff = 0.1
-        self.min_curve_diff = 0.05
+        self.max_curve_diff = 0.05
+        self.min_curve_diff = 0.02
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
     def __len__(self):
         return self.num_point_clouds
@@ -115,12 +115,11 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #         plot_point_clouds(point_cloud1 @ rot_orig,axis_range=axis_limits,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #         a =1
-        # if class_label in [4]:
-        #     if  (not (angle>0 or radius>0)) or True:
-        #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,
-        #                           np.load('one_clean.npy'),axis_range=None,
-        #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        #         a =1
+        if class_label in [0,1,2,3]:
+            if  (not (angle>0 or radius>0)) or True:
+                plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot,axis_range=None,
+                                  title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
+                a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
@@ -234,46 +233,89 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
                 (((d) ** 2) + ((e) ** 2) + 1) ** 1.5)
 
         discriminant_orig = H_orig ** 2 - K_orig
-        k1_orig = H_orig + np.sqrt(discriminant_orig)
-        k2_orig = H_orig - np.sqrt(discriminant_orig)
-        while True:
-            # noise_to_add = np.random.normal(0, 0.1, 5)
-            noise_to_add = np.random.normal(0, 0.09, 5)
-            K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
-                ((c + noise_to_add[2]) ** 2))) / (
-                             (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
-            H_cont = ((a + noise_to_add[0]) * (1 + (e + noise_to_add[4]) ** 2) - (
-                    d + noise_to_add[3]) * (e + noise_to_add[4]) * (
-                              c + noise_to_add[2]) + (b + noise_to_add[1]) * (
-                              1 + (d + noise_to_add[3]) ** 2)) / ((((d + noise_to_add[
-                3]) ** 2) + ((e + noise_to_add[4]) ** 2) + 1) ** 1.5)
-            discriminant_cont = H_cont ** 2 - K_cont
-            k1_cont = H_cont + np.sqrt(discriminant_cont)
-            k2_cont = H_cont - np.sqrt(discriminant_cont)
-
-            temp_max_diff = abs(k1_cont - k1_orig)
-            temp_min_diff = abs(k2_cont - k2_orig)
-
-            if (((temp_max_diff > min_curve_diff) or (temp_min_diff > min_curve_diff)) and
-                    ((temp_max_diff < max_curve_diff) and (temp_min_diff < max_curve_diff))):
-                a = info['a'] + noise_to_add[0]
-                b = info['b'] + noise_to_add[1]
-                c = info['c'] + noise_to_add[2]
-                d = info['d'] + noise_to_add[3]
-                e = info['e'] + noise_to_add[4]
-                break
-            count += 1
+        old_k1 = H_orig + np.sqrt(discriminant_orig)
+        old_k2 = H_orig - np.sqrt(discriminant_orig)
+        # KK, HH = compute_curvatures([a,b,c,d,e])
+        sign1, sign2= np.random.choice([-1,1],2)
+        new_k1 = old_k1 + ( sign1 * np.random.uniform(min_curve_diff, max_curve_diff) )
+        new_k2 = old_k2 + ( sign2 * np.random.uniform(min_curve_diff, max_curve_diff) )
+        a,b,c,d,e = update_coefficients(a, b, c, d, e, new_k1, new_k2)
+        # a=-2
+        # while True:
+        #     # noise_to_add = np.random.normal(0, 0.1, 5)
+        #     noise_to_add = np.random.normal(0, 0.09, 5)
+        #     K_cont = (4 * ((a + noise_to_add[0]) * (b + noise_to_add[1])) - (
+        #         ((c + noise_to_add[2]) ** 2))) / (
+        #                      (1 + (d + noise_to_add[3]) ** 2 + (e + noise_to_add[4]) ** 2) ** 2)
+        #     H_cont = ((a + noise_to_add[0]) * (1 + (e + noise_to_add[4]) ** 2) - (
+        #             d + noise_to_add[3]) * (e + noise_to_add[4]) * (
+        #                       c + noise_to_add[2]) + (b + noise_to_add[1]) * (
+        #                       1 + (d + noise_to_add[3]) ** 2)) / ((((d + noise_to_add[
+        #         3]) ** 2) + ((e + noise_to_add[4]) ** 2) + 1) ** 1.5)
+        #     discriminant_cont = H_cont ** 2 - K_cont
+        #     k1_cont = H_cont + np.sqrt(discriminant_cont)
+        #     k2_cont = H_cont - np.sqrt(discriminant_cont)
+        #
+        #     temp_max_diff = abs(k1_cont - k1_orig)
+        #     temp_min_diff = abs(k2_cont - k2_orig)
+        #
+        #     if (((temp_max_diff > min_curve_diff) or (temp_min_diff > min_curve_diff)) and
+        #             ((temp_max_diff < max_curve_diff) and (temp_min_diff < max_curve_diff))):
+        #         a = info['a'] + noise_to_add[0]
+        #         b = info['b'] + noise_to_add[1]
+        #         c = info['c'] + noise_to_add[2]
+        #         d = info['d'] + noise_to_add[3]
+        #         e = info['e'] + noise_to_add[4]
+        #         break
+        #     count += 1
         bounds, contrastive_point_cloud = samplePoints(a, b, c, d, e, count=sampled_points, min_len=min_len,max_len=max_len, bounds=bounds)
-        new_k1 = k1_cont
-        new_k2 = k2_cont
-        old_k1 = k1_orig
-        old_k2 = k2_orig
+        # new_k1 = k1_cont
+        # new_k2 = k2_cont
+        # old_k1 = k1_orig
+        # old_k2 = k2_orig
     if class_label == 4:
         # contrastive_point_cloud = sampleHalfSpacePoints(contrastive_point_cloud)
         contrastive_point_cloud = find_representative_point(contrastive_point_cloud)
     return count, old_k1, old_k2, new_k1, new_k2, bounds, contrastive_point_cloud
 
+def compute_curvatures(coeffs):
+    a, b, c, d, e = coeffs
+    denom = (1 + d**2 + e**2)
+    K = (4 * a * b - c**2) / (denom**2)
+    H = (a * (1 + e**2) - d * e * c + b * (1 + d**2)) / (denom**(3/2))
+    return K, H
 
+from scipy.optimize import minimize
+
+def update_coefficients(a_orig, b_orig, c_orig, d_orig, e_orig, k1_new, k2_new):
+    """
+    Updates the coefficients (a, b, c, d, e) to match the new principal curvatures k1_new and k2_new.
+
+    Parameters:
+        a_orig, b_orig, c_orig, d_orig, e_orig: float
+            Original coefficients of the polynomial.
+        k1_new, k2_new: float
+            Target principal curvatures.
+
+    Returns:
+        a_new, b_new, c_new, d_new, e_new: float
+            Updated coefficients.
+    """
+    # Target Gaussian and mean curvatures
+    K_new = k1_new * k2_new
+    H_new = (k1_new + k2_new) / 2
+
+    # Objective function
+    def objective(coeffs):
+        K, H = compute_curvatures(coeffs)
+        return (K - K_new)**2 + (H - H_new)**2
+
+    # Initial guess
+    initial_guess = [a_orig, b_orig, c_orig, d_orig, e_orig]
+
+    # Optimization
+    result = minimize(objective, initial_guess, method='BFGS')
+    return result.x  # Optimized coefficients (a_new, b_new, c_new, d_new, e_new)
 def rotatePCLToCanonical(point_cloud, centroid, k):
     num_points = point_cloud.shape[0]
 
