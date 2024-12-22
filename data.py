@@ -26,7 +26,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.min_curve = 3
         self.smallest_angle = 30
         self.max_angle = 120
-        self.max_curve_diff = 0.05
+        self.max_curve_diff = 0.2
         self.min_curve_diff = 0.02
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
     def __len__(self):
@@ -75,6 +75,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                                                            bounds=bounds,  min_curve=self.min_curve, max_curve=self.max_curve)
 
 
+            # print(f'{max(abs(old_k1-new_k1), abs(old_k2-new_k2))},')
             positive_point_cloud = point_cloud
             if class_label != 4:
                 bounds_pos,positive_point_cloud = samplePcl(angle=angle, radius=radius, class_label=class_label,
@@ -115,7 +116,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #         plot_point_clouds(point_cloud1 @ rot_orig,axis_range=axis_limits,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #         a =1
-        # if class_label in [0]:
+        # if class_label in [0,1,2,3]:
         #     if  ((angle>0 or radius>0)) or True:
         #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, np.load("one_clean.npy"),axis_range=None,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
@@ -210,7 +211,8 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         cur_curve = 1 / radius
         old_k1 = old_k2 = cur_curve
         rad_vals = []
-        boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
+        # boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
+        boundaries = [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff]
         for cur_val in boundaries:
             rad_vals.append(1/cur_val)
         a, b, c, d = rad_vals
@@ -255,11 +257,9 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             k1_cont = H_cont + np.sqrt(discriminant_cont)
             k2_cont = H_cont - np.sqrt(discriminant_cont)
 
-            temp_max_diff = abs(k1_cont - old_k1)
-            temp_min_diff = abs(k2_cont - old_k2)
+            temp_max_diff = max(abs(k1_cont - old_k1), abs(k2_cont - old_k2))
 
-            if (((temp_max_diff > min_curve_diff) or (temp_min_diff > min_curve_diff)) and
-                    ((temp_max_diff < max_curve_diff) and (temp_min_diff < max_curve_diff))):
+            if (((temp_max_diff > min_curve_diff)) and ((temp_max_diff < max_curve_diff))):
                 a = info['a'] + noise_to_add[0]
                 b = info['b'] + noise_to_add[1]
                 c = info['c'] + noise_to_add[2]

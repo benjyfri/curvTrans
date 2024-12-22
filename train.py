@@ -73,7 +73,7 @@ def train_and_test(args):
     milestones = [args.lr_jumps * (i) for i in range(1,num_epochs//args.lr_jumps + 1)]
     scheduler = MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
 
-    tripletMarginLoss = nn.TripletMarginLoss(margin=3.0)
+    tripletMarginLoss = nn.TripletMarginLoss(margin=20.0)
     criterion = nn.CrossEntropyLoss(reduction='mean')
     mseLoss = nn.MSELoss()
     contr_loss_weight = args.contr_loss_weight
