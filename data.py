@@ -22,12 +22,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.rotate_data = args.rotate_data
         self.contr_loss_weight = args.contr_loss_weight
         self.sampled_points = args.sampled_points
-        self.max_curve = 5
+        self.max_curve = 10
         self.min_curve = 3
         self.smallest_angle = 30
         self.max_angle = 120
-        self.max_curve_diff = 0.2
-        self.min_curve_diff = 0.02
+        self.max_curve_diff = 0.05
+        self.min_curve_diff = 0.01
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
     def __len__(self):
         return self.num_point_clouds
