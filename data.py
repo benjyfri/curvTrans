@@ -132,7 +132,6 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #                       title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #     a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
-        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
 
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
@@ -172,12 +171,10 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             cur_curve = np.clip(np.sqrt(cur_gauss_curv), min_curve, max_curve)
             old_k1 = old_k2 = cur_curve
             angle_vals = []
-            # boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
-            boundaries = [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff]
+            boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
+            # boundaries = [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff]
             for cur_val in boundaries:
                 new_angle_rad = (2 * np.pi - (cur_val**2 / int_K_const)) / 3
-                if (new_angle_rad>0)==False:
-                    pp=10
                 angle_vals.append(new_angle_rad)
 
             a, b, c, d = angle_vals
@@ -201,8 +198,8 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             old_k1 = cur_curve
             old_k2 = 0
             angle_vals = []
-            # boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
-            boundaries = [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff]
+            boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], min_curve, max_curve)
+            # boundaries = [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff]
             for cur_val in boundaries:
                 x = np.clip(cur_val / (2 * constant),-1,1)
                 new_angle_rad = 2 *  np.arccos(x)
