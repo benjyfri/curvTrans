@@ -26,8 +26,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.min_curve = 3
         self.smallest_angle = 30
         self.max_angle = 120
-        self.max_curve_diff = 1
-        self.min_curve_diff = 0.5
+        self.max_curve_diff = 0.5
+        self.min_curve_diff = 0.1
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
         self.int_K_const =( (self.max_curve + self.max_curve_diff + 10e-6)**2 / (2 * np.pi) )
     def __len__(self):
@@ -38,7 +38,6 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         # Load metadata from attributes
         info = {key: self.point_clouds_group[point_cloud_name].attrs[key] for key in
                     self.point_clouds_group[point_cloud_name].attrs}
-
         # enforce basic plane patch 5 pct of the time for planes and for edges
         class_label = info['class']
         if class_label in [0,4]:
@@ -122,7 +121,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, np.load("one_clean.npy"),axis_range=None,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #         a =1
-        # if class_label in [0,1,2,3] and (angle>0 or radius>0):
+        # if class_label in [0,1,2,3]:
         #     axis_limits = {
         #         "x": [-1, 1],
         #         "y": [-1, 1],
@@ -192,6 +191,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             r_tri, contrastive_point_cloud = sample_pyramid(n_points=sampled_points, head_angle_rad=new_angle_rad, bias=bias,min_len=min_len,max_len=max_len,bounds=bounds)
             bounds = [-r_tri, r_tri, -r_tri, r_tri]
             new_k1 = new_k2 = np.sqrt( (2 * np.pi - new_angle_rad * 3) * int_K_const)
+            # new_angle_deg = np.degrees(new_angle_rad)
 
         if cur_class_label == 2 or edge_label==2:
             angle_rad = np.radians(angle)
@@ -218,6 +218,9 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             bounds, contrastive_point_cloud = generate_surfaces_angles_and_sample(sampled_points, new_angle_deg,min_len=min_len,max_len=max_len, bounds=bounds)
             new_k1 = constant * ( 2 * np.cos(np.radians(new_angle_deg)/ 2))
             new_k2 = 0
+        # if (((old_k1 < new_k1) and (angle < new_angle_deg)) or ((old_k1 > new_k1) and (angle > new_angle_deg)) == True):
+        #     raise Exception("Something went wrong with curvature calculations and the angles given")
+
     elif radius != 0:
         cur_curve = 1 / radius
         old_k1 = old_k2 = cur_curve
@@ -255,7 +258,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         old_k2 = H_orig - np.sqrt(discriminant_orig)
         while True:
             # noise_to_add = np.random.normal(0, 0.1, 5)
-            noise_to_add = np.random.normal(0, 0.5, 5)
+            noise_to_add = np.random.normal(0, 0.2, 5)
             K_cont, H_cont = compute_curvatures([a, b, c, d, e] + noise_to_add)
             discriminant_cont = H_cont ** 2 - K_cont
             k1_cont = H_cont + np.sqrt(discriminant_cont)
@@ -640,7 +643,7 @@ def generate_surfaces_angles_and_sample(N, angle,min_len,max_len, bounds=None):
     # must fix - is wrong! first point must be centered!
     points[center_point_idx, :] = (points[0, :]).copy()
     points[0, :] = np.array([[0, 0, 0]])
-    return bounds, points
+    return [lower_bound_x,upper_bound_x,lower_bound_y, upper_bound_y], points
 def plotFunc(a, b, c, d, e,sampled_points):
     # Create a grid of points for the surface
     x = np.linspace(-3, 3, 100)
@@ -713,13 +716,13 @@ def sample_cylinder_point_cloud(radius, min_len,max_len, num_of_points,top_half=
     # points = points - points[center_point_idx, :]
     # points[center_point_idx, :] = (points[0, :]).copy()
     # points[0, :] = np.array([[0, 0, 0]])
-    return bounds, points
+    return [lower_bound_x,upper_bound_x,lower_bound_y, upper_bound_y], points
 
 
 def sample_sphere_point_cloud(radius, num_of_points, top_half=True, bounds=None):
-    if bounds is not None:
-        if radius > abs(bounds[0]):
-            radius = abs(bounds[0])
+    # if bounds is not None:
+    #     if radius > abs(bounds[0]):
+    #         radius = abs(bounds[0])
     theta = np.random.uniform(0, 2 * np.pi, num_of_points)
 
     if top_half:
