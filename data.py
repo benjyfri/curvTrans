@@ -121,7 +121,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, np.load("one_clean.npy"),axis_range=None,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #         a =1
-        # if class_label in [0,1,2,3] and edge_label not in [1,2]:
+        # if class_label in [0,1,2,3] and not (angle>0 or radius>0):
         #     axis_limits = {
         #         "x": [-1, 1],
         #         "y": [-1, 1],
@@ -225,6 +225,9 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         # Maximum values for spheres etc. is defined such that they wont be too different from rest of data; 1.5<curve<3
         cur_curve = 1 / radius
         old_k1 = old_k2 = cur_curve
+        #radius should be
+        max_curve_diff = min(max_curve_diff, 1)
+        min_curve_diff = min(min_curve_diff, 0.5)
         rad_vals = []
         boundaries = np.clip( [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff], 1.5, 3)
         # boundaries = [cur_curve + max_curve_diff, cur_curve + min_curve_diff, cur_curve - max_curve_diff,cur_curve - min_curve_diff]
