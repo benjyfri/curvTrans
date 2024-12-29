@@ -22,12 +22,12 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.rotate_data = args.rotate_data
         self.contr_loss_weight = args.contr_loss_weight
         self.sampled_points = args.sampled_points
-        self.max_curve = 10
+        self.max_curve = 8.5
         self.min_curve = 3
         self.smallest_angle = 30
         self.max_angle = 120
-        self.max_curve_diff = 2
-        self.min_curve_diff = 1
+        self.max_curve_diff = 1.5
+        self.min_curve_diff = 0.5
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
         self.int_K_const =( (self.max_curve + self.max_curve_diff + 10e-6)**2 / (2 * np.pi) )
     def __len__(self):
@@ -121,7 +121,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, np.load("one_clean.npy"),axis_range=None,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #         a =1
-        # if class_label in [0,1,2,3] and not (angle>0 or radius>0):
+        # if class_label in [0,1,2,3] and (angle>0 or radius>0):
         #     axis_limits = {
         #         "x": [-1, 1],
         #         "y": [-1, 1],
@@ -262,7 +262,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         old_k2 = H_orig - np.sqrt(discriminant_orig)
         while True:
             # noise_to_add = np.random.normal(0, 0.1, 5)
-            noise_to_add = np.random.normal(0, 0.9, 5)
+            noise_to_add = np.random.normal(0, 0.5, 5)
             K_cont, H_cont = compute_curvatures([a, b, c, d, e] + noise_to_add)
             discriminant_cont = H_cont ** 2 - K_cont
             k1_cont = H_cont + np.sqrt(discriminant_cont)
