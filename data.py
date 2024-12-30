@@ -26,7 +26,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.min_curve = 3
         self.smallest_angle = 30
         self.max_angle = 120
-        self.max_curve_diff = 1.5
+        self.max_curve_diff = 1
         self.min_curve_diff = 0.5
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
         self.int_K_const =( (self.max_curve + self.max_curve_diff + 10e-6)**2 / (2 * np.pi) )
@@ -41,7 +41,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         # enforce basic plane patch 5 pct of the time for planes and for edges
         class_label = info['class']
         if class_label in [0,4]:
-            if np.random.rand() < 0.1:
+            if np.random.rand() < 0.2:
                 info = {k: 0 for k, v in info.items()}
         info['idx']= self.indices[idx]
         angle = info['angle']
@@ -116,20 +116,6 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #         plot_point_clouds(point_cloud1 @ rot_orig,axis_range=axis_limits,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #         a =1
-        # if class_label in [0,1,2,3]:
-        #     if  angle>0:
-        #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, np.load("one_clean.npy"),axis_range=None,
-        #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        #         a =1
-        # if class_label in [0,1,2,3] and (angle>0 or radius>0):
-        #     axis_limits = {
-        #         "x": [-1, 1],
-        #         "y": [-1, 1],
-        #         "z": [-1, 1]
-        #     }
-        #     plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, np.load("one_clean.npy"), axis_range=None,
-        #                       title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        #     a =1
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
         # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
 
@@ -276,7 +262,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
                 c = info['c'] + noise_to_add[2]
                 d = info['d'] + noise_to_add[3]
                 e = info['e'] + noise_to_add[4]
-                # print(f"{temp_max_diff}, ")
+                print(f"{temp_max_diff}, ")
                 break
             count += 1
         bounds, contrastive_point_cloud = samplePoints(a, b, c, d, e, count=sampled_points, min_len=min_len,max_len=max_len, bounds=bounds)
