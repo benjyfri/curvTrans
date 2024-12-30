@@ -262,7 +262,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
                 c = info['c'] + noise_to_add[2]
                 d = info['d'] + noise_to_add[3]
                 e = info['e'] + noise_to_add[4]
-                print(f"{temp_max_diff}, ")
+                # print(f"{temp_max_diff}, ")
                 break
             count += 1
         bounds, contrastive_point_cloud = samplePoints(a, b, c, d, e, count=sampled_points, min_len=min_len,max_len=max_len, bounds=bounds)
