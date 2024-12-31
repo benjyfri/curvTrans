@@ -22,9 +22,9 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.rotate_data = args.rotate_data
         self.contr_loss_weight = args.contr_loss_weight
         self.sampled_points = args.sampled_points
-        self.max_curve = 8.5
-        self.min_curve = 3
-        self.smallest_angle = 30
+        self.max_curve = 6
+        self.min_curve = 2
+        self.smallest_angle = 60
         self.max_angle = 120
         self.max_curve_diff = 1
         self.min_curve_diff = 0.5
@@ -105,17 +105,13 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         else:
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
-
-        # if class_label in [4]:
-        #     if  (not (angle>0 or radius>0)) or True:
-        #         axis_limits = {
-        #             "x": [-0.75, 0.75],
-        #             "y": [-0.75, 0.75],
-        #             "z": [-0.75, 0.75]
-        #         }
-        #         plot_point_clouds(point_cloud1 @ rot_orig,axis_range=axis_limits,
+        # if class_label in [1,2]:
+        # if class_label in [1]:
+        #     if  angle>0 and old_k1>5:
+        #         plot_point_clouds(point_cloud, np.load("one_clean.npy"), axis_range=None,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
-        #         a =1
+        #         a = 1
+
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
         # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
 

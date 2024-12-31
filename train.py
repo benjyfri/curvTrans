@@ -95,6 +95,7 @@ def train_and_test(args):
                     pcl /= torch.max(torch.abs(pcl))
                 label = info['class'].to(device).long()
                 output = (model((pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
+
                 orig_classification = output[:, :5]
                 orig_emb = output
                 classification_loss = torch.tensor((0))
@@ -202,7 +203,7 @@ def configArgsPCT():
                         help='Normalize data into 1 cube')
     parser.add_argument('--num_neurons_per_layer', type=int, default=64, metavar='N',
                         help='how many neurons per layer to use')
-    parser.add_argument('--num_mlp_layers', type=int, default=3, metavar='N',
+    parser.add_argument('--num_mlp_layers', type=int, default=5, metavar='N',
                         help='how many mlp layers to use')
     parser.add_argument('--output_dim', type=int, default=5, metavar='N',
                         help='how many labels are used')
