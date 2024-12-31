@@ -18,8 +18,8 @@ def test(model, dataloader, loss_function, device, args):
     total_loss = 0.0
     total_acc_loss = 0.0
     count = 0
-    label_correct = {label: 0 for label in range(5)}
-    label_total = {label: 0 for label in range(5)}
+    label_correct = {label: 0 for label in range(args.output_dim)}
+    label_total = {label: 0 for label in range(args.output_dim)}
 
     with torch.no_grad():
         for batch in dataloader:
@@ -28,12 +28,12 @@ def test(model, dataloader, loss_function, device, args):
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
             output = output.squeeze()
             loss = loss_function(output, label)
-            output = output[:,:5]
+            output = output[:,:args.output_dim]
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
             total_loss += loss.item()
             count += 1
-            for label_name in range(5):
+            for label_name in range(args.output_dim):
                 correct_mask = (preds == label_name) & (label == label_name)
                 label_correct[label_name] += correct_mask.sum().item()
                 label_total[label_name] += (label == label_name).sum().item()
@@ -41,7 +41,7 @@ def test(model, dataloader, loss_function, device, args):
     # Overall accuracy
     test_acc = (total_acc_loss / (count))
     label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
-                        for label in range(5)}
+                        for label in range(args.output_dim)}
     average_loss = total_loss / (count)
 
     return average_loss, test_acc, label_accuracies
@@ -99,7 +99,7 @@ def train_and_test(args):
                 label = info['class'].to(device).long()
                 output = (model((pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
 
-                orig_classification = output[:, :5]
+                orig_classification = output[:, :args.output_dim]
                 orig_emb = output
                 classification_loss = torch.tensor((0))
                 if args.classification == 1:
@@ -227,21 +227,21 @@ def testPretrainedModel(args, model=None):
     model.eval()
     count =0
     total_acc_loss = 0.0
-    label_correct = {label: 0 for label in range(5)}
-    label_total = {label: 0 for label in range(5)}
-    wrong_preds = {label: [] for label in range(5)}
-    wrong_idx = {label: [] for label in range(5)}
-    wrong_pcl = {label: [] for label in range(5)}
-    wrong_pred_class = {label: [] for label in range(5)}
-    wrong_K1_values = {label: [] for label in range(5)}
-    wrong_K2_values = {label: [] for label in range(5)}
+    label_correct = {label: 0 for label in range(args.output_dim)}
+    label_total = {label: 0 for label in range(args.output_dim)}
+    wrong_preds = {label: [] for label in range(args.output_dim)}
+    wrong_idx = {label: [] for label in range(args.output_dim)}
+    wrong_pcl = {label: [] for label in range(args.output_dim)}
+    wrong_pred_class = {label: [] for label in range(args.output_dim)}
+    wrong_K1_values = {label: [] for label in range(args.output_dim)}
+    wrong_K2_values = {label: [] for label in range(args.output_dim)}
 
     with torch.no_grad():
         for batch in test_dataloader:
             pcl, info = batch['point_cloud'].to(device), batch['info']
             label = info['class'].to(device).long()
             output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-            output = (output[:,:5]).squeeze()
+            output = (output[:,:args.output_dim]).squeeze()
             preds = output.max(dim=1)[1]
             total_acc_loss += torch.mean((preds == label).float()).item()
 
@@ -258,21 +258,21 @@ def testPretrainedModel(args, model=None):
             count += 1
 
             # Update per-label statistics
-            for label_name in range(5):
+            for label_name in range(args.output_dim):
                 correct_mask = (preds == label_name) & (label == label_name)
                 label_correct[label_name] += correct_mask.sum().item()
                 label_total[label_name] += (label == label_name).sum().item()
 
     label_accuracies = {
         label: label_correct[label] / label_total[label]
-        for label in range(5)
+        for label in range(args.output_dim)
         if label_total[label] != 0
     }
     for label, accuracy in label_accuracies.items():
         print(f"Accuracy for label {label}: {accuracy:.4f}")
 
     # for label in range(4):
-    for label in range(5):
+    for label in range(args.output_dim):
         if len(wrong_preds[label]) > 0:
             print(f"Label {label}:")
             print(f"  - Most frequent wrong prediction: {max(wrong_preds[label], key=wrong_preds[label].count)}")
