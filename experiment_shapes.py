@@ -1093,10 +1093,10 @@ def test_multi_scale_classification(cls_args=None,num_worst_losses = 3, scaling_
         fps_indices_1 = farthest_point_sampling(noisy_pointcloud_1, k=50)
         fps_indices_2 = farthest_point_sampling(noisy_pointcloud_2, k=50)
 
-        global_emb_1 = classifyPoints(model_name=cls_args.exp,
+        global_emb_1 , scaling_fac = classifyPoints(model_name=cls_args.exp,
                                     pcl_src=noisy_pointcloud_1[fps_indices_1,:], pcl_interest=centered_points_1, args_shape=cls_args, scaling_factor=scaling_factor)
 
-        global_emb_2 = classifyPoints(model_name=cls_args.exp,
+        global_emb_2 , scaling_fac = classifyPoints(model_name=cls_args.exp,
                                             pcl_src=noisy_pointcloud_2[fps_indices_2,:], pcl_interest=centered_points_2, args_shape=cls_args, scaling_factor=scaling_factor)
 
 
@@ -1185,9 +1185,9 @@ def view_stabiity(model_name=None, args_shape=None, scaling_factor=None):
         noisy_pointcloud_2 = rotated_pcl + np.random.normal(0, 0.01, rotated_pcl.shape)
         noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
-        emb_1 = classifyPoints(model_name=model_name, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1,
+        emb_1 , scaling_fac = classifyPoints(model_name=model_name, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1,
                        args_shape=args_shape, scaling_factor=scaling_factor)
-        emb_2 = classifyPoints(model_name=model_name, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2,
+        emb_2 , scaling_fac = classifyPoints(model_name=model_name, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2,
                        args_shape=args_shape, scaling_factor=scaling_factor)
         emb_1 = emb_1.detach().cpu().numpy()
         emb_2 = emb_2.detach().cpu().numpy()

@@ -401,34 +401,71 @@ def save_point_clouds(point_cloud1, point_cloud2, title="", filename="plot.html"
     # Save the figure as a png image
     fig.write_html(filename)
 
-def plot_point_clouds(point_cloud1, point_cloud2, title=""):
-    if isinstance(point_cloud1, torch.Tensor):
-        point_cloud1 = point_cloud1.cpu().detach().numpy()
-    if isinstance(point_cloud2, torch.Tensor):
-        point_cloud2 = point_cloud2.cpu().detach().numpy()
+def plot_point_clouds(*point_clouds, title="", axis_range=None):
+    """
+    Plots multiple point clouds in 3D space, each with a different color.
+
+    Parameters:
+        *point_clouds: Variable number of point cloud arrays. Each array should be of shape (N, 3).
+        title (str): Title of the plot.
+        axis_range (dict): Dictionary specifying exact axis ranges as:
+                           {"x": [xmin, xmax], "y": [ymin, ymax], "z": [zmin, zmax]}.
+                           Axes will be set to these values no matter the data.
+    """
+    # List of colors for the point clouds
+    colors = [
+        'gray', 'green', 'red', 'purple', 'orange', 'yellow', 'cyan', 'magenta'
+    ]
+
+    # Extend colors if there are more point clouds than predefined colors
+    if len(point_clouds) > len(colors):
+        colors += [
+            f'rgba({np.random.randint(0, 256)}, {np.random.randint(0, 256)}, {np.random.randint(0, 256)}, 1)'
+            for _ in range(len(point_clouds) - len(colors))
+        ]
+
     fig = go.Figure()
 
+    for i, point_cloud in enumerate(point_clouds):
+        # Convert to numpy if it's a PyTorch tensor
+        if isinstance(point_cloud, torch.Tensor):
+            point_cloud = point_cloud.cpu().detach().numpy()
+
+        # Add trace for the current point cloud
+        fig.add_trace(go.Scatter3d(
+            x=point_cloud[:, 0],
+            y=point_cloud[:, 1],
+            z=point_cloud[:, 2],
+            mode='markers',
+            marker=dict(size=5, color=colors[i % len(colors)]),
+            name=f'PCL_{i + 1}: {len(point_cloud)} points'
+        ))
+
+    # Optionally add the origin as a center marker
     fig.add_trace(go.Scatter3d(
-        x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
-        mode='markers', marker=dict(size=2,color='red'), name='Point Cloud 1'
+        x=[0],
+        y=[0],
+        z=[0],
+        mode='markers',
+        marker=dict(size=5, color='pink'),
+        name='CENTER'
     ))
 
-    fig.add_trace(go.Scatter3d(
-        x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
-        mode='markers', marker=dict(size=2,color='blue'), name='Point Cloud 2'
-    ))
+    # Set the scene configuration
+    scene_config = dict(
+        xaxis=dict(title='X', range=axis_range["x"] if axis_range and "x" in axis_range else None),
+        yaxis=dict(title='Y', range=axis_range["y"] if axis_range and "y" in axis_range else None),
+        zaxis=dict(title='Z', range=axis_range["z"] if axis_range and "z" in axis_range else None),
+    )
 
     fig.update_layout(
-        scene=dict(
-            xaxis=dict(title='X'),
-            yaxis=dict(title='Y'),
-            zaxis=dict(title='Z'),
-        ),
+        scene=scene_config,
         margin=dict(r=20, l=10, b=10, t=50),
         title=title
     )
-    fig.show()
 
+    # Display the plot
+    fig.show()
 
 def plotWorst(worst_losses, model_name="", dir=r"./"):
     count = 0

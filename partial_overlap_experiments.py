@@ -19,64 +19,8 @@ from scipy.spatial import KDTree
 from data import samplePcl
 
 
-def samplePoints(a, b, c, d, e, count, center_point=np.array([0,0,0]), label=None):
-    def surface_function(x, y):
-        return a * x**2 + b * y**2 + c * x * y + d * x + e * y
-
-    if label == 4:
-        return sampleHalfSpacePoints(a, b, c, d, e, count)
-    bias = np.random.uniform(-0.5, 0.5)
-    x_size = 2 + bias
-    y_size = 2 - bias
-
-    # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-x_size, x_size, count) + center_point[0]
-    y_samples = np.random.uniform(-y_size, y_size, count) + center_point[1]
-
-    # Evaluate the surface function at the random points
-    z_samples = surface_function(x_samples, y_samples)
-
-    # Create an array with the sampled points
-    sampled_points = np.column_stack((x_samples, y_samples, z_samples))
-
-    # Concatenate the centroid [0, 0, 0] to the beginning of the array
-    centroid = np.expand_dims(center_point, axis=0)
-    sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
-
-    return sampled_points_with_centroid
-def sampleHalfSpacePoints(a, b, c, d, e, count):
-    def surface_function(x, y):
-        return a * x**2 + b * y**2 + c * x * y + d * x + e * y
-
-    bias = np.random.uniform(-0.5, 0.5)
-    x_size = 2 + bias
-    y_size = 2 - bias
-
-    # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-x_size, x_size, count)
-    y_samples = np.random.uniform(-y_size, y_size, count)
-
-    # Evaluate the surface function at the random points
-    z_samples = surface_function(x_samples, y_samples)
-
-    # Create an array with the sampled points
-    sampled_points = np.column_stack((x_samples, y_samples, z_samples))
-
-    # Concatenate the centroid [0, 0, 0] to the beginning of the array
-    centroid = np.array([[0, 0, 0]])
-    sampled_points_with_centroid = np.concatenate((centroid, sampled_points), axis=0)
-    center_point_idx = np.argsort(np.linalg.norm(sampled_points_with_centroid, axis=1))[np.random.choice(np.arange(-10,0))]
-    # center_point_idx = np.argsort(np.linalg.norm(sampled_points, axis=1))[-1]
-    sampled_points_with_centroid = sampled_points_with_centroid - sampled_points_with_centroid[center_point_idx, :]
-    sampled_points_with_centroid[center_point_idx, :] = (sampled_points_with_centroid[0, :]).copy()
-    sampled_points_with_centroid[0, :] = np.array([[0, 0, 0]])
-
-    return sampled_points_with_centroid
-
-
 def checkSizeSynthetic():
-    hdf5_file = h5py.File("train_surfaces_with_corners_very_mild_curve.h5" , 'r')
-    hdf5_file = h5py.File("train_surfaces_1X1.h5" , 'r')
+    hdf5_file = h5py.File("train_surfaces_05X05.h5" , 'r')
     point_clouds_group = hdf5_file['point_clouds']
     num_point_clouds = len(point_clouds_group)
     indices = list(range(num_point_clouds))
@@ -86,6 +30,10 @@ def checkSizeSynthetic():
     total_max_dist_from_center = 0
     yay_max = 0
     counter_list = [0,0,0,0,0]
+    yay = []
+    angles_ang =[]
+    angles_pyr =[]
+    angles_cur =[]
     for idx in range(num_point_clouds):
         if idx%10000 ==0:
             print(f'------------{idx}------------')
@@ -93,31 +41,44 @@ def checkSizeSynthetic():
 
         info = {key: point_clouds_group[point_cloud_name].attrs[key] for key in
                 point_clouds_group[point_cloud_name].attrs}
+        # if (info['angle']>0):
+        #     ang = info['angle']
+        #     angles_cur.append(max(abs(info['k1']),abs(info['k2'])))
+        #     if info['edge']==1:
+        #         angles_pyr.append(ang)
+        #     if info['edge']==2:
+        #         angles_ang.append(ang)
+        #
+        # yay.append(max(abs(info['k1']),abs(info['k2'])))
+        # # print(f"{max(abs(info['k1']),abs(info['k2']))},")
+        # continue
         class_label = info['class']
         counter_list[class_label] = counter_list[class_label] + 1
-        # angle = info['angle']
-        # radius = info['radius']
-        # edge_label = info['edge']
-        # bias = 0.25
-        # length = 1
-        # point_cloud = samplePcl(angle, radius, class_label, 20, length, bias, info,
-        #                         edge_label=edge_label)
-        # distances = cdist(point_cloud, point_cloud)
-        #
-        # max_ax = np.max(np.abs(point_cloud))
-        # if yay_max < max_ax:
-        #     yay_max = max_ax
-        # # Replace the diagonal with infinity to ignore self-distances
-        # np.fill_diagonal(distances, np.inf)
-        #
-        # # Find the minimum distance to the closest point for each point
-        # closest_distances = np.min(distances, axis=1)
-        # median_closest_distance = np.median(closest_distances)
-        # mean_closest_distance = np.mean(closest_distances)
-        # total_sum_median += np.mean(median_closest_distance)
-        # total_sum_mean += np.mean(mean_closest_distance)
-        # total_diam_med += np.median(np.max(np.abs(point_cloud),axis=0))
-        # total_max_dist_from_center += np.max(np.linalg.norm(point_cloud,axis=1))
+        class_label = info['class']
+        angle = info['angle']
+        radius = info['radius']
+        [min_len, max_len] = [0.45, 0.55]
+        bias = 0.25
+        edge_label = info['edge']
+        bounds, point_cloud = samplePcl(angle=angle, radius=radius, class_label=class_label, sampled_points=20, min_len=min_len,
+                                max_len=max_len, bias=bias, info=info, edge_label=edge_label)
+
+        distances = cdist(point_cloud, point_cloud)
+
+        max_ax = np.max(np.abs(point_cloud))
+        if yay_max < max_ax:
+            yay_max = max_ax
+        # Replace the diagonal with infinity to ignore self-distances
+        np.fill_diagonal(distances, np.inf)
+
+        # Find the minimum distance to the closest point for each point
+        closest_distances = np.min(distances, axis=1)
+        median_closest_distance = np.median(closest_distances)
+        mean_closest_distance = np.mean(closest_distances)
+        total_sum_median += np.mean(median_closest_distance)
+        total_sum_mean += np.mean(mean_closest_distance)
+        total_diam_med += np.median(np.max(np.abs(point_cloud),axis=0))
+        total_max_dist_from_center += np.max(np.linalg.norm(point_cloud,axis=1))
     print(f'++++++++++++++++++++++++++++++++++')
     print(f'SYNTHETIC')
     print(f'++++++++++++++++++++++++++++++++++')
@@ -130,20 +91,30 @@ def checkSizeSynthetic():
     print(f'total_max_dist_from_center: {total_max_dist_from_center}, num_point_clouds: {num_point_clouds}')
     print(f'MEAN max distance from center: {total_max_dist_from_center / num_point_clouds}')
 def checkDiameterPCLSynthetic():
-    hdf5_file = h5py.File("train_surfaces_with_corners_very_mild_curve.h5" , 'r')
+    hdf5_file = h5py.File("train_surfaces_05X05.h5" , 'r')
     point_clouds_group = hdf5_file['point_clouds']
     num_point_clouds = len(point_clouds_group)
     for label in [0,1,2,3,4]:
         all_diameter_vals = []
+        all_k1_vals = []
+        all_k2_vals = []
         for idx in range(num_point_clouds // 5):
             # if idx%10000 ==0:
             #     print(f'------------{idx}------------')
-            point_cloud_name = f"point_cloud_{idx + (label * (num_point_clouds // 5))}"
+            full_idx = idx + (label * (num_point_clouds // 5))
+            point_cloud_name = f"point_cloud_{full_idx}"
 
             info = {key: point_clouds_group[point_cloud_name].attrs[key] for key in
                     point_clouds_group[point_cloud_name].attrs}
             class_label = info['class']
-            point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'], count=20, label=class_label)
+            angle = info['angle']
+            radius = info['radius']
+            all_k1_vals.append(info['k1'])
+            all_k2_vals.append(info['k2'])
+            [min_len, max_len] = [0.45, 0.55]
+            bias = 0.25
+            edge_label = info['edge']
+            bounds, point_cloud = samplePcl(angle=angle, radius=radius,class_label=class_label,sampled_points=20,min_len=min_len,max_len=max_len, bias=bias, info=info, edge_label=edge_label)
             cur_diameter = (np.max(np.linalg.norm(point_cloud,axis=1)))
             all_diameter_vals.append(cur_diameter)
         all_diameter_vals = np.array(all_diameter_vals)
@@ -154,6 +125,10 @@ def checkDiameterPCLSynthetic():
         print(f'Median: {np.median(all_diameter_vals)}')
         print(f'Max: {np.max(all_diameter_vals)}')
         print(f'Min: {np.min(all_diameter_vals)}')
+        print(f'Min K1: {np.min(np.abs(all_k1_vals))}')
+        print(f'max K1: {np.max(np.abs(all_k1_vals))}')
+        print(f'Min K2: {np.min(np.abs(all_k2_vals))}')
+        print(f'max K2: {np.max(np.abs(all_k2_vals))}')
 
 def checkSizeModelnet():
     test_dataset = test_predator_data()
@@ -171,6 +146,7 @@ def checkSizeModelnet():
             print(f'------------{i}------------')
         data = test_dataset.__getitem__(i)
         src_pcd, tgt_pcd, GT_rot, GT_trans, sample = data['src_pcd'], data['tgt_pcd'], data['rot'], data['trans'], data['sample']
+
         pcl = (((get_k_nearest_neighbors_diff_pcls(src_pcd, src_pcd, k=21)).squeeze()).T)
 
         num_of_points = pcl.shape[1]
@@ -263,8 +239,8 @@ def load_data(partition='test', divide_data=1):
 def create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36'):
     cls_args_shape = configArgsPCT()
     cls_args_shape.batch_size = 1024
-    cls_args_shape.num_mlp_layers = 3
-    cls_args_shape.num_neurons_per_layer = 32
+    cls_args_shape.num_mlp_layers = 5
+    cls_args_shape.num_neurons_per_layer = 64
     cls_args_shape.sampled_points = 20
     cls_args_shape.use_second_deg = 1
     cls_args_shape.lpe_normalize = 0
@@ -338,70 +314,75 @@ def check_pairings_3dmatch():
                         dir=run_name)
             plotWorst(worst_losses=worst_losses, dir=run_name)
 def check_registration_modelnet(model_name):
-    scaling_factors = ["axis", "min"]
+    remove_planes = [False, True]
+    remove_dups = [False, True]
     subsamples = [700,350]
-    # receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
-    # receptive_fields_list = [[1, 3], [1, 3, 5],[1, 5, 9]]
     receptive_fields_list = [[1, 3], [1, 3, 5], [1, 3, 5, 7], [1, 7], [1, 5, 7], [1, 5, 9]]
-    # scales_list = [2,3,3]
     scales_list = [2,3,4,2,3,3]
-    nn_modes = [4]
-    pcts = [0.5]
-    # runsac_iterations = [5000]
+    pcts = [1]
     runsac_iterations = [1000]
-    tri=True
-    models_names =["3MLP32_eig15_cntr02_std01_rand", "3MLP32_eig15_cntr03_std01_rand", "3MLP32_eig15_cntr015_std01_rand","3MLP32_eig15_cntr005_std01_rand"]
-    models_names =["b_cntr03_std01_rand"]
-    for scales, receptive_field in zip(scales_list, receptive_fields_list):
-        for amount_of_interest_points in subsamples:
-            for scaling_factor in scaling_factors:
-                for pct_of_points_2_take in pcts:
-                    for model_name in models_names:
-                        for num_of_ransac_iter in runsac_iterations:
-                            rfield = "_".join(map(str, receptive_field))
-                            run_name = f'rfield_{rfield}_keypoints_{amount_of_interest_points}_pct_{pct_of_points_2_take}_rsac_iter_{num_of_ransac_iter}_{scaling_factor}_{model_name}'
-                            print(run_name)
+    use_triangles=[False,True]
+    models_names = ['a_cntr01_std007','a_cntr03_std007', 'a_cntr05_std007']
+    nn_modes = [2,4]
+    for nn_mode in nn_modes:
+        for scales, receptive_field in zip(scales_list, receptive_fields_list):
+            for amount_of_interest_points in subsamples:
+                for avoid_planes in remove_planes:
+                    for avoid_diff_classification in remove_dups:
+                        for tri in use_triangles:
+                            for model_name in models_names:
+                                for num_of_ransac_iter in runsac_iterations:
+                                    rfield = "_".join(map(str, receptive_field))
+                                    run_name = f'rfield_{rfield}_keypoints_{amount_of_interest_points}_tri_{tri}_nn_mode_{nn_mode}_{avoid_planes}_{avoid_diff_classification}_{model_name}'
+                                    print(run_name)
 
-                            # cProfile.runctx('test_multi_scale_using_embedding_predator_modelnet(cls_args=cls_args, num_worst_losses=3, scaling_factor=scaling_factor, amount_of_interest_points=amount_of_interest_points, num_of_ransac_iter=num_of_ransac_iter, pct_of_points_2_take=pct_of_points_2_take, max_non_unique_correspondences=max_non_unique_correspondences, scales=scales, receptive_field=receptive_field,  amount_of_samples=20, batch_size=16 )', globals(), locals())
+                                    # cProfile.runctx('test_multi_scale_using_embedding_predator_modelnet(cls_args=cls_args, num_worst_losses=3, scaling_factor=scaling_factor, amount_of_interest_points=amount_of_interest_points, num_of_ransac_iter=num_of_ransac_iter, pct_of_points_2_take=pct_of_points_2_take, max_non_unique_correspondences=max_non_unique_correspondences, scales=scales, receptive_field=receptive_field,  amount_of_samples=20, batch_size=16 )', globals(), locals())
 
-                            # profiler = cProfile.Profile()
-                            # profiler.runctx('test_multi_scale_using_embedding_predator_modelnet(cls_args=cls_args, num_worst_losses=3, scaling_factor=scaling_factor, amount_of_interest_points=amount_of_interest_points,num_of_ransac_iter=num_of_ransac_iter, pct_of_points_2_take=pct_of_points_2_take, max_non_unique_correspondences=max_non_unique_correspondences,scales=scales, receptive_field=receptive_field,  amount_of_samples=10)', globals(), locals())
-                            # stats = pstats.Stats(profiler)
-                            # stats.sort_stats(pstats.SortKey.TIME)
-                            # stats.print_stats()
-                            cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
-                            worst_losses, losses_rot, losses_trans, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict = (
-                                test_multi_scale_using_embedding_predator_modelnet(cls_args=cls_args,
-                                                                                   tri=tri,
-                                                                                   num_worst_losses=3,
-                                                                                   scaling_factor=scaling_factor,
-                                                                                   amount_of_interest_points=amount_of_interest_points,
-                                                                                   num_of_ransac_iter=num_of_ransac_iter,
-                                                                                   pct_of_points_2_take=pct_of_points_2_take,
-                                                                                   max_non_unique_correspondences=1,
-                                                                                   nn_mode=4, scales=scales,
-                                                                                   receptive_field=receptive_field,
-                                                                                   amount_of_samples=50))
-                            os.makedirs(run_name, exist_ok=True)
-                            file_path = os.path.join(run_name, 'combined_dict.pkl')
-                            with open(file_path, 'wb') as pickle_file:
-                                pickle.dump(combined_dict, pickle_file)
-                            npy_file_path = os.path.join(run_name, 'losses_rot.npy')
-                            np.save(npy_file_path, losses_rot)
-                            plot_metrics(combined_dict, dir=run_name)
-                            plot_losses(losses=losses_rot, inliers=final_inliers_list,
-                                        filename=f'rot_loss_scales_emb.png', dir=run_name)
-                            plotWorst(worst_losses=worst_losses, dir=run_name)
+                                    # profiler = cProfile.Profile()
+                                    # profiler.runctx('test_multi_scale_using_embedding_predator_modelnet(cls_args=cls_args, num_worst_losses=3, scaling_factor=scaling_factor, amount_of_interest_points=amount_of_interest_points,num_of_ransac_iter=num_of_ransac_iter, pct_of_points_2_take=pct_of_points_2_take, max_non_unique_correspondences=max_non_unique_correspondences,scales=scales, receptive_field=receptive_field,  amount_of_samples=10)', globals(), locals())
+                                    # stats = pstats.Stats(profiler)
+                                    # stats.sort_stats(pstats.SortKey.TIME)
+                                    # stats.print_stats()
+                                    cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
+                                    cls_args.num_neurons_per_layer = 64
+                                    cls_args.num_mlp_layers = 5
+                                    worst_losses, losses_rot, losses_trans, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict = (
+                                        test_multi_scale_using_embedding_predator_modelnet_geo(cls_args=cls_args,
+                                                                                           tri=tri,
+                                                                                           num_worst_losses=3,
+                                                                                           scaling_factor="1",
+                                                                                           amount_of_interest_points=amount_of_interest_points,
+                                                                                           num_of_ransac_iter=num_of_ransac_iter,
+                                                                                           pct_of_points_2_take=1,
+                                                                                           max_non_unique_correspondences=3,
+                                                                                           nn_mode=nn_mode, scales=scales,
+                                                                                           receptive_field=receptive_field,
+                                                                                           amount_of_samples=50,
+                                                                                           avoid_planes=avoid_planes, avoid_diff_classification=avoid_diff_classification))
+                                    dir_path = os.path.join("0101run", run_name)
+                                    os.makedirs(dir_path, exist_ok=True)
+                                    file_path = os.path.join(dir_path, 'combined_dict.pkl')
+                                    with open(file_path, 'wb') as pickle_file:
+                                        pickle.dump(combined_dict, pickle_file)
+                                    # npy_file_path = os.path.join(dir_path, 'losses_rot.npy')
+                                    # np.save(npy_file_path, losses_rot)
+                                    plot_metrics(combined_dict, dir=dir_path)
+                                    mean = np.mean(losses_rot)
+                                    median = np.median(losses_rot)
+                                    file_name = f"rot_loss_mean_{mean:.2f}_median_{median:.2f}.npy"
+
+                                    np.save(os.path.join(dir_path, file_name), losses_rot)
+                                    plot_losses(losses=losses_rot, inliers=final_inliers_list,
+                                                filename=f'rot_loss_scales_emb.png', dir=dir_path)
+                                    plotWorst(worst_losses=worst_losses, dir=dir_path)
 
 def check_registration_3dmatch(model_name):
     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
     cls_args.output_dim = 5
-    cls_args.num_neurons_per_layer = 32
-    cls_args.sampled_points = 20
-    cls_args.lap_eigenvalues_dim = 15
+    cls_args.num_neurons_per_layer = 64
 
     # scaling_factors = ["min", "mean"]
-    scaling_factors = ["axis"]
+    scaling_factors = [1]
     # subsamples = [500, 1000, 1500, 2000, 3000, 5000]
     subsamples = [1000, 3000]
 
@@ -416,8 +397,9 @@ def check_registration_3dmatch(model_name):
     # scales_list = [2,3,4,2,3,3]
     # nn_modes = [2,3,4]
     nn_modes = [4]
-    pcts = [1]
-    thresh_multi_options = [1,3,5]
+    pcts = [0.5]
+    thresh_multi_options = [1,3,5,10]
+    thresh_multi_options = [5]
     # tri_type =[True, False]
     tri_type =[True]
     # ransac_type =[True, False]
@@ -447,10 +429,10 @@ def check_registration_3dmatch(model_name):
                                                                                            num_worst_losses=3,
                                                                                            scaling_factor=scaling_factor,
                                                                                            amount_of_interest_points=amount_of_interest_points,
-                                                                                           num_of_ransac_iter=1000,
+                                                                                           num_of_ransac_iter=10000,
                                                                                            use_o3d_ransac=use_o3d_ransac,
                                                                                            pct_of_points_2_take=pct_of_points_2_take,
-                                                                                           max_non_unique_correspondences=1,
+                                                                                           max_non_unique_correspondences=3,
                                                                                            nn_mode=nn_mode, scales=scales,
                                                                                            receptive_field=receptive_field,
                                                                                            thresh_multi=thresh_multi,
@@ -506,9 +488,9 @@ def viewStabilityWithPartial():
                     noisy_pointcloud_2 = tgt_pcd
 
 
-                    emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1,
+                    emb_1 , scaling_fac = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1,
                                            args_shape=cls_args, scaling_factor=scaling_factor)
-                    emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2,
+                    emb_2 , scaling_fac = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2,
                                            args_shape=cls_args, scaling_factor=scaling_factor)
 
                     emb_1 = emb_1.detach().cpu().numpy().squeeze()
@@ -521,12 +503,12 @@ def viewStabilityWithPartial():
                             subsampled_1 = farthest_point_sampling_o3d(noisy_pointcloud_1, k=(int)(len(noisy_pointcloud_1) // scale))
                             subsampled_2 = farthest_point_sampling_o3d(noisy_pointcloud_2, k=(int)(len(noisy_pointcloud_2) // scale))
 
-                            global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                            global_emb_1 , scaling_fac = classifyPoints(model_name=cls_args.exp,
                                                           pcl_src=subsampled_1,
                                                           pcl_interest=noisy_pointcloud_1, args_shape=cls_args,
                                                           scaling_factor=scaling_factor)
 
-                            global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                            global_emb_2 , scaling_fac = classifyPoints(model_name=cls_args.exp,
                                                           pcl_src=subsampled_2,
                                                           pcl_interest=noisy_pointcloud_2, args_shape=cls_args,
                                                           scaling_factor=scaling_factor)
@@ -578,13 +560,141 @@ def find_lowest_mean_image_dir(base_path):
         print("No valid image files were found.")
 
 
+def testPretrainedModel(args, model_name):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    test_dataset = BasicPointCloudDataset(file_path='train_surfaces_05X05.h5', args=args)
+
+    model = shapeClassifier(args)
+    model.load_state_dict(torch.load(f'models_weights/{model_name}.pt'))
+    model.to(device)
+    model.eval()
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f'Num of parameters in NN: {num_params}')
+    # Set the model to evaluation mode
+    model.eval()
+    count = 0
+    total_acc_loss = 0.0
+    label_correct = {label: 0 for label in range(5)}
+    label_total = {label: 0 for label in range(5)}
+    wrong_preds = {label: [] for label in range(5)}
+    wrong_idx = {label: [] for label in range(5)}
+    wrong_pcl = {label: [] for label in range(5)}
+    wrong_pred_class = {label: [] for label in range(5)}
+    wrong_K1_values = {label: [] for label in range(5)}
+    wrong_K2_values = {label: [] for label in range(5)}
+
+    with torch.no_grad():
+        for batch in test_dataloader:
+            pcl, info = batch['point_cloud'].to(device), batch['info']
+            label = info['class'].to(device).long()
+            output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
+            output = (output[:, :5]).squeeze()
+            preds = output.max(dim=1)[1]
+            total_acc_loss += torch.mean((preds == label).float()).item()
+
+            # Collect data for wrong predictions
+            for i, (pred, actual_label) in enumerate(zip(preds, label.cpu().numpy())):
+                if pred != actual_label:
+                    wrong_preds[actual_label].append(pred.item())
+                    wrong_idx[actual_label].append(info['idx'][i].item())
+                    wrong_pcl[actual_label].append(pcl[i, :, :])
+                    wrong_pred_class[actual_label].append(preds[i])
+                    wrong_K1_values[actual_label].append((info['k1'][i].item()))
+                    wrong_K2_values[actual_label].append((info['k2'][i].item()))
+
+            count += 1
+
+            # Update per-label statistics
+            for label_name in range(5):
+                correct_mask = (preds == label_name) & (label == label_name)
+                label_correct[label_name] += correct_mask.sum().item()
+                label_total[label_name] += (label == label_name).sum().item()
+
+    label_accuracies = {
+        label: label_correct[label] / label_total[label]
+        for label in range(5)
+        if label_total[label] != 0
+    }
+    for label, accuracy in label_accuracies.items():
+        print(f"Accuracy for label {label}: {accuracy:.4f}")
+
+    # for label in range(4):
+    for label in range(5):
+        if len(wrong_preds[label]) > 0:
+            print(f"Label {label}:")
+            print(f"  - Most frequent wrong prediction: {max(wrong_preds[label], key=wrong_preds[label].count)}")
+            print(f"  - Average K1 for wrong predictions: {np.mean(wrong_K1_values[label])}")
+            print(f"  - Average K for wrong predictions: {np.mean(wrong_K2_values[label])}")
+            print(f"  - median K1 for wrong predictions: {np.median(wrong_K1_values[label])}")
+            print(f"  - median K for wrong predictions: {np.median(wrong_K2_values[label])}")
+            print(f"+++++")
+            argmax_K1_index = (np.argmax(np.abs(wrong_K1_values[label])))
+            print(f"  - biggest abs wrong K1 pcl idx: {wrong_idx[label][argmax_K1_index]}")
+            print(f"  - biggest abs wrong K1 pcl val: {wrong_K1_values[label][argmax_K1_index]}")
+            np.save(f"{label}_max_K1_pcl_{wrong_pred_class[label][argmax_K1_index]}_{wrong_idx[label][argmax_K1_index]}.npy",
+                    (wrong_pcl[label][argmax_K1_index]).cpu().numpy())
+
+            argmin_K1_index = (np.argmin(np.abs(wrong_K1_values[label])))
+            print(f"  - smallest abs wrong K1 pcl idx: {wrong_idx[label][argmin_K1_index]}")
+            print(f"  - smallest abs wrong K1 pcl val: {wrong_K1_values[label][argmin_K1_index]}")
+            np.save(f"{label}_min_K1_pcl_{wrong_pred_class[label][argmin_K1_index]}_{wrong_idx[label][argmin_K1_index]}.npy",
+                    (wrong_pcl[label][argmin_K1_index]).cpu().numpy())
+
+            argmax_K2_index = (np.argmax(np.abs(wrong_K2_values[label])))
+            print(f"  - biggest abs wrong K2 pcl idx: {wrong_idx[label][argmax_K2_index]}")
+            print(f"  - biggest abs wrong K2 pcl val: {wrong_K2_values[label][argmax_K2_index]}")
+            np.save(f"{label}_max_K2_pcl_{wrong_pred_class[label][argmax_K2_index]}_{wrong_idx[label][argmax_K2_index]}.npy",
+                    (wrong_pcl[label][argmax_K2_index]).cpu().numpy())
+
+            argmin_K2_index = (np.argmin(np.abs(wrong_K2_values[label])))
+            print(f"  - smallest abs wrong K2 pcl idx: {wrong_idx[label][argmin_K2_index]}")
+            print(f"  - smallest abs wrong K2 pcl val: {wrong_K2_values[label][argmin_K2_index]}")
+            np.save(f"{label}_min_K2_pcl_{wrong_pred_class[label][argmin_K2_index]}_{wrong_idx[label][argmin_K2_index]}.npy",
+                    (wrong_pcl[label][argmin_K2_index]).cpu().numpy())
+
+def find_top_three_directories_with_lowest_means(base_dir, k=3):
+    # Pattern to match the required filename format
+    filename_pattern = re.compile(r"rot_loss_mean_(?P<mean>[-+]?[0-9]*\.?[0-9]+)_median_[-+]?[0-9]*\.?[0-9]+\.npy")
+
+    # Initialize a list to store directories and their mean values
+    directories_with_means = []
+
+    # Iterate over all items in the base directory
+    for item in os.listdir(base_dir):
+        # Construct the full path
+        item_path = os.path.join(base_dir, item)
+
+        # Check if the item is a directory and starts with 'rfield'
+        if os.path.isdir(item_path) and item.startswith("rfield"):
+            # Iterate over the files in the directory
+            for file in os.listdir(item_path):
+                # Check if the file matches the required pattern
+                match = filename_pattern.match(file)
+                if match:
+                    # Extract the mean value from the filename
+                    mean = float(match.group("mean"))
+
+                    # Append the directory and mean value to the list
+                    directories_with_means.append((item_path, mean))
+
+    # Sort the list by mean value
+    directories_with_means.sort(key=lambda x: x[1])
+
+    # Return the top three directories and their means
+    return directories_with_means[:k]
+
 if __name__ == '__main__':
-    # model_name = "3MLP32_eig15_cntr02_std01_rand"
-    # model_name = "3MLP32_eig15_cntr03_std01_rand"
-    # model_name = "3MLP32_eig15_cntr015_std01_rand"
-    # model_name = "b_cntr03_std01_rand"
-    # model_name = "c_cntr05_std01_rand"
-    model_name = "d_cntr0005_std001"
+    # base_directory = r"C:\Users\benjy\Desktop\curvTrans\0101run"
+    # result = find_top_three_directories_with_lowest_means(base_directory, k=10)
+    # for r in result:
+    #     print(r)
+    # exit(0)
+    # model_name = "a_cntr01_std005_64"
+    all_scalings_1 = np.load("all_scalings_1.npy")
+    all_scalings_2 = np.load("all_scalings_2.npy")
+    model_name = "c_cntr01_std007"
+
     # viewStabilityWithPartial()
     # checkSizeModelnet()
     # checkSizeSynthetic()
@@ -594,29 +704,38 @@ if __name__ == '__main__':
     # exit(0)
     checkSizeSynthetic()
     # checkSyntheticData()
-    # checkDiameterPCLSynthetic()
+    checkDiameterPCLSynthetic()
     exit(0)
-    # check_registration_modelnet(model_name)
+    check_registration_modelnet(model_name)
     # check_registration_3dmatch(model_name)
-    # exit(0)
+    exit(0)
 
 
     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
     cls_args.output_dim=5
-    cls_args.num_neurons_per_layer = 32
-    cls_args.sampled_points = 20
-    cls_args.lap_eigenvalues_dim = 15
+    cls_args.num_neurons_per_layer = 64
+    cls_args.num_mlp_layers = 5
 
-    # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=2, receptive_field=[1, 3])
-    # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=3, receptive_field=[1, 3, 5])
-    # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=3, receptive_field=[1, 2, 3])
-    # view_stabiity(cls_args=cls_args, scaling_factor="axis",scales=5, receptive_field=[2, 3, 4, 6, 8])
+    # checkDiameterPCLSynthetic()
+    # testPretrainedModel(cls_args, model_name)
+    # exit()
+    #
+
+    # view_stabiity(cls_args=cls_args, scaling_factor=1,scales=3, receptive_field=[1, 5, 10], add_noise=True)
     # exit(0)
 
 
-    # visualizeShapesWithEmbeddings3dMatchCorners(model_name=model_name, args_shape=cls_args, scaling_factor="axis", rgb=False)
-    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="axis", rgb=False, add_noise=False)
-    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="one", rgb=False, add_noise=False)
-    # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor="axis", rgb=True, add_noise=True)
+    # visualizeShapesWithEmbeddings3dMatchCorners(model_name=model_name, args_shape=cls_args, scaling_factor=2.5, rgb=False)
+    # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="one", rgb=False, add_noise=False)
+    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.9, rgb=False, add_noise=False)
+    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.9, rgb=False, add_noise=True)
+    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=1, rgb=False, add_noise=True)
+    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=1.1, rgb=False, add_noise=False)
+    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=1.2, rgb=False, add_noise=False)
+    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.77, rgb=False, add_noise=True)
+    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.8, rgb=False, add_noise=True)
+    # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor=0.9, rgb=True, add_noise=True)
+    visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor=1, rgb=True, add_noise=True)
+    # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor=1.1, rgb=True, add_noise=True)
     # exit(0)
 

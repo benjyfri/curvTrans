@@ -26,6 +26,8 @@ from threedmatch import *
 from indoor import *
 from modelnet import ModelNetHdf
 import transforms
+from dataset import ModelNetPairDataset
+from configGeo import make_cfg
 def farthest_point_sampling(point_cloud, k):
     N, _ = point_cloud.shape
 
@@ -159,8 +161,8 @@ def ransac_pose_estimation_features(src_pcd, tgt_pcd, source_feature, tgt_featur
 def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_dist=0.05, max_thresh=1, sample=None, tri=False):
     # failing badly....
     if threshold > max_thresh:
-        # print(f'RANSAC FAIL!')
-        # print(f'threshold: {threshold}; max_thresh: {max_thresh}')
+        print(f'RANSAC FAIL!')
+        print(f'threshold: {threshold}; max_thresh: {max_thresh}')
         return None, None, 0, 1000, [np.array([[1,1,1]]),np.array([[1,1,1]])], threshold
     N = data1.shape[0]
     best_inliers = None
@@ -208,7 +210,7 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_
         # Estimate rotation and translation
         rotation, translation = estimate_rigid_transform(src_points, dst_points)
 
-        if np.max(np.abs(translation)) > 0.75:
+        if np.max(np.abs(rotation.T @ translation)) > 0.5:
             continue
         r_pred_euler_deg = dcm2euler(np.array([rotation]), seq='xyz')
         # check if magnitude of movement is too big for current setup
@@ -219,13 +221,13 @@ def ransac(data1, data2, max_iterations=1000, threshold=0.1, min_inliers=2, nn1_
         # Find inliers
         inliers1, inliers2 = find_inliers(src_centered, dst_centered, rotation,translation, threshold)
 
-        if sample is not None:
-            best_rot_trans = np.hstack((rotation, translation.reshape(3, 1)))
-            metrics = compute_metrics({key: torch.tensor(np.expand_dims(val, axis=0)) for key, val in sample.items()},
-                                      torch.tensor(np.expand_dims(best_rot_trans, axis=0), dtype=torch.float32))
-            rot_loss = metrics['err_r_deg']
-            if rot_loss < 5:
-                print(f'YAY!! rot loss is: {rot_loss}; inliers={len(inliers1)}')
+        # if sample is not None:
+        #     best_rot_trans = np.hstack((rotation, translation.reshape(3, 1)))
+        #     metrics = compute_metrics({key: torch.tensor(np.expand_dims(val, axis=0)) for key, val in sample.items()},
+        #                               torch.tensor(np.expand_dims(best_rot_trans, axis=0), dtype=torch.float32))
+        #     rot_loss = metrics['err_r_deg']
+        #     if rot_loss < 5:
+        #         print(f'YAY!! rot loss is: {rot_loss}; inliers={len(inliers1)}')
 
         # Update best model if we have enough inliers
         if len(inliers1) >= min_inliers and ((best_inliers is None) or (len(inliers1) > len(best_inliers))):
@@ -295,7 +297,7 @@ def ransac_3dmatch(data1, data2, max_iterations=1000, threshold=0.1, min_inliers
                 first_index = np.random.choice(indices)
                 remaining_indices = indices[indices != first_index]
                 remaining_indices = np.random.permutation(remaining_indices)
-                tri_indices = find_triangles(data1, data2, first_index, remaining_indices, dist_threshold)
+                tri_indices = find_triangles(data1, data2, first_index, remaining_indices, 2*dist_threshold)
                 if tri_indices is not None and len(set([first_index, tri_indices[0], tri_indices[1]]))==3:
                     break
             else:
@@ -320,6 +322,8 @@ def ransac_3dmatch(data1, data2, max_iterations=1000, threshold=0.1, min_inliers
 
         # Estimate rotation and translation
         rotation, translation = estimate_rigid_transform(src_points, dst_points)
+        # if np.max(np.abs(translation@rotation)) > 5.5:
+        #     continue
         # Find inliers usin np.matmul(data1, rotation.T) + translation.squeeze()
         inliers1, inliers2 = find_inliers(src_centered, dst_centered, rotation,translation, threshold)
 
@@ -439,7 +443,7 @@ def find_inliers_classification_multiclass(cls_1, cls_2, rotation, threshold=0.1
     return np.vstack(inliers_1), np.vstack(inliers_2)
 
 def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
-                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, batch_size=4,tri=False):
+                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, n_neighbors=3,tri=False, avoid_planes = True, avoid_diff_classification = True):
     worst_losses = [(0, None)] * num_worst_losses
     losses_rot_list = []
     losses_trans_list = []
@@ -457,16 +461,20 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         if i%10 ==0:
             print(f'------------{i}------------')
 
-        # data = test_dataset.__getitem__(83)
-        data = test_dataset.__getitem__(i)
+        data = test_dataset.__getitem__(83*i)
+        # data = test_dataset.__getitem__(i)
         src_pcd, tgt_pcd, GT_rot, GT_trans, sample = data['src_pcd'], data['tgt_pcd'], data['rot'], data['trans'], data['sample']
 
+
+        r_pred_euler_deg = dcm2euler(np.array([GT_rot]), seq='xyz')
+        print(r_pred_euler_deg)
+        continue
         chosen_pcl_1 = farthest_point_sampling_o3d(src_pcd, k=amount_of_interest_points)
         chosen_pcl_2 = farthest_point_sampling_o3d(tgt_pcd, k=amount_of_interest_points)
 
-        emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_1 , scaling_fac_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
 
-        emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_2 , scaling_fac_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
         emb_1 = emb_1.detach().cpu().numpy()[0]
         emb_2 = emb_2.detach().cpu().numpy()[0]
 
@@ -478,11 +486,11 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
                 # fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
                 # fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
 
-                global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                global_emb_1 , scaling_fac_1 = classifyPoints(model_name=cls_args.exp,
                                               pcl_src=subsampled_1, pcl_interest=chosen_pcl_1,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
-                global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                global_emb_2 , scaling_fac_2 = classifyPoints(model_name=cls_args.exp,
                                               pcl_src=subsampled_2, pcl_interest=chosen_pcl_2,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
@@ -492,12 +500,17 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
                 emb_1 = np.hstack((emb_1, global_emb_1))
                 emb_2 = np.hstack((emb_2, global_emb_2))
 
-        if nn_mode == 2:emb1_indices, emb2_indices = find_closest_points_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+        if nn_mode == 2:
+            emb1_indices, emb2_indices = find_closest_points_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences,n_neighbors=n_neighbors, avoid_planes=avoid_planes, avoid_diff_classification=avoid_diff_classification)
         if nn_mode == 4:
-            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
+            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), n_neighbors=n_neighbors, avoid_planes=avoid_planes, avoid_diff_classification=avoid_diff_classification)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
 
+
+        # plot_correspondence_with_classification(src_pcd, src_pcd, chosen_pcl_1, chosen_pcl_1, emb_1, emb_1)
+        # x= 3
+        # continue
 
         # plot_correspondence_with_classification(src_pcd, tgt_pcd, centered_points_1, centered_points_2,
         #                                         emb_1[emb1_indices, :], emb_2[emb2_indices, :], GT_rot, GT_trans)
@@ -508,7 +521,7 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(chosen_pcl_1);
         closest_neighbor_dist = nbrs.kneighbors(chosen_pcl_1)[0][:, 1];
         mean_closest_neighbor_dist = np.median(closest_neighbor_dist)
-        # mean_closest_neighbor_dist *= 2
+        mean_closest_neighbor_dist *= 2
 
         failed_ransac = False
         o3d_successful = False
@@ -516,7 +529,7 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         if o3d_successful == False:
             best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(
                 centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
-                threshold=mean_closest_neighbor_dist, sample=None, tri=tri,
+                threshold=mean_closest_neighbor_dist, sample=sample, tri=tri,
                 min_inliers=4, nn1_dist=mean_closest_neighbor_dist, max_thresh=(2 * mean_closest_neighbor_dist))
             # failed in Ransac
             if best_rotation is None:
@@ -527,7 +540,7 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
         # final_inliers_list.append(best_num_of_inliers)
         # iter_2_ransac_convergence.append(best_iter)
 
-        transformed_points1 = np.matmul(src_pcd, best_rotation.T) + best_translation.squeeze()
+        # transformed_points1 = np.matmul(src_pcd, best_rotation.T) + best_translation.squeeze()
         rot_trace = np.trace(GT_rot @ best_rotation.T)
         residual_rotdeg = np.arccos(np.clip(0.5 * (rot_trace - 1), -1.0, 1.0)) * 180.0 / np.pi
         losses_rot_list.append(residual_rotdeg)
@@ -571,6 +584,153 @@ def test_multi_scale_using_embedding_predator_modelnet(cls_args=None,num_worst_l
 
 
     return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
+def test_multi_scale_using_embedding_predator_modelnet_geo(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
+                                    num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, n_neighbors=3,tri=False, avoid_planes = True, avoid_diff_classification = True):
+    worst_losses = [(0, None)] * num_worst_losses
+    losses_rot_list = []
+    losses_trans_list = []
+    point_distance_list = []
+    final_thresh_list = []
+    final_inliers_list = []
+    iter_2_ransac_convergence = []
+    combined_dict = {}
+    # test_dataset = test_predator_data(partial_p_keep= [0.5, 0.5])
+    cfg = make_cfg()
+    train_dataset = ModelNetPairDataset(
+        cfg.data.dataset_root,
+        "train",
+        num_points=cfg.data.num_points,
+        voxel_size=cfg.data.voxel_size,
+        rotation_magnitude=cfg.data.rotation_magnitude,
+        translation_magnitude=cfg.data.translation_magnitude,
+        noise_magnitude=cfg.train.noise_magnitude,
+        keep_ratio=cfg.data.keep_ratio,
+        crop_method=cfg.data.crop_method,
+        asymmetric=cfg.data.asymmetric,
+        class_indices=cfg.train.class_indices,
+        deterministic=False,
+        twice_sample=cfg.data.twice_sample,
+        twice_transform=cfg.data.twice_transform,
+        return_normals=False,
+        return_occupancy=True,
+    )
+    size = len(train_dataset)
+    all_scalings_1 = []
+    all_scalings_2 = []
+    for i in range(size):
+        if i%100 ==0:
+            print(f'------------{i}------------')
+
+        data = train_dataset.__getitem__(i)
+        raw_points, src_pcd, tgt_pcd, transform = data['raw_points'], data['ref_points'], data['src_points'], data['transform']
+        GT_rot = transform[0:3, 0:3].T
+        GT_trans = -transform[0:3, 3]@ GT_rot.T
+
+
+        chosen_pcl_1 = farthest_point_sampling_o3d(src_pcd, k=amount_of_interest_points)
+        chosen_pcl_2 = farthest_point_sampling_o3d(tgt_pcd, k=amount_of_interest_points)
+
+        emb_1 , scaling_fac_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_2 , scaling_fac_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_fac_1)
+        emb_1 = emb_1.detach().cpu().numpy()[0]
+        emb_2 = emb_2.detach().cpu().numpy()[0]
+
+        # multiscale embeddings
+        if scales > 1:
+            for scale in receptive_field[1:]:
+                subsampled_1 = farthest_point_sampling_o3d(src_pcd, k=(int)(len(src_pcd) // scale))
+                subsampled_2 = farthest_point_sampling_o3d(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
+                # fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
+                # fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
+
+                global_emb_1 , scaling_fac_1 = classifyPoints(model_name=cls_args.exp,
+                                              pcl_src=subsampled_1, pcl_interest=chosen_pcl_1,
+                                              args_shape=cls_args, scaling_factor=scaling_factor)
+
+                global_emb_2 , scaling_fac_2 = classifyPoints(model_name=cls_args.exp,
+                                              pcl_src=subsampled_2, pcl_interest=chosen_pcl_2,
+                                              args_shape=cls_args, scaling_factor=scaling_fac_1)
+
+                global_emb_1 = global_emb_1.detach().cpu().numpy()[0]
+                global_emb_2 = global_emb_2.detach().cpu().numpy()[0]
+
+                emb_1 = np.hstack((emb_1, global_emb_1))
+                emb_2 = np.hstack((emb_2, global_emb_2))
+
+        if nn_mode == 2:
+            emb1_indices, emb2_indices = find_closest_points_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences,n_neighbors=n_neighbors, avoid_planes=avoid_planes, avoid_diff_classification=avoid_diff_classification)
+        if nn_mode == 4:
+            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), n_neighbors=n_neighbors, avoid_planes=avoid_planes, avoid_diff_classification=avoid_diff_classification)
+        centered_points_1 = chosen_pcl_1[emb1_indices, :]
+        centered_points_2 = chosen_pcl_2[emb2_indices, :]
+
+
+        # plot_correspondence_with_classification(src_pcd, src_pcd, chosen_pcl_1, chosen_pcl_1, emb_1, emb_1)
+        # x= 3
+        # continue
+
+        # plot_correspondence_with_classification(src_pcd, tgt_pcd, centered_points_1, centered_points_2,
+        #                                         emb_1[emb1_indices, :], emb_2[emb2_indices, :], GT_rot, GT_trans)
+
+        # nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(chosen_pcl_1);
+        # closest_neighbor_dist = nbrs.kneighbors(chosen_pcl_1)[0][:, 1];
+        # mean_closest_neighbor_dist = np.mean(closest_neighbor_dist)
+        nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(chosen_pcl_1);
+        closest_neighbor_dist = nbrs.kneighbors(chosen_pcl_1)[0][:, 1];
+        mean_closest_neighbor_dist = np.median(closest_neighbor_dist)
+        mean_closest_neighbor_dist *= 2
+
+        failed_ransac = False
+        o3d_successful = False
+
+        if o3d_successful == False:
+            best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac(
+                centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
+                threshold=mean_closest_neighbor_dist, sample=None, tri=tri,
+                min_inliers=4, nn1_dist=mean_closest_neighbor_dist, max_thresh=(2 * mean_closest_neighbor_dist))
+            # failed in Ransac
+            if best_rotation is None:
+                failed_ransac = True
+                best_rotation = np.eye(3, dtype=np.float32)
+                best_translation = np.zeros((3,), dtype=np.float32)
+
+        # final_inliers_list.append(best_num_of_inliers)
+        # iter_2_ransac_convergence.append(best_iter)
+
+        # transformed_points1 = np.matmul(src_pcd, best_rotation.T) + best_translation.squeeze()
+        rot_trace = np.trace(GT_rot @ best_rotation.T)
+        residual_rotdeg = np.arccos(np.clip(0.5 * (rot_trace - 1), -1.0, 1.0)) * 180.0 / np.pi
+        losses_rot_list.append(residual_rotdeg)
+        translation_loss = np.linalg.norm(GT_trans - best_translation)
+        losses_trans_list.append(translation_loss)
+        # corres_emb_1 = np.where((chosen_pcl_1[:, None] == corres[0]).all(axis=2))[0]
+        # corres_emb_2 = np.where((chosen_pcl_2[:, None] == corres[1]).all(axis=2))[0]
+        # plot_correspondence_with_classification(src_pcd, tgt_pcd, corres[0], corres[1],
+        #                                         emb_1[corres_emb_1, :], emb_2[corres_emb_2, :], GT_rot, GT_trans, title=f'LOSS: {residual_rotdeg}; ')
+        best_rot_trans = np.hstack((best_rotation, best_translation.reshape(3, 1)))
+
+        index_of_smallest_loss = np.argmin([worst_losses[i][0] for i in range(len(worst_losses))])
+        smallest_loss = worst_losses[index_of_smallest_loss][0]
+        if residual_rotdeg > smallest_loss:
+            worst_losses[index_of_smallest_loss] = (residual_rotdeg, {
+                'noisy_pointcloud_1': src_pcd,
+                'noisy_pointcloud_2': tgt_pcd,
+                'chosen_points_1': corres[0],
+                'chosen_points_2': corres[1],
+                'All_pairs_1': centered_points_1,
+                'All_pairs_2': centered_points_2,
+                'failed_ransac': failed_ransac,
+                'pcl_id': i,
+                'rotation_matrix': GT_rot,
+                'translation': GT_trans,
+                'best_rotation': best_rotation,
+                'best_translation': best_translation
+            })
+    np.save("all_scalings_1.npy", all_scalings_1)
+    np.save("all_scalings_2.npy", all_scalings_2)
+
+
+    return worst_losses, losses_rot_list, losses_trans_list, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict
 def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_losses = 3, scaling_factor=None, scales=1, receptive_field=[1, 2], amount_of_interest_points=100,
                                     num_of_ransac_iter=100, max_non_unique_correspondences=3, nn_mode=3, pct_of_points_2_take=0.75, amount_of_samples=100, use_o3d_ransac=False,tri=True, thresh_multi=1):
     worst_losses = [(0, None)] * num_worst_losses
@@ -585,14 +745,21 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
     train_dataset = IndoorDataset(data_augmentation=True)
     size = len(train_dataset)
     for i in range(size):
-        if i > amount_of_samples:
-            break
+        # if i > amount_of_samples:
+        #     break
         if i%10 ==0:
             print(f'------------{i}------------')
 
         data = train_dataset.__getitem__(i)
         src_pcd, tgt_pcd, GT_rot, GT_trans = data[0].astype(np.float32), data[1].astype(np.float32), data[4], data[5]
-
+        # xxx =dcm2euler(np.array([GT_rot]), seq='xyz')
+        # print("+++++++++")
+        # # print(np.min(xxx))
+        # # print(np.max(xxx))
+        # print(f'trans_a: {np.max(np.abs(GT_trans))}')
+        # print(f'trans_b: {np.max(np.abs(GT_rot@GT_trans))}')
+        # print(f'trans_c: {np.max(np.abs(GT_rot.T@GT_trans))}')
+        # continue
         '''
         (src_pcd @ GT_rot.T) + GT_trans.T = tgt_pcd
         '''
@@ -604,11 +771,15 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
         chosen_pcl_1 = farthest_point_sampling_o3d(src_pcd, k=amount_of_interest_points)
         chosen_pcl_2 = farthest_point_sampling_o3d(tgt_pcd, k=amount_of_interest_points)
 
-        emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_1 , scaling_fac_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
 
-        emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_2 , scaling_fac_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
         emb_1 = emb_1.detach().cpu().numpy()[0]
         emb_2 = emb_2.detach().cpu().numpy()[0]
+
+        # plot_correspondence_with_classification(chosen_pcl_1, chosen_pcl_1, chosen_pcl_1, chosen_pcl_1, emb_1, emb_1)
+        # x= 3
+        # continue
 
         # multiscale embeddings
         if scales > 1:
@@ -620,11 +791,11 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
                 # fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
                 # fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
 
-                global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                global_emb_1 , scaling_fac_1 = classifyPoints(model_name=cls_args.exp,
                                               pcl_src=subsampled_1, pcl_interest=chosen_pcl_1,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
-                global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                global_emb_2 , scaling_fac_2 = classifyPoints(model_name=cls_args.exp,
                                               pcl_src=subsampled_2, pcl_interest=chosen_pcl_2,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
@@ -637,18 +808,24 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
         if nn_mode == 2:
             emb1_indices, emb2_indices = find_closest_points_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points*pct_of_points_2_take), max_non_unique_correspondences=max_non_unique_correspondences)
         if nn_mode == 4:
-            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),max_non_unique_correspondences=max_non_unique_correspondences)
+            emb1_indices, emb2_indices = find_closest_points_best_buddy_beta(emb_1, emb_2, num_of_pairs=int(amount_of_interest_points * pct_of_points_2_take),n_neighbors=max_non_unique_correspondences)
         centered_points_1 = chosen_pcl_1[emb1_indices, :]
         centered_points_2 = chosen_pcl_2[emb2_indices, :]
 
-        nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(centered_points_1);
-        closest_neighbor_dist = nbrs.kneighbors(centered_points_1)[0][:, 1];
+
+        nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(chosen_pcl_1);
+        closest_neighbor_dist = nbrs.kneighbors(chosen_pcl_1)[0][:, 1];
         mean_closest_neighbor_dist = np.mean(closest_neighbor_dist)
         dist_threshold = mean_closest_neighbor_dist * thresh_multi
         centered_registered = centered_points_1 @ GT_rot.T + GT_trans.squeeze()
         distances_corres = np.linalg.norm(centered_registered- centered_points_2,axis=1)
         amount_of_good_corres = np.count_nonzero(distances_corres<dist_threshold)
         good_correspondences.append(amount_of_good_corres)
+
+
+        plot_correspondence_with_classification(centered_points_1, centered_points_2, centered_points_1, centered_points_2,
+                                                emb_1[emb1_indices, :], emb_2[emb2_indices, :], GT_rot, GT_trans, title=f"good amount={amount_of_samples}")
+
 
         failed_ransac = False
         if use_o3d_ransac:
@@ -670,7 +847,7 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
             best_rotation, best_translation, best_num_of_inliers, best_iter, corres, final_threshold = ransac_3dmatch(
                 centered_points_1, centered_points_2, max_iterations=num_of_ransac_iter,
                 threshold=dist_threshold, tri=tri,
-                min_inliers=3, nn1_dist=mean_closest_neighbor_dist, max_thresh=(8 * dist_threshold))
+                min_inliers=5, nn1_dist=mean_closest_neighbor_dist, max_thresh=(3 * dist_threshold))
             # failed in Ransac
             if best_rotation is None:
                 failed_ransac = True
@@ -685,6 +862,16 @@ def test_multi_scale_using_embedding_predator_3dmatch(cls_args=None,num_worst_lo
         losses_rot_list.append(residual_rotdeg)
         translation_loss = np.linalg.norm(GT_trans - best_translation)
         losses_trans_list.append(translation_loss)
+
+        corres_1_tuple = np.where((chosen_pcl_1[:, None] == corres[0]).all(axis=2))
+        corres_emb_1 = corres_1_tuple[0][np.argsort(corres_1_tuple[1])]
+        corres_2_tuple = np.where((chosen_pcl_2[:, None] == corres[1]).all(axis=2))
+        corres_emb_2 = corres_2_tuple[0][np.argsort(corres_2_tuple[1])]
+        # plot_correspondence_with_classification(src_pcd, tgt_pcd, corres[0], corres[1],
+        #                                         emb_1[corres_emb_1, :], emb_2[corres_emb_2, :], GT_rot, GT_trans, title=f'LOSS: {residual_rotdeg}; ')
+
+        plot_correspondence_with_classification(chosen_pcl_1, chosen_pcl_2, corres[0], corres[1],
+                                                emb_1[corres_emb_1, :], emb_2[corres_emb_2, :], GT_rot, GT_trans, title=f'LOSS: {residual_rotdeg};')
 
         # Update the worst losses list
         index_of_smallest_loss = np.argmin([worst_losses[i][0] for i in range(len(worst_losses))])
@@ -726,9 +913,9 @@ def test_pairings_3dmatch(cls_args=None,num_worst_losses = 3, scaling_factor=Non
         chosen_fps_indices_2 = farthest_point_sampling(tgt_pcd, k=amount_of_interest_points)
         chosen_pcl_2 = tgt_pcd[chosen_fps_indices_2, :]
 
-        emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_1 , scaling_fac_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
 
-        emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_2 , scaling_fac_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
         emb_1 = emb_1.detach().cpu().numpy()[0]
         emb_2 = emb_2.detach().cpu().numpy()[0]
         # multiscale embeddings
@@ -741,11 +928,11 @@ def test_pairings_3dmatch(cls_args=None,num_worst_losses = 3, scaling_factor=Non
                 # fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
                 # fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
 
-                global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                global_emb_1 , scaling_fac_1 = classifyPoints(model_name=cls_args.exp,
                                               pcl_src=subsampled_1, pcl_interest=chosen_pcl_1,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
-                global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                global_emb_2 , scaling_fac_2 = classifyPoints(model_name=cls_args.exp,
                                               pcl_src=subsampled_2, pcl_interest=chosen_pcl_2,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
@@ -788,9 +975,9 @@ def test_pairings_modelnet(cls_args=None,num_worst_losses = 3, scaling_factor=No
         chosen_fps_indices_2 = farthest_point_sampling(tgt_pcd, k=amount_of_interest_points)
         chosen_pcl_2 = tgt_pcd[chosen_fps_indices_2, :]
 
-        emb_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_1 , scaling_fac_1 = classifyPoints(model_name=cls_args.exp, pcl_src=src_pcd, pcl_interest=chosen_pcl_1, args_shape=cls_args, scaling_factor=scaling_factor)
 
-        emb_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
+        emb_2 , scaling_fac_2 = classifyPoints(model_name=cls_args.exp, pcl_src=tgt_pcd, pcl_interest=chosen_pcl_2, args_shape=cls_args, scaling_factor=scaling_factor)
         emb_1 = emb_1.detach().cpu().numpy()[0]
         emb_2 = emb_2.detach().cpu().numpy()[0]
         # multiscale embeddings
@@ -803,11 +990,11 @@ def test_pairings_modelnet(cls_args=None,num_worst_losses = 3, scaling_factor=No
                 # fps_indices_1 = farthest_point_sampling(src_pcd, k=(int)(len(src_pcd) // scale))
                 # fps_indices_2 = farthest_point_sampling(tgt_pcd, k=(int)(len(tgt_pcd) // scale))
 
-                global_emb_1 = classifyPoints(model_name=cls_args.exp,
+                global_emb_1 , scaling_fac_1 = classifyPoints(model_name=cls_args.exp,
                                               pcl_src=subsampled_1, pcl_interest=chosen_pcl_1,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
-                global_emb_2 = classifyPoints(model_name=cls_args.exp,
+                global_emb_2 , scaling_fac_2 = classifyPoints(model_name=cls_args.exp,
                                               pcl_src=subsampled_2, pcl_interest=chosen_pcl_2,
                                               args_shape=cls_args, scaling_factor=scaling_factor)
 
