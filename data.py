@@ -22,8 +22,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.rotate_data = args.rotate_data
         self.contr_loss_weight = args.contr_loss_weight
         self.sampled_points = args.sampled_points
-        self.max_curve = 6
-        self.min_curve = 2
+        self.max_curve = 5
+        self.min_curve = 1
         self.smallest_angle = 60
         self.max_angle = 120
         self.max_curve_diff = 0.5
@@ -106,7 +106,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
         # if class_label in [0,1,2,3]:
-        #     if  radius>0:
+        #     if  radius>0 or angle>0 or True:
         #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, np.load("one_clean.npy"),axis_range=None,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #         a =1
@@ -257,7 +257,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
                 c = info['c'] + noise_to_add[2]
                 d = info['d'] + noise_to_add[3]
                 e = info['e'] + noise_to_add[4]
-                # print(f"{temp_max_diff}, ")
+                print(f"{temp_max_diff}, ")
                 break
             count += 1
         bounds, contrastive_point_cloud = samplePoints(a, b, c, d, e, count=sampled_points, min_len=min_len,max_len=max_len, bounds=bounds)
