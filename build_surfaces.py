@@ -64,10 +64,6 @@ def updateDataSet(label_to_update=4,new_file_path_train = "train_surfaces_05x05.
         if point_clouds_group is None:
             point_clouds_group = new_hdf5_train_file.create_group("point_clouds")
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=1, mean_curv=-1, label=1, boundary=1, epsilon=0.05, max_curv=5, counter=15000, size=3, amount_of_pcl=2500, angle=1)
-        print(f'Finished train parabolic CORNERS')
-        a=1/0
-
         # Train data generation for each label
         addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=0, boundary=1, epsilon=0.05, max_curv=5, counter=0, size=1.5, amount_of_pcl=10000)
         print(f'Finished train flat surfaces')
