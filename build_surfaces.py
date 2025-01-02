@@ -778,8 +778,8 @@ def plot_point_clouds(point_cloud1, point_cloud2=None):
 
 if __name__ == '__main__':
     # updateDataSet(label_to_update=0)
-    # createDataSetOld()
-    updateDataSet(label_to_update=1)
+    createDataSetOld()
+    # updateDataSet(label_to_update=1)
     # updateDataSet(label_to_update=2)
     # updateDataSet(label_to_update=3)
     # updateDataSet(label_to_update=4)
