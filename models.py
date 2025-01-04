@@ -42,6 +42,7 @@ class shapeClassifier(nn.Module):
         if self.use_lap_reorder:
             # Gather and reshape fixed point cloud
             data = torch.gather(x, 1, indices.unsqueeze(2).expand(-1, -1, 3))
+            data = (transform_point_clouds_to_canonical(data))
         else:
             data = x
         if self.use_second_deg:
@@ -83,6 +84,26 @@ class shapeClassifier(nn.Module):
         return eigenvectors[:,: ,1:k+1], eigenvalues
 
     def sort_by_first_eigenvector(self, eigenvectors):
+        first_eig_vec = eigenvectors[:, :, 0]
+
+        abs_tensor = torch.abs(first_eig_vec)  # Absolute values
+        max_indices = torch.argmax(abs_tensor, dim=1)  # Indices of max abs value
+
+        # Step 2: Get the sign of the max absolute values
+        max_values = first_eig_vec[torch.arange(eigenvectors.shape[0]), max_indices]  # Gather max values
+        signs = torch.sign(max_values)  # Compute the sign of the max values
+
+        # Step 3: Multiply each row by its corresponding sign
+        result = first_eig_vec * signs.unsqueeze(1)
+
+        sorted_indices = torch.argsort(result[:,1:])
+        zeros_tensor = torch.zeros(size=(eigenvectors.shape[0],1),device=eigenvectors.device, dtype=int)
+        sorted_indices = torch.cat((zeros_tensor, 1 + sorted_indices), dim=1)
+
+        sorted_eigvecs = torch.gather(eigenvectors, 1,
+                                      sorted_indices.unsqueeze(-1).expand(-1, -1, eigenvectors.size(-1)))
+        return sorted_indices, sorted_eigvecs
+    def sort_by_first_eigenvector_orig(self, eigenvectors):
         abs_eigenvector = torch.abs(eigenvectors[:, :, 0])
         sorted_indices = torch.argsort(abs_eigenvector[:,1:])
         zeros_tensor = torch.zeros(size=(eigenvectors.shape[0],1),device=eigenvectors.device, dtype=int)
@@ -226,3 +247,92 @@ class TransformerNetworkPCT(nn.Module):
         x = self.linear3(x)
 
         return x
+
+def transform_point_clouds_to_canonical(point_clouds: torch.Tensor, epsilon: float = 1e-7) -> torch.Tensor:
+    """
+    Normalize batched point clouds by rotating them according to specified conditions.
+    Args:
+        point_clouds: Tensor of shape (batch_size, 21, 3)
+        epsilon: Small value for numerical stability
+    Returns:
+        Normalized point clouds of same shape
+    """
+    # Calculate center of mass for each point cloud
+    m_point = torch.mean(point_clouds, dim=1)  # Shape: (batch_size, 3)
+
+    # Step 1: Rotate to put center of mass at (0, 0, norm(m_point))
+    m_norm = torch.norm(m_point, dim=1, keepdim=True)  # Shape: (batch_size, 1)
+
+    # Create rotation matrix to align m_point with (0, 0, norm(m_point))
+    v1 = m_point / (m_norm + epsilon)
+    v2 = torch.zeros_like(m_point)
+    v2[:, 2] = 1.0
+
+    # Get rotation axis and angle using cross product and dot product
+    rotation_axis = torch.cross(v1, v2)
+    rotation_axis = rotation_axis / (torch.norm(rotation_axis, dim=1, keepdim=True) + epsilon)
+    cos_theta = torch.sum(v1 * v2, dim=1)
+    sin_theta = torch.sqrt(1 - cos_theta ** 2 + epsilon)
+
+    # Rodriguez rotation formula
+    K = torch.zeros((point_clouds.shape[0], 3, 3), device=point_clouds.device)
+    K[:, 0, 1] = -rotation_axis[:, 2]
+    K[:, 0, 2] = rotation_axis[:, 1]
+    K[:, 1, 0] = rotation_axis[:, 2]
+    K[:, 1, 2] = -rotation_axis[:, 0]
+    K[:, 2, 0] = -rotation_axis[:, 1]
+    K[:, 2, 1] = rotation_axis[:, 0]
+
+    R1 = torch.eye(3, device=point_clouds.device).unsqueeze(0) + \
+         sin_theta.unsqueeze(-1).unsqueeze(-1) * K + \
+         (1 - cos_theta).unsqueeze(-1).unsqueeze(-1) * (K @ K)
+
+    # Apply first rotation
+    rotated_points = torch.bmm(point_clouds, R1.transpose(1, 2))
+
+    # Step 2: Get the rotated last point directly from rotated_points
+    rotated_p = rotated_points[:, -1, :]  # Shape: (batch_size, 3)
+
+    # Calculate rotation angle around z-axis to align rotated_p with required conditions
+    angle = torch.atan2(rotated_p[:, 1], rotated_p[:, 0])  # Current angle of the last point in xy-plane
+
+    # Adjust the angle to ensure y = 0 and x >= 0
+    angle = -angle
+    angle = torch.where(rotated_p[:, 0] < 0, angle + torch.pi, angle)
+
+    # Create z-axis rotation matrix using adjusted angle
+    cos_phi = torch.cos(angle)
+    sin_phi = torch.sin(angle)
+
+    R2 = torch.zeros((point_clouds.shape[0], 3, 3), device=point_clouds.device)
+    R2[:, 0, 0] = cos_phi
+    R2[:, 0, 1] = -sin_phi
+    R2[:, 1, 0] = sin_phi
+    R2[:, 1, 1] = cos_phi
+    R2[:, 2, 2] = 1.0
+
+    # Apply second rotation
+    final_points = torch.bmm(rotated_points, R2.transpose(1, 2))
+
+    # Verify that the last point has y = 0 and x >= 0
+    final_rotated_p = final_points[:, -1, :]
+    final_rotated_p[:, 1] = 0  # Force y to be 0
+    final_rotated_p[:, 0] = torch.abs(final_rotated_p[:, 0])  # Ensure x is non-negative
+
+    # Apply these corrections to the final points
+    final_points[:, -1, :] = final_rotated_p
+
+    # Step 3: Adjust the sign of x and y coordinates based on the second point's x-coordinate
+    second_point_x = final_points[:, 1, 0]  # Extract the x-coordinate of the second point
+    sign = torch.sign(second_point_x).unsqueeze(-1).unsqueeze(-1)  # Shape: (batch_size, 1, 1)
+
+    # Multiply all x and y coordinates by the sign to remove ambiguity
+    final_points[:, :-1, 0:2] *= sign
+
+    # Zero out small values for stability
+    final_points = torch.where(torch.abs(final_points) < epsilon,
+                               torch.zeros_like(final_points),
+                               final_points)
+
+    return final_points
+
