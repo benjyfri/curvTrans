@@ -34,7 +34,7 @@ class shapeClassifier(nn.Module):
 
         if self.use_lap_reorder or self.lpe_dim or self.lap_eigenvalues_dim:
             # Calculate Laplacian
-            l = self.createLap(x, self.lpe_normalize)
+            l = self.createLap(x)
             # Compute LPE embedding
             eigvecs, eigenvals = self.top_k_smallest_eigenvectors(l, self.lpe_dim)
             indices, fixed_eigs = self.sort_by_first_eigenvector(eigvecs)
