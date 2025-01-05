@@ -58,23 +58,32 @@ class shapeClassifier(nn.Module):
         output = output.view(batch_size, num_of_pcl_centroids, -1)
         return output
 
-    def createLap(self, point_cloud, normalized):
+    def createLap(self, point_cloud):
         distances = torch.cdist(point_cloud, point_cloud)
-        if self.graph_weight_mode == 0:
-            weights = torch.exp(-distances)
-        if self.graph_weight_mode == 1:
-            weights = torch.exp(-distances**2)
-        if self.graph_weight_mode == 2:
-            batch_size = point_cloud.shape[0]
-            rbf_weight = distances / (torch.max(distances.view(batch_size, -1), dim=1).values).view(batch_size, 1, 1)
-            weights = torch.exp(-rbf_weight)
+        # if self.graph_weight_mode == 0:
+        #     weights = torch.exp(-distances)
+        # elif self.graph_weight_mode == 1:
+        #     weights = torch.exp(-distances**2)
+        # elif self.graph_weight_mode == 2:
+        #     batch_size = point_cloud.shape[0]
+        #     rbf_weight = distances / (torch.max(distances.view(batch_size, -1), dim=1).values).view(batch_size, 1, 1)
+        #     weights = torch.exp(-rbf_weight)
+
+        weights = torch.exp(-distances ** 2)
         column_sums = weights.sum(dim=1)
-        diag_matrix = torch.diag_embed(column_sums)
-        laplacian = diag_matrix - weights
-        if normalized:
-            inv_D_sqrt = torch.diag_embed(torch.sqrt(1.0 / (column_sums + 1e-7)))
-            identity = torch.eye(weights.shape[1], device=weights.device).unsqueeze(0).expand_as(weights)
-            laplacian = identity - (inv_D_sqrt @ weights @ inv_D_sqrt)
+
+        # laplacian = -weights
+        # laplacian += torch.diag_embed(column_sums)
+        #
+        # inv_D_sqrt = torch.diag_embed(torch.sqrt(1.0 / (column_sums + 1e-7)))
+        # identity = torch.eye(weights.shape[1], device=weights.device).unsqueeze(0).expand_as(weights)
+        # laplacian = identity - (inv_D_sqrt @ weights @ inv_D_sqrt)
+
+        inv_sqrt_col_sum = torch.rsqrt(column_sums + 1e-7)  # Safer reciprocal sqrt
+        laplacian = (
+                torch.eye(weights.size(1), device=weights.device)  # Identity matrix
+                - (inv_sqrt_col_sum.unsqueeze(2) * weights * inv_sqrt_col_sum.unsqueeze(1))
+        )
         return laplacian
 
     def top_k_smallest_eigenvectors(self, graph, k):
