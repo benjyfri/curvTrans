@@ -257,7 +257,7 @@ class TransformerNetworkPCT(nn.Module):
 
         return x
 
-def transform_point_clouds_to_canonical(point_clouds: torch.Tensor, epsilon: float = 1e-7) -> torch.Tensor:
+def transform_point_clouds_to_canonical(point_clouds: torch.Tensor, epsilon: float = 1e-10) -> torch.Tensor:
     """
     Normalize batched point clouds by rotating them according to specified conditions.
     Args:
@@ -305,14 +305,18 @@ def transform_point_clouds_to_canonical(point_clouds: torch.Tensor, epsilon: flo
     # Calculate rotation angle around z-axis to align rotated_p with required conditions
     angle = torch.atan2(rotated_p[:, 1], rotated_p[:, 0])  # Current angle of the last point in xy-plane
 
-    # Adjust the angle to ensure y = 0 and x >= 0
-    angle = -angle
-    angle = torch.where(rotated_p[:, 0] < 0, angle + torch.pi, angle)
+    # Calculate the magnitude in the xy-plane
+    xy_magnitude = torch.sqrt(rotated_p[:, 0] ** 2 + rotated_p[:, 1] ** 2 + epsilon)
 
-    # Create z-axis rotation matrix using adjusted angle
-    cos_phi = torch.cos(angle)
-    sin_phi = torch.sin(angle)
+    # Normalize x and y components
+    cos_current = rotated_p[:, 0] / xy_magnitude
+    sin_current = rotated_p[:, 1] / xy_magnitude
 
+    # Calculate rotation matrix components directly
+    cos_phi = cos_current  # This will give us x >= 0
+    sin_phi = -sin_current  # This will give us y = 0
+
+    # Create z-axis rotation matrix using calculated components
     R2 = torch.zeros((point_clouds.shape[0], 3, 3), device=point_clouds.device)
     R2[:, 0, 0] = cos_phi
     R2[:, 0, 1] = -sin_phi
@@ -322,21 +326,8 @@ def transform_point_clouds_to_canonical(point_clouds: torch.Tensor, epsilon: flo
 
     # Apply second rotation
     final_points = torch.bmm(rotated_points, R2.transpose(1, 2))
+    final_points[:,-1,1]=0
 
-    # Verify that the last point has y = 0 and x >= 0
-    final_rotated_p = final_points[:, -1, :]
-    final_rotated_p[:, 1] = 0  # Force y to be 0
-    final_rotated_p[:, 0] = torch.abs(final_rotated_p[:, 0])  # Ensure x is non-negative
-
-    # Apply these corrections to the final points
-    final_points[:, -1, :] = final_rotated_p
-
-    # Step 3: Adjust the sign of x and y coordinates based on the second point's x-coordinate
-    second_point_x = final_points[:, 1, 0]  # Extract the x-coordinate of the second point
-    sign = torch.sign(second_point_x).unsqueeze(-1).unsqueeze(-1)  # Shape: (batch_size, 1, 1)
-
-    # Multiply all x and y coordinates by the sign to remove ambiguity
-    final_points[:, :-1, 0:2] *= sign
 
     # Zero out small values for stability
     final_points = torch.where(torch.abs(final_points) < epsilon,
