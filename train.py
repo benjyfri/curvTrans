@@ -76,7 +76,7 @@ def train_and_test(args):
     milestones = [args.lr_jumps * (i) for i in range(1,num_epochs//args.lr_jumps + 1)]
     scheduler = MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
 
-    tripletMarginLoss = nn.TripletMarginLoss(margin=5.0)
+    tripletMarginLoss = nn.TripletMarginLoss(margin=args.contr_margin)
     criterion = nn.CrossEntropyLoss(reduction='mean')
     mseLoss = nn.MSELoss()
     contr_loss_weight = args.contr_loss_weight
@@ -178,8 +178,8 @@ def configArgsPCT():
                         help='learning rate (default: 0.001, 0.1 if using sgd)')
     parser.add_argument('--use_wandb', type=int, default=0, metavar='N',
                         help='use angles in learning ')
-    parser.add_argument('--graph_weight_mode', type=int, default=1, metavar='N',
-                        help='0 is -dist; 1 is -dist^2; 2 is -dist dvided by largest dist')
+    parser.add_argument('--contr_margin', type=float, default=5.0, metavar='N',
+                        help='margin used for contrastive loss')
     parser.add_argument('--use_lap_reorder', type=int, default=1, metavar='N',
                         help='reorder points by laplacian order ')
     parser.add_argument('--lap_eigenvalues_dim', type=int, default=15, metavar='N',
