@@ -26,8 +26,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.min_curve = 1
         self.smallest_angle = 60
         self.max_angle = 120
-        self.max_curve_diff = 0.3
-        self.min_curve_diff = 0.1
+        self.max_curve_diff = args.max_curve_diff
+        self.min_curve_diff = args.min_curve_diff
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
         self.int_K_const =( (self.max_curve + self.max_curve_diff + 10e-6)**2 / (2 * np.pi) )
     def __len__(self):
@@ -243,7 +243,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         old_k2 = H_orig - np.sqrt(discriminant_orig)
         while True:
             # noise_to_add = np.random.normal(0, 0.1, 5)
-            noise_to_add = np.random.normal(0, 0.15, 5)
+            noise_to_add = np.random.normal(0, 0.09, 5)
             K_cont, H_cont = compute_curvatures([a, b, c, d, e] + noise_to_add)
             discriminant_cont = H_cont ** 2 - K_cont
             k1_cont = H_cont + np.sqrt(discriminant_cont)
