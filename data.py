@@ -26,8 +26,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         self.min_curve = 1
         self.smallest_angle = 60
         self.max_angle = 120
-        self.max_curve_diff = 0.5
-        self.min_curve_diff = 0.3
+        self.max_curve_diff = 0.3
+        self.min_curve_diff = 0.1
         self.constant = self.max_curve / (2 * np.cos(np.radians(self.smallest_angle) / 2)) + 0.05
         self.int_K_const =( (self.max_curve + self.max_curve_diff + 10e-6)**2 / (2 * np.pi) )
     def __len__(self):
@@ -111,8 +111,8 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #         a =1
 
-        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
-        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
+        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
+        return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
 
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
@@ -243,7 +243,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         old_k2 = H_orig - np.sqrt(discriminant_orig)
         while True:
             # noise_to_add = np.random.normal(0, 0.1, 5)
-            noise_to_add = np.random.normal(0, 0.3, 5)
+            noise_to_add = np.random.normal(0, 0.15, 5)
             K_cont, H_cont = compute_curvatures([a, b, c, d, e] + noise_to_add)
             discriminant_cont = H_cont ** 2 - K_cont
             k1_cont = H_cont + np.sqrt(discriminant_cont)
@@ -257,7 +257,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
                 c = info['c'] + noise_to_add[2]
                 d = info['d'] + noise_to_add[3]
                 e = info['e'] + noise_to_add[4]
-                # print(f"{temp_max_diff}, ")
+                print(f"{temp_max_diff}, ")
                 break
             count += 1
         bounds, contrastive_point_cloud = samplePoints(a, b, c, d, e, count=sampled_points, min_len=min_len,max_len=max_len, bounds=bounds)

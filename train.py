@@ -178,7 +178,7 @@ def configArgsPCT():
                         help='learning rate (default: 0.001, 0.1 if using sgd)')
     parser.add_argument('--use_wandb', type=int, default=0, metavar='N',
                         help='use angles in learning ')
-    parser.add_argument('--graph_weight_mode', type=int, default=0, metavar='N',
+    parser.add_argument('--graph_weight_mode', type=int, default=1, metavar='N',
                         help='0 is -dist; 1 is -dist^2; 2 is -dist dvided by largest dist')
     parser.add_argument('--use_lap_reorder', type=int, default=1, metavar='N',
                         help='reorder points by laplacian order ')
@@ -186,8 +186,8 @@ def configArgsPCT():
                         help='use eigenvalues in as input')
     parser.add_argument('--use_second_deg', type=int, default=1, metavar='N',
                         help='use second degree embedding ')
-    parser.add_argument('--lpe_normalize', type=int, default=0, metavar='N',
-                        help='use PCT transformer version')
+    parser.add_argument('--lpe_normalize', type=int, default=1, metavar='N',
+                        help='use normalized laplacian')
     parser.add_argument('--std_dev', type=float, default=0.01, metavar='N',
                         help='amount of noise to add to data')
     parser.add_argument('--clip', type=float, default=0.05, metavar='N',
