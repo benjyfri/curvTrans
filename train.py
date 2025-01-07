@@ -190,9 +190,9 @@ def configArgsPCT():
                         help='use normalized laplacian')
     parser.add_argument('--std_dev', type=float, default=0.05, metavar='N',
                         help='amount of noise to add to data')
-    parser.add_argument('--max_curve_diff', type=float, default=0.2, metavar='N',
+    parser.add_argument('--max_curve_diff', type=float, default=0.001, metavar='N',
                         help='max difference in curvature for contrastive loss')
-    parser.add_argument('--min_curve_diff', type=float, default=0.05, metavar='N',
+    parser.add_argument('--min_curve_diff', type=float, default=0.0, metavar='N',
                         help='min difference in curvature for contrastive loss')
     parser.add_argument('--clip', type=float, default=0.25, metavar='N',
                         help='clip noise')
