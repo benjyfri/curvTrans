@@ -13,6 +13,16 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 import seaborn as sns
 from torch.profiler import profile, record_function, ProfilerActivity
+import torch.nn.functional as F
+
+def normalized_triplet_loss(orig_emb, pos_emb, neg_emb, margin=5.0):
+    # Normalize all embeddings
+    orig_emb = F.normalize(orig_emb, p=2, dim=1)
+    pos_emb = F.normalize(pos_emb, p=2, dim=1)
+    neg_emb = F.normalize(neg_emb, p=2, dim=1)
+
+    # Compute triplet loss with normalized embeddings
+    return nn.TripletMarginLoss(margin=margin)(orig_emb, pos_emb, neg_emb)
 def test(model, dataloader, loss_function, device, args):
     model.eval()  # Set the model to evaluation mode
     total_loss = 0.0
@@ -113,7 +123,8 @@ def train_and_test(args):
                     pos_emb = output_pcl2
                     output_contrastive_pcl = (model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))).squeeze()
                     neg_emb = output_contrastive_pcl
-                    contrstive_loss = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
+                    # contrstive_loss = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
+                    contrstive_loss = normalized_triplet_loss(orig_emb, pos_emb, neg_emb, margin=args.contr_margin)
                     total_train_contrastive_positive_loss += mseLoss(orig_emb, pos_emb)
                     total_train_contrastive_negative_loss += mseLoss(orig_emb, neg_emb)
                     total_train_contrastive_loss += contrstive_loss
@@ -178,7 +189,7 @@ def configArgsPCT():
                         help='learning rate (default: 0.001, 0.1 if using sgd)')
     parser.add_argument('--use_wandb', type=int, default=0, metavar='N',
                         help='use angles in learning ')
-    parser.add_argument('--contr_margin', type=float, default=5.0, metavar='N',
+    parser.add_argument('--contr_margin', type=float, default=1.0, metavar='N',
                         help='margin used for contrastive loss')
     parser.add_argument('--use_lap_reorder', type=int, default=1, metavar='N',
                         help='reorder points by laplacian order ')
@@ -190,9 +201,9 @@ def configArgsPCT():
                         help='use normalized laplacian')
     parser.add_argument('--std_dev', type=float, default=0.05, metavar='N',
                         help='amount of noise to add to data')
-    parser.add_argument('--max_curve_diff', type=float, default=0.001, metavar='N',
+    parser.add_argument('--max_curve_diff', type=float, default=2, metavar='N',
                         help='max difference in curvature for contrastive loss')
-    parser.add_argument('--min_curve_diff', type=float, default=0.0, metavar='N',
+    parser.add_argument('--min_curve_diff', type=float, default=1, metavar='N',
                         help='min difference in curvature for contrastive loss')
     parser.add_argument('--clip', type=float, default=0.25, metavar='N',
                         help='clip noise')

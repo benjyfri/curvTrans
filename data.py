@@ -69,15 +69,15 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud1 = point_cloud1 - point_cloud1[0,:]
 
         if self.contr_loss_weight  != 0:
-            count, old_k1, old_k2, new_k1, new_k2, bounds, contrastive_point_cloud = sampleContrastivePcl(angle=angle,radius=radius,class_label=class_label,sampled_points=self.sampled_points,
+            count, old_k1, old_k2, new_k1, new_k2, bounds_neg, contrastive_point_cloud = sampleContrastivePcl(angle=angle,radius=radius,class_label=class_label,sampled_points=self.sampled_points,
                                                            min_len=min_len,max_len=max_len, bias=bias, info=info,min_curve_diff=self.min_curve_diff,
                                                            max_curve_diff=self.max_curve_diff, constant=self.constant,edge_label=edge_label,
                                                            bounds=bounds,  min_curve=self.min_curve, max_curve=self.max_curve,int_K_const=self.int_K_const)
 
 
-            # print(f'{max(abs(old_k1-new_k1), abs(old_k2-new_k2))},')
-            positive_point_cloud = point_cloud
-            if class_label != 4:
+            if class_label == 4:
+                positive_point_cloud = point_cloud
+            else:
                 bounds_pos,positive_point_cloud = samplePcl(angle=angle, radius=radius, class_label=class_label,
                                                           sampled_points=self.sampled_points, min_len=min_len,max_len=max_len, bias=bias,
                                                           info=info, bounds=bounds, edge_label=edge_label)
@@ -112,39 +112,43 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
         #         a =1
 
         return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info}
-        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":point_cloud2, "info": info, "count": count}
+        # return {"point_cloud": point_cloud1, "point_cloud2": point_cloud2, "contrastive_point_cloud":contrastive_point_cloud, "info": info, "count": count}
 
 
 def samplePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,edge_label=0, bounds=None):
     cur_class_label = class_label
     if bounds is not None:
-        bounds = [bound * (1 + np.random.uniform(-0.1, 0.1)) for bound in bounds]
+        cur_bounds = [bound * (1 + np.random.uniform(-0.1, 0.1)) for bound in bounds]
+    else:
+        cur_bounds = None
     if angle != 0:
         if cur_class_label == 1 or edge_label == 1:
-            r_tri, point_cloud = sample_pyramid(n_points=sampled_points, head_angle_rad=np.radians(angle), bias=bias,min_len=min_len,max_len=max_len, bounds=bounds)
-            bounds = [-r_tri,r_tri,-r_tri,r_tri]
+            r_tri, point_cloud = sample_pyramid(n_points=sampled_points, head_angle_rad=np.radians(angle), bias=bias,min_len=min_len,max_len=max_len, bounds=cur_bounds)
+            new_bounds = [-r_tri,r_tri,-r_tri,r_tri]
         if cur_class_label == 2 or edge_label == 2:
-            bounds, point_cloud = generate_surfaces_angles_and_sample(sampled_points, angle, min_len=min_len,max_len=max_len,bounds=bounds)
+            new_bounds, point_cloud = generate_surfaces_angles_and_sample(sampled_points, angle, min_len=min_len,max_len=max_len,bounds=cur_bounds)
 
     elif radius != 0:
 
         if cur_class_label == 1 or edge_label == 1:
-            point_cloud = sample_sphere_point_cloud(radius=radius, num_of_points=sampled_points,bounds=bounds)
-            bounds = [-radius, radius, -radius, radius]
+            point_cloud = sample_sphere_point_cloud(radius=radius, num_of_points=sampled_points,bounds=cur_bounds)
+            new_bounds = [-radius, radius, -radius, radius]
         if cur_class_label == 2 or edge_label == 2:
-            bounds, point_cloud = sample_cylinder_point_cloud(radius=radius, min_len=min_len,max_len=max_len, num_of_points=sampled_points,bounds=bounds)
+            new_bounds, point_cloud = sample_cylinder_point_cloud(radius=radius, min_len=min_len,max_len=max_len, num_of_points=sampled_points,bounds=cur_bounds)
     else:
-        bounds, point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'], count=sampled_points, min_len=min_len,max_len=max_len,bounds=bounds)
+        new_bounds, point_cloud = samplePoints(info['a'], info['b'], info['c'], info['d'], info['e'], count=sampled_points, min_len=min_len,max_len=max_len,bounds=cur_bounds)
     if class_label == 4:
         # point_cloud = sampleHalfSpacePoints(point_cloud)
         point_cloud = find_representative_point(point_cloud)
-    return bounds, point_cloud
+    return new_bounds, point_cloud
 
 def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,max_len, info,min_curve_diff, max_curve_diff, constant,max_curve, min_curve,int_K_const,  edge_label=0, bounds=None):
     cur_class_label = class_label
     count = 0
     if bounds is not None:
-        bounds = [bound * (1 + np.random.uniform(-0.1, 0.1)) for bound in bounds]
+        cur_bounds = [bound * (1 + np.random.uniform(-0.1, 0.1)) for bound in bounds]
+    else:
+        cur_bounds = None
     if angle != 0:
         if cur_class_label == 1 or edge_label==1:
             angle_rad = np.radians(angle)
@@ -169,8 +173,8 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             interval = int_1 if np.random.uniform(0, 1) < prob else int_2
             new_angle_rad = np.random.uniform(interval[0],interval[1])
 
-            r_tri, contrastive_point_cloud = sample_pyramid(n_points=sampled_points, head_angle_rad=new_angle_rad, bias=bias,min_len=min_len,max_len=max_len,bounds=bounds)
-            bounds = [-r_tri, r_tri, -r_tri, r_tri]
+            r_tri, contrastive_point_cloud = sample_pyramid(n_points=sampled_points, head_angle_rad=new_angle_rad, bias=bias,min_len=min_len,max_len=max_len,bounds=cur_bounds)
+            new_bounds = [-r_tri, r_tri, -r_tri, r_tri]
             new_k1 = new_k2 = np.sqrt( (2 * np.pi - new_angle_rad * 3) * int_K_const)
             # new_angle_deg = np.degrees(new_angle_rad)
 
@@ -196,7 +200,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
             prob = 0.5
             interval = int_1 if np.random.uniform(0, 1) < prob else int_2
             new_angle_deg = np.random.uniform(interval[0],interval[1])
-            bounds, contrastive_point_cloud = generate_surfaces_angles_and_sample(sampled_points, new_angle_deg,min_len=min_len,max_len=max_len, bounds=bounds)
+            new_bounds, contrastive_point_cloud = generate_surfaces_angles_and_sample(sampled_points, new_angle_deg,min_len=min_len,max_len=max_len, bounds=cur_bounds)
             new_k1 = constant * ( 2 * np.cos(np.radians(new_angle_deg)/ 2))
             new_k2 = 0
         # if (((old_k1 < new_k1) and (angle < new_angle_deg)) or ((old_k1 > new_k1) and (angle > new_angle_deg)) == True):
@@ -225,13 +229,13 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         interval = int_1 if np.random.uniform(0, 1) < prob else int_2
         new_radius = np.random.uniform(interval[0], interval[1])
         if cur_class_label == 1 or edge_label==1:
-            contrastive_point_cloud = sample_sphere_point_cloud(radius=new_radius, num_of_points=sampled_points,bounds=bounds)
-            bounds = [-radius, radius, -radius, radius]
+            contrastive_point_cloud = sample_sphere_point_cloud(radius=new_radius, num_of_points=sampled_points,bounds=cur_bounds)
+            new_bounds = [-radius, radius, -radius, radius]
             new_k1 = new_k2 = ( 1 / new_radius )
         if cur_class_label == 2 or edge_label==2:
             old_k1 = ( 1 / radius)
             old_k2 = 0
-            bounds, contrastive_point_cloud = sample_cylinder_point_cloud(radius=new_radius, min_len=min_len,max_len=max_len, num_of_points=sampled_points,bounds=bounds)
+            new_bounds, contrastive_point_cloud = sample_cylinder_point_cloud(radius=new_radius, min_len=min_len,max_len=max_len, num_of_points=sampled_points,bounds=cur_bounds)
             new_k1 = ( 1 / new_radius )
             new_k2 = 0
     else:
@@ -243,7 +247,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         old_k2 = H_orig - np.sqrt(discriminant_orig)
         while True:
             # noise_to_add = np.random.normal(0, 0.1, 5)
-            noise_to_add = np.random.normal(0, 0.001, 5)
+            noise_to_add = np.random.normal(0, 1, 5)
             K_cont, H_cont = compute_curvatures([a, b, c, d, e] + noise_to_add)
             discriminant_cont = H_cont ** 2 - K_cont
             k1_cont = H_cont + np.sqrt(discriminant_cont)
@@ -260,13 +264,13 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
                 # print(f"{temp_max_diff}, ")
                 break
             count += 1
-        bounds, contrastive_point_cloud = samplePoints(a, b, c, d, e, count=sampled_points, min_len=min_len,max_len=max_len, bounds=bounds)
+        new_bounds, contrastive_point_cloud = samplePoints(a, b, c, d, e, count=sampled_points, min_len=min_len,max_len=max_len, bounds=cur_bounds)
         new_k1 = k1_cont
         new_k2 = k2_cont
     if class_label == 4:
         # contrastive_point_cloud = sampleHalfSpacePoints(contrastive_point_cloud)
         contrastive_point_cloud = find_representative_point(contrastive_point_cloud)
-    return count, old_k1, old_k2, new_k1, new_k2, bounds, contrastive_point_cloud
+    return count, old_k1, old_k2, new_k1, new_k2, new_bounds, contrastive_point_cloud
 
 def compute_curvatures(coeffs):
     a, b, c, d, e = coeffs
