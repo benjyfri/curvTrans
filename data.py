@@ -106,7 +106,7 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
             point_cloud2 = torch.tensor((0))
             contrastive_point_cloud = torch.tensor((0))
         # if class_label in [0,1,2,3]:
-        #     if  radius>0 or angle>0 or True:
+        #     if  radius>0 or angle>0:
         #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, np.load("one_clean.npy"),axis_range=None,
         #                           title=f'COUNT: {count} XXX neg; class: {class_label}, angle: {angle:.2f}, radius: {radius:.2f}; old_k1: {old_k1:.2f},new_k1: {new_k1:.2f} || old_k2: {old_k2:.2f},new_k2: {new_k2:.2f}')
         #         a =1
@@ -247,7 +247,7 @@ def sampleContrastivePcl(angle,radius,class_label,sampled_points, bias, min_len,
         old_k2 = H_orig - np.sqrt(discriminant_orig)
         while True:
             # noise_to_add = np.random.normal(0, 0.1, 5)
-            noise_to_add = np.random.normal(0, 0.6, 5)
+            noise_to_add = np.random.normal(0, 0.065, 5)
             K_cont, H_cont = compute_curvatures([a, b, c, d, e] + noise_to_add)
             discriminant_cont = H_cont ** 2 - K_cont
             k1_cont = H_cont + np.sqrt(discriminant_cont)

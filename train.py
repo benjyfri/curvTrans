@@ -187,13 +187,13 @@ def configArgsPCT():
                         help='number of episode to train ')
     parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                         help='learning rate (default: 0.001, 0.1 if using sgd)')
-    parser.add_argument('--use_wandb', type=int, default=0, metavar='N',
+    parser.add_argument('--use_wandb', type=int, default=1, metavar='N',
                         help='use angles in learning ')
     parser.add_argument('--contr_margin', type=float, default=1.0, metavar='N',
                         help='margin used for contrastive loss')
     parser.add_argument('--use_lap_reorder', type=int, default=1, metavar='N',
                         help='reorder points by laplacian order ')
-    parser.add_argument('--lap_eigenvalues_dim', type=int, default=15, metavar='N',
+    parser.add_argument('--lap_eigenvalues_dim', type=int, default=5, metavar='N',
                         help='use eigenvalues in as input')
     parser.add_argument('--use_second_deg', type=int, default=1, metavar='N',
                         help='use second degree embedding ')
@@ -201,9 +201,9 @@ def configArgsPCT():
                         help='use normalized laplacian')
     parser.add_argument('--std_dev', type=float, default=0.05, metavar='N',
                         help='amount of noise to add to data')
-    parser.add_argument('--max_curve_diff', type=float, default=1, metavar='N',
+    parser.add_argument('--max_curve_diff', type=float, default=0.1, metavar='N',
                         help='max difference in curvature for contrastive loss')
-    parser.add_argument('--min_curve_diff', type=float, default=0.5, metavar='N',
+    parser.add_argument('--min_curve_diff', type=float, default=0.05, metavar='N',
                         help='min difference in curvature for contrastive loss')
     parser.add_argument('--clip', type=float, default=0.25, metavar='N',
                         help='clip noise')
