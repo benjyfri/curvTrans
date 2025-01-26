@@ -26,8 +26,8 @@ from threedmatch import *
 from indoor import *
 from modelnet import ModelNetHdf
 import transforms
-from dataset import ModelNetPairDataset
-from configGeo import make_cfg
+# from dataset import ModelNetPairDataset
+# from configGeo import make_cfg
 def farthest_point_sampling(point_cloud, k):
     N, _ = point_cloud.shape
 

@@ -691,9 +691,7 @@ if __name__ == '__main__':
     #     print(r)
     # exit(0)
     # model_name = "a_cntr01_std005_64"
-    all_scalings_1 = np.load("all_scalings_1.npy")
-    all_scalings_2 = np.load("all_scalings_2.npy")
-    model_name = "c_cntr01_std007"
+    model_name = "n_cntr1_std01_long"
 
     # viewStabilityWithPartial()
     # checkSizeModelnet()
@@ -702,17 +700,18 @@ if __name__ == '__main__':
 
     # example_usage()
     # exit(0)
-    checkSizeSynthetic()
-    # checkSyntheticData()
-    checkDiameterPCLSynthetic()
-    exit(0)
-    check_registration_modelnet(model_name)
-    # check_registration_3dmatch(model_name)
-    exit(0)
+    # checkSizeSynthetic()
+    # # checkSyntheticData()
+    # checkDiameterPCLSynthetic()
+    # exit(0)
+    # check_registration_modelnet(model_name)
+    # # check_registration_3dmatch(model_name)
+    # exit(0)
 
 
     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
     cls_args.output_dim=5
+    cls_args.output_dim=10
     cls_args.num_neurons_per_layer = 64
     cls_args.num_mlp_layers = 5
 
@@ -721,6 +720,7 @@ if __name__ == '__main__':
     # exit()
     #
 
+    check3dStability(cls_args=cls_args, scaling_factor="1",scales=3, receptive_field=[1, 5, 10])
     # view_stabiity(cls_args=cls_args, scaling_factor=1,scales=3, receptive_field=[1, 5, 10], add_noise=True)
     # exit(0)
 
@@ -728,14 +728,14 @@ if __name__ == '__main__':
     # visualizeShapesWithEmbeddings3dMatchCorners(model_name=model_name, args_shape=cls_args, scaling_factor=2.5, rgb=False)
     # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="one", rgb=False, add_noise=False)
     # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.9, rgb=False, add_noise=False)
-    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.9, rgb=False, add_noise=True)
-    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=1, rgb=False, add_noise=True)
-    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=1.1, rgb=False, add_noise=False)
-    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=1.2, rgb=False, add_noise=False)
-    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.77, rgb=False, add_noise=True)
-    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.8, rgb=False, add_noise=True)
-    # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor=0.9, rgb=True, add_noise=True)
-    visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor=1, rgb=True, add_noise=True)
-    # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor=1.1, rgb=True, add_noise=True)
-    # exit(0)
-
+    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="0.5", rgb=False, add_noise=True)
+    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="1", rgb=False, add_noise=True)
+    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="1.5", rgb=False, add_noise=False)
+    # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=1.2, rgb=False, add_noise=False)
+    # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.77, rgb=False, add_noise=True)
+    # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.8, rgb=False, add_noise=True)
+    # # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor=0.9, rgb=True, add_noise=True)
+    # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor="1", rgb=True, add_noise=True)
+    # # visualizeShapesWithEmbeddings(model_name=model_name, args_shape=cls_args, scaling_factor=1.1, rgb=True, add_noise=True)
+    # # exit(0)
+    #

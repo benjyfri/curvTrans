@@ -260,8 +260,9 @@ def transform_point_clouds_to_canonical(point_clouds: torch.Tensor, epsilon: flo
     v2[:, 2] = 1.0
 
     # Get rotation axis and angle using cross product and dot product
-    rotation_axis = torch.cross(v1, v2)
+    rotation_axis = torch.cross(v1, v2, dim=1)  # Explicitly specifying the dim
     rotation_axis = rotation_axis / (torch.norm(rotation_axis, dim=1, keepdim=True) + epsilon)
+
     cos_theta = torch.sum(v1 * v2, dim=1)
     sin_theta = torch.sqrt(1 - cos_theta ** 2 + epsilon)
 

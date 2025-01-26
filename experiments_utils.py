@@ -666,6 +666,72 @@ def view_stabiity(cls_args=None,num_worst_losses = 3, scaling_factor=None, scale
                 # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2, chosen_point)
 
         plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2, chosen_point)
+import itertools
+def check3dStability(cls_args=None, scaling_factor=None, scales=1, receptive_field=[1, 2]):
+    pointcloud = np.load("pcl1.npy")
+    receptive_fields = [[1]+list(combo) for r in range(2, 6) for combo in itertools.combinations([3,5,7,9,11,13,15], r)]
+    dic_yay ={}
+    for r_field in receptive_fields:
+        indices= sorted(np.random.choice(range(len(pointcloud)), size=10, replace=False))
+        count = 0
+        for ind in indices:
+            rotated_pcl, rotation_matrix, _ = random_rotation_translation(pointcloud)
+            noise_1 = np.clip(np.random.normal(0.0, scale=0.01, size=(pointcloud.shape)),
+                              a_min=-0.05, a_max=0.05)
+            noise_2 = np.clip(np.random.normal(0.0, scale=0.01, size=(pointcloud.shape)),
+                              a_min=-0.05, a_max=0.05)
+            # Because noise is added for 700 sample which is roughly a quarter of the original so less noise should be added
+            noise_1 = noise_1 / 4
+            noise_2 = noise_2 / 4
+            noisy_pointcloud_1 = pointcloud + noise_1
+            noisy_pointcloud_1 = noisy_pointcloud_1.astype(np.float32)
+            noisy_pointcloud_2 = rotated_pcl + noise_2
+            noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
+
+
+            emb_1 , scaling_factor_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1[ind,:], args_shape=cls_args, scaling_factor=scaling_factor)
+            emb_1 , scaling_factor_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1[ind,:].reshape(1,3), args_shape=cls_args, scaling_factor=scaling_factor)
+            emb_2 , scaling_factor_2 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2, args_shape=cls_args, scaling_factor=scaling_factor_1)
+
+            emb_1 = emb_1.detach().cpu().numpy().squeeze()
+            emb_2 = emb_2.detach().cpu().numpy().squeeze()
+
+            for scale in r_field[1:]:
+                subsampled_1 = farthest_point_sampling_o3d(noisy_pointcloud_1, k=(int)(len(noisy_pointcloud_1) // scale))
+                subsampled_2 = farthest_point_sampling_o3d(noisy_pointcloud_2, k=(int)(len(noisy_pointcloud_2) // scale))
+
+                global_emb_1 , scaling_factor_1 = classifyPoints(model_name=cls_args.exp,
+                                              pcl_src=subsampled_1,
+                                              pcl_interest=noisy_pointcloud_1[ind,:].reshape(1,3), args_shape=cls_args,
+                                              scaling_factor=scaling_factor)
+
+                global_emb_2 , scaling_factor_2 = classifyPoints(model_name=cls_args.exp,
+                                              pcl_src=subsampled_2,
+                                              pcl_interest=noisy_pointcloud_2, args_shape=cls_args,
+                                              scaling_factor=scaling_factor_1)
+
+                global_emb_1 = global_emb_1.detach().cpu().numpy().squeeze()
+                global_emb_2 = global_emb_2.detach().cpu().numpy().squeeze()
+                # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, global_emb_1, global_emb_2)
+                emb_1 = np.hstack((emb_1, global_emb_1))
+                emb_2 = np.hstack((emb_2, global_emb_2))
+                # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2, chosen_point)
+
+            random_embedding = emb_1[ind]
+
+            # Calculate distances from the random embedding to all embeddings in embedding2
+            distances = np.linalg.norm(emb_2 - random_embedding, axis=1)
+
+            # Find indices of the 20 closest points
+            closest_indices = np.argsort(distances)[:5]
+            if ind in closest_indices:
+                count +=1
+
+        dic_yay[str(r_field)]=count
+        print(f'{str(r_field)}: {count}')
+    sorted_dict = {k: v for k, v in sorted(dic_yay.items(), key=lambda item: item[1], reverse=True)}
+    print(sorted_dict)
+
 def read_bin_file(bin_file):
     """
     Read a .bin file and return a numpy array of shape (N, 3) where N is the number of points.

@@ -7,6 +7,7 @@ import time
 import os
 # from ThreeDMatch.Test.tools import get_pcd, get_keypts, get_desc, loadlog
 from sklearn.neighbors import KDTree
+from plotting_functions import *
 
 def loadlog(gtpath):
     with open(os.path.join(gtpath, 'gt.log')) as f:
@@ -43,7 +44,7 @@ def get_keypts(keyptspath, filename):
     return keypts
 def get_pcd(pcdpath, filename):
     return open3d.io.read_point_cloud(os.path.join(pcdpath, filename + '.ply'))
-def calculate_M(source_desc, target_desc):
+def calculate_M_old(source_desc, target_desc):
     """
     Find the mutually closest point pairs in feature space.
     source and target are descriptor for 2 point cloud key points. [5000, 512]
@@ -59,6 +60,52 @@ def calculate_M(source_desc, target_desc):
             result.append([i, sourceNNidx[i][0]])
     return np.array(result)
 
+def calculate_M(source_desc, target_desc):
+    """
+    Find the mutually closest point pairs in feature space, only including
+    points with the same classification and ignoring points classified as "plane".
+
+    source_desc and target_desc are descriptors for 2 point cloud key points. [5000, 512]
+    """
+
+    # Compute classifications based on the max argument of the first 5 entries
+    source_class = np.argmax(source_desc[:, :5], axis=1)
+    target_class = np.argmax(target_desc[:, :5], axis=1)
+
+    # Ignore points classified as "plane" (classification == 0)
+    valid_source_indices = np.where(source_class != 0)[0]
+    valid_target_indices = np.where(target_class != 0)[0]
+
+    # Handle cases where all points are ignored
+    if len(valid_source_indices) == 0 or len(valid_target_indices) == 0:
+        return np.array([])
+
+    # Filter descriptors to exclude "plane" points
+    filtered_source_desc = source_desc[valid_source_indices]
+    filtered_target_desc = target_desc[valid_target_indices]
+
+    # Normalize descriptors (optional, based on feature characteristics)
+    filtered_source_desc /= np.linalg.norm(filtered_source_desc, axis=1, keepdims=True)
+    filtered_target_desc /= np.linalg.norm(filtered_target_desc, axis=1, keepdims=True)
+
+    # Build KD-trees for nearest neighbor search
+    kdtree_target = KDTree(filtered_target_desc)
+    sourceNNdis, sourceNNidx = kdtree_target.query(filtered_source_desc, 1)
+    kdtree_source = KDTree(filtered_source_desc)
+    targetNNdis, targetNNidx = kdtree_source.query(filtered_target_desc, 1)
+
+    result = []
+    for i, source_idx in enumerate(valid_source_indices):
+        target_idx = valid_target_indices[sourceNNidx[i]]
+
+        # Ensure mutual closest pair and same classification
+        if (
+            targetNNidx[sourceNNidx[i]] == i
+            and source_class[source_idx] == target_class[target_idx]
+        ):
+            result.append([source_idx.squeeze(), target_idx.squeeze()])
+
+    return np.array(result)
 
 def register2Fragments(id1, id2, keyptspath, descpath, resultpath, desc_name='SpinNet'):
     cloud_bin_s = f'cloud_bin_{id1}'
@@ -107,42 +154,62 @@ def register2Fragments(id1, id2, keyptspath, descpath, resultpath, desc_name='Sp
         gtTrans = gtLog[key]
         frag1 = source_keypts[corr[:, 0]]
         frag2_pc = open3d.geometry.PointCloud()
-        frag2_pc.points = open3d.utility.Vector3dVector(target_keypts[corr[:, 1]])
+        # frag2_pc.points = open3d.utility.Vector3dVector(target_keypts[corr[:, 1]])
+        frag2_pc.points = open3d.utility.Vector3dVector(target_keypts)
         frag2_pc.transform(gtTrans)
         frag2 = np.asarray(frag2_pc.points)
         distance = np.sqrt(np.sum(np.power(frag1 - frag2, 2), axis=1))
         num_inliers = np.sum(distance < 0.10)
         inlier_ratio = num_inliers / len(distance)
         gt_flag = 1
-
-        # calculate the transformation matrix using RANSAC, this is for Registration Recall.
-        source_pcd = open3d.geometry.PointCloud()
-        source_pcd.points = open3d.utility.Vector3dVector(source_keypts)
-        target_pcd = open3d.geometry.PointCloud()
-        target_pcd.points = open3d.utility.Vector3dVector(target_keypts)
-        s_desc = open3d.pipelines.registration.Feature()
-        s_desc.data = source_desc.T
-        t_desc = open3d.pipelines.registration.Feature()
-        t_desc.data = target_desc.T
-
-        # Another registration method
-        corr_v = open3d.utility.Vector2iVector(corr)
-        result = open3d.pipelines.registration.registration_ransac_based_on_correspondence(
-            source_pcd, target_pcd, corr_v,
-            0.05,
-            open3d.pipelines.registration.TransformationEstimationPointToPoint(False), 3,
-            open3d.pipelines.registration.RANSACConvergenceCriteria(50000, 1000))
-
-        # write the transformation matrix into .log file for evaluation.
-        with open(os.path.join(logpath, f'{desc_name}_{timestr}.log'), 'a+') as f:
-            trans = result.transformation
-            trans = np.linalg.inv(trans)
-            s1 = f'{id1}\t {id2}\t  37\n'
-            f.write(s1)
-            f.write(f"{trans[0, 0]}\t {trans[0, 1]}\t {trans[0, 2]}\t {trans[0, 3]}\t \n")
-            f.write(f"{trans[1, 0]}\t {trans[1, 1]}\t {trans[1, 2]}\t {trans[1, 3]}\t \n")
-            f.write(f"{trans[2, 0]}\t {trans[2, 1]}\t {trans[2, 2]}\t {trans[2, 3]}\t \n")
-            f.write(f"{trans[3, 0]}\t {trans[3, 1]}\t {trans[3, 2]}\t {trans[3, 3]}\t \n")
+        #
+        # # calculate the transformation matrix using RANSAC, this is for Registration Recall.
+        # source_pcd = open3d.geometry.PointCloud()
+        # source_pcd.points = open3d.utility.Vector3dVector(source_keypts)
+        # target_pcd = open3d.geometry.PointCloud()
+        # target_pcd.points = open3d.utility.Vector3dVector(target_keypts)
+        # s_desc = open3d.pipelines.registration.Feature()
+        # s_desc.data = source_desc.T
+        # t_desc = open3d.pipelines.registration.Feature()
+        # t_desc.data = target_desc.T
+        #
+        # # Another registration method
+        # corr_v = open3d.utility.Vector2iVector(corr)
+        # # Create RANSAC parameters
+        # distance_threshold = 0.05
+        # ransac_n = 3
+        # criteria = open3d.pipelines.registration.RANSACConvergenceCriteria(50000, 1000)
+        #
+        # # Create correspondence checkers list
+        # checkers = []
+        #
+        # # Perform RANSAC registration
+        # result = open3d.pipelines.registration.registration_ransac_based_on_correspondence(
+        #     source_pcd,
+        #     target_pcd,
+        #     corr_v,
+        #     distance_threshold,
+        #     open3d.pipelines.registration.TransformationEstimationPointToPoint(False),
+        #     ransac_n,
+        #     checkers,
+        #     criteria
+        # )
+        # # result = open3d.pipelines.registration.registration_ransac_based_on_correspondence(
+        # #     source_pcd, target_pcd, corr_v,
+        # #     0.05,
+        # #     open3d.pipelines.registration.TransformationEstimationPointToPoint(False), 3,
+        # #     open3d.pipelines.registration.RANSACConvergenceCriteria(50000, 1000))
+        #
+        # # write the transformation matrix into .log file for evaluation.
+        # with open(os.path.join(logpath, f'{desc_name}_{timestr}.log'), 'a+') as f:
+        #     trans = result.transformation
+        #     trans = np.linalg.inv(trans)
+        #     s1 = f'{id1}\t {id2}\t  37\n'
+        #     f.write(s1)
+        #     f.write(f"{trans[0, 0]}\t {trans[0, 1]}\t {trans[0, 2]}\t {trans[0, 3]}\t \n")
+        #     f.write(f"{trans[1, 0]}\t {trans[1, 1]}\t {trans[1, 2]}\t {trans[1, 3]}\t \n")
+        #     f.write(f"{trans[2, 0]}\t {trans[2, 1]}\t {trans[2, 2]}\t {trans[2, 3]}\t \n")
+        #     f.write(f"{trans[3, 0]}\t {trans[3, 1]}\t {trans[3, 2]}\t {trans[3, 3]}\t \n")
 
     s = f"{cloud_bin_s}\t{cloud_bin_t}\t{num_inliers}\t{inlier_ratio:.8f}\t{gt_flag}"
     with open(os.path.join(resultpath, f'{cloud_bin_s}_{cloud_bin_t}.rt.txt'), 'w+') as f:
@@ -171,16 +238,17 @@ if __name__ == '__main__':
         'sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika'
     ]
     desc_name = 'SpinNet'
-    timestr = sys.argv[1]
+    # timestr = sys.argv[1]
+    timestr = r"01261127"
     inliers_list = []
     recall_list = []
     inliers_ratio_list = []
     num_keypoints = 5000
     is_D3Feat_keypts = False
     for scene in scene_list:
-        pcdpath = f"../../data/3DMatch/fragments/{scene}/"
-        interpath = f"../../data/3DMatch/intermediate-files-real/{scene}/"
-        gtpath = f'../../data/3DMatch/fragments/{scene}-evaluation/'
+        pcdpath = f"./../data/3DMatch/fragments/{scene}/"
+        interpath = f"./../data/3DMatch/intermediate-files-real/{scene}/"
+        gtpath = f'./../data/3DMatch/fragments/{scene}-evaluation/'
         keyptspath = interpath  # os.path.join(interpath, "keypoints/")
         descpath = os.path.join(".", f"{desc_name}_desc_{timestr}/{scene}")
         gtLog = loadlog(gtpath)
