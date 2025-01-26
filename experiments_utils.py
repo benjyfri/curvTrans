@@ -670,9 +670,10 @@ import itertools
 def check3dStability(cls_args=None, scaling_factor=None, scales=1, receptive_field=[1, 2]):
     pointcloud = np.load("pcl1.npy")
     receptive_fields = [[1]+list(combo) for r in range(2, 6) for combo in itertools.combinations([3,5,7,9,11,13,15], r)]
+    # receptive_fields = [[1,3,5],[1,3,7],[1,3,9]]
     dic_yay ={}
     for r_field in receptive_fields:
-        indices= sorted(np.random.choice(range(len(pointcloud)), size=10, replace=False))
+        indices= sorted(np.random.choice(range(len(pointcloud)), size=20, replace=False))
         count = 0
         for ind in indices:
             rotated_pcl, rotation_matrix, _ = random_rotation_translation(pointcloud)
@@ -688,8 +689,6 @@ def check3dStability(cls_args=None, scaling_factor=None, scales=1, receptive_fie
             noisy_pointcloud_2 = rotated_pcl + noise_2
             noisy_pointcloud_2 = noisy_pointcloud_2.astype(np.float32)
 
-
-            emb_1 , scaling_factor_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1[ind,:], args_shape=cls_args, scaling_factor=scaling_factor)
             emb_1 , scaling_factor_1 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_1, pcl_interest=noisy_pointcloud_1[ind,:].reshape(1,3), args_shape=cls_args, scaling_factor=scaling_factor)
             emb_2 , scaling_factor_2 = classifyPoints(model_name=cls_args.exp, pcl_src=noisy_pointcloud_2, pcl_interest=noisy_pointcloud_2, args_shape=cls_args, scaling_factor=scaling_factor_1)
 
@@ -717,10 +716,8 @@ def check3dStability(cls_args=None, scaling_factor=None, scales=1, receptive_fie
                 emb_2 = np.hstack((emb_2, global_emb_2))
                 # plot_point_cloud_with_colors_by_dist_2_pcls(noisy_pointcloud_1, noisy_pointcloud_2, emb_1, emb_2, chosen_point)
 
-            random_embedding = emb_1[ind]
-
             # Calculate distances from the random embedding to all embeddings in embedding2
-            distances = np.linalg.norm(emb_2 - random_embedding, axis=1)
+            distances = np.linalg.norm(emb_2 - emb_1, axis=1)
 
             # Find indices of the 20 closest points
             closest_indices = np.argsort(distances)[:5]
@@ -1164,7 +1161,7 @@ def calcDist(src_knn_pcl, scaling_mode):
     return scale
 def classifyPoints(model_name=None, pcl_src=None,pcl_interest=None, args_shape=None, scaling_factor=None, device='cpu'):
     model = shapeClassifier(args_shape)
-    model.load_state_dict(torch.load(f'models_weights/{model_name}.pt'))
+    model.load_state_dict(torch.load(f'models_weights/{model_name}.pt',weights_only=True))
     model.to(device)
     model.eval()
     # neighbors_centered = get_k_nearest_neighbors_diff_pcls(pcl_src, pcl_interest, k=41)

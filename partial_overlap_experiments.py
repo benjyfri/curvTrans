@@ -248,7 +248,7 @@ def create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36'):
     cls_args_shape.lpe_dim = 0
     cls_args_shape.output_dim = 5
     cls_args_shape.use_lap_reorder = 1
-    cls_args_shape.lap_eigenvalues_dim = 15
+    cls_args_shape.lap_eigenvalues_dim = 5
     return cls_args_shape, 1, 1
 
 def check_pairings_modelnet():
@@ -719,8 +719,14 @@ if __name__ == '__main__':
     # testPretrainedModel(cls_args, model_name)
     # exit()
     #
-
+    import time
+    start_time = time.time()
     check3dStability(cls_args=cls_args, scaling_factor="1",scales=3, receptive_field=[1, 5, 10])
+    end_time = time.time()
+
+    # Calculate and print elapsed time
+    elapsed_time = end_time - start_time
+    print(f"Function execution time: {elapsed_time:.4f} seconds")
     # view_stabiity(cls_args=cls_args, scaling_factor=1,scales=3, receptive_field=[1, 5, 10], add_noise=True)
     # exit(0)
 
