@@ -91,6 +91,7 @@ def train_and_test(args):
     mseLoss = nn.MSELoss()
     contr_loss_weight = args.contr_loss_weight
     data_in_1_cube = args.cube
+    emb_start = 0 if (args.output_dim==5) else 5
     # Training loop
     for epoch in range(num_epochs):
         model.train()  # Set the model to training mode
@@ -110,19 +111,21 @@ def train_and_test(args):
                 output = (model((pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
 
                 orig_classification = output[:, :5]
-                orig_emb = output
+                orig_emb = output[:, emb_start:]
                 classification_loss = torch.tensor((0))
                 if args.classification == 1:
                     classification_loss = criterion(orig_classification, label)
 
                 if args.contr_loss_weight != 0:
-                    pcl2 = batch['point_cloud2'].to(device)
-                    contrastive_point_cloud = batch['contrastive_point_cloud'].to(device)
+                    pos_pcl = batch['point_cloud2'].to(device)
+                    neg_pcl = batch['contrastive_point_cloud'].to(device)
 
-                    output_pcl2 = (model((pcl2.permute(0, 2, 1)).unsqueeze(2))).squeeze()
-                    pos_emb = output_pcl2
-                    output_contrastive_pcl = (model((contrastive_point_cloud.permute(0, 2, 1)).unsqueeze(2))).squeeze()
-                    neg_emb = output_contrastive_pcl
+                    output_pos_pcl = (model((pos_pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
+
+                    output_neg_pcl = (model((neg_pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
+
+                    pos_emb = output_pos_pcl[:, emb_start:]
+                    neg_emb = output_neg_pcl[:, emb_start:]
                     # contrstive_loss = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
                     contrstive_loss = normalized_triplet_loss(orig_emb, pos_emb, neg_emb, margin=args.contr_margin)
                     total_train_contrastive_positive_loss += mseLoss(orig_emb, pos_emb)
