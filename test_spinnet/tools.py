@@ -16,7 +16,7 @@ def get_keypts(keyptspath, filename):
 
 def get_ETH_keypts(pcd, keyptspath, filename):
     pts = np.array(pcd.points)
-    key_ind = np.loadtxt(os.path.join(keyptspath, filename + '_Keypoints.txt'), dtype=np.int)
+    key_ind = np.loadtxt(os.path.join(keyptspath, filename + '_Keypoints.txt'), dtype=int)
     keypts = pts[key_ind]
     return keypts
 

@@ -6,7 +6,7 @@ from threedmatch import *
 from indoor import *
 import platform
 def load_data(partition='test', divide_data=1):
-    DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
+    DATA_DIR = r'C:\\Users\\Owner\\PycharmProjects\\curvTrans\\bbsWithShapes\\data'
     if platform.system() != "Windows":
         DATA_DIR = r'/content/curvTrans/bbsWithShapes/data'
     all_data = []
@@ -419,11 +419,12 @@ def visualizeShapesWithEmbeddingsCorners(model_name=None, args_shape=None, scali
     shapes = [47,86]
     # shapes = [47,86, 174, 51]
     # shapes = [47, 86, 162, 174, 176, 179]
-    # shapes = [86]
+    shapes = [86]
     # shapes = [10, 17, 24, 47]
     # shapes = range(10)
     for k in shapes:
         pointcloud = pcls[k][:]
+        pointcloud = np.load("pcl1.npy")
         # bin_file = "000098.bin"
         # pointcloud = read_bin_file(bin_file)
         noisy_pointcloud = pointcloud
@@ -670,7 +671,7 @@ import itertools
 def check3dStability(cls_args=None, scaling_factor=None, scales=1, receptive_field=[1, 2]):
     pointcloud = np.load("pcl1.npy")
     receptive_fields = [[1]+list(combo) for r in range(2, 6) for combo in itertools.combinations([3,5,7,9,11,13,15], r)]
-    # receptive_fields = [[1,3,5],[1,3,7],[1,3,9]]
+    # receptive_fields = [[1, 3, 5, 9, 13],[1, 7, 13],[1, 5, 13, 15],[1, 3, 7, 11],[1, 3, 7, 11, 13],[1, 3, 9, 11, 15],[1, 5, 7, 9, 11],[1, 5, 7, 13, 15]]
     dic_yay ={}
     for r_field in receptive_fields:
         indices= sorted(np.random.choice(range(len(pointcloud)), size=20, replace=False))

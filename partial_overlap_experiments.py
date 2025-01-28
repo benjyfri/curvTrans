@@ -211,7 +211,8 @@ def test_predator_data(matching=False, partial_p_keep=[0.7, 0.7]):
                         transforms.RandomJitter(),
                         transforms.ShufflePoints()]
     if os.name == 'nt':
-        root = r'C:\\Users\\benjy\\Desktop\\curvTrans\\DeepBBS\\modelnet40_ply_hdf5_2048'
+        # root = r'C:\\Users\\benjy\\Desktop\\curvTrans\\DeepBBS\\modelnet40_ply_hdf5_2048'
+        root = r'C:\\Users\\Owner\\PycharmProjects\\curvTrans\\bbsWithShapes\\data\\modelnet40_ply_hdf5_2048'
     else:
         root = r'/content/curvTrans/DeepBBS/modelnet40_ply_hdf5_2048'
     test_dataset = ModelNetHdf(overlap_radius=overlap_radius, root=root,
@@ -219,7 +220,7 @@ def test_predator_data(matching=False, partial_p_keep=[0.7, 0.7]):
     return test_dataset
 
 def load_data(partition='test', divide_data=1):
-    DATA_DIR = r'C:\\Users\\benjy\\Desktop\\curvTrans\\bbsWithShapes\\data'
+    DATA_DIR = r'C:\\Users\\Owner\\PycharmProjects\\curvTrans\\bbsWithShapes\\data'
     all_data = []
     all_label = []
     for h5_name in glob.glob(os.path.join(DATA_DIR, 'modelnet40_ply_hdf5_2048', 'ply_data_%s*.h5' % partition)):
@@ -691,7 +692,7 @@ if __name__ == '__main__':
     #     print(r)
     # exit(0)
     # model_name = "a_cntr01_std005_64"
-    model_name = "n_cntr1_std01_long"
+    model_name = "b_cntr1_std01_long"
 
     # viewStabilityWithPartial()
     # checkSizeModelnet()
@@ -711,7 +712,7 @@ if __name__ == '__main__':
 
     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
     cls_args.output_dim=5
-    cls_args.output_dim=10
+    # cls_args.output_dim=10
     cls_args.num_neurons_per_layer = 64
     cls_args.num_mlp_layers = 5
 
@@ -719,14 +720,14 @@ if __name__ == '__main__':
     # testPretrainedModel(cls_args, model_name)
     # exit()
     #
-    import time
-    start_time = time.time()
-    check3dStability(cls_args=cls_args, scaling_factor="1",scales=3, receptive_field=[1, 5, 10])
-    end_time = time.time()
-
-    # Calculate and print elapsed time
-    elapsed_time = end_time - start_time
-    print(f"Function execution time: {elapsed_time:.4f} seconds")
+    # import time
+    # start_time = time.time()
+    # check3dStability(cls_args=cls_args, scaling_factor="1",scales=3, receptive_field=[1, 5, 10])
+    # end_time = time.time()
+    #
+    # # Calculate and print elapsed time
+    # elapsed_time = end_time - start_time
+    # print(f"Function execution time: {elapsed_time:.4f} seconds")
     # view_stabiity(cls_args=cls_args, scaling_factor=1,scales=3, receptive_field=[1, 5, 10], add_noise=True)
     # exit(0)
 
@@ -735,7 +736,7 @@ if __name__ == '__main__':
     # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="one", rgb=False, add_noise=False)
     # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.9, rgb=False, add_noise=False)
     # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="0.5", rgb=False, add_noise=True)
-    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="1", rgb=False, add_noise=True)
+    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="1", rgb=False, add_noise=True)
     # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="1.5", rgb=False, add_noise=False)
     # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=1.2, rgb=False, add_noise=False)
     # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.77, rgb=False, add_noise=True)

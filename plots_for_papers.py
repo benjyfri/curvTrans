@@ -69,7 +69,7 @@ class Arrow3D(FancyArrowPatch):
         return np.min(zs)
 
 
-def create_curved_arrow(ax, start, end, n_points=20, color='purple', alpha=0.6):
+def create_curved_arrow(ax, start, end, n_points=15, color='purple', alpha=0.6):
     # Calculate the midpoint and displacement vector
     mid = (start + end) / 2
     displacement = end - start
@@ -103,8 +103,9 @@ def create_curved_arrow(ax, start, end, n_points=20, color='purple', alpha=0.6):
                 [points[i][0], points[i + 1][0]],
                 [points[i][1], points[i + 1][1]],
                 [points[i][2], points[i + 1][2]],
-                mutation_scale=10,
+                mutation_scale=30,
                 lw=1.5,
+                # lw=5,
                 arrowstyle='-|>',
                 color=color,
                 alpha=alpha
@@ -115,165 +116,31 @@ def create_curved_arrow(ax, start, end, n_points=20, color='purple', alpha=0.6):
     return arrows
 
 
-
-def plot_point_cloud_old(pcls, titles, colors, labels):
-    plt.rcParams['figure.dpi'] = 300
-    plt.rcParams['savefig.dpi'] = 300
-
-    fig = plt.figure(figsize=(7.2, 7.2))
-
-    SMALL_SIZE = 8
-    MEDIUM_SIZE = 12
-    BIGGER_SIZE = 14
-
-    plt.rc('font', size=SMALL_SIZE)
-    plt.rc('axes', titlesize=MEDIUM_SIZE)
-    plt.rc('axes', labelsize=SMALL_SIZE)
-    plt.rc('xtick', labelsize=SMALL_SIZE)
-    plt.rc('ytick', labelsize=SMALL_SIZE)
-    plt.rc('legend', fontsize=SMALL_SIZE)
-    plt.rc('figure', titlesize=BIGGER_SIZE)
-
-    face_colors = ['red', 'blue', 'green']
-    face_alpha = 0.15
-
-    # Create legend handles
-    legend_elements = []
-
-    for idx, (pcl, title) in enumerate(zip(pcls, titles)):
-        ax = fig.add_subplot(2, 2, idx + 1, projection='3d')
-        ax.set_xticklabels([])
-        ax.set_yticklabels([])
-        ax.set_zticklabels([])
-        ax.set_xlabel('')
-        ax.set_ylabel('')
-        ax.set_zlabel('')
-        if idx == 0:
-            for i in range(2, 5):
-                point = pcl[i]
-                ax.scatter(*point, c='gray', s=50, edgecolor='k', alpha=0.8)
-                ax.scatter(*(pcl[0]), c='black', s=50, edgecolor='k', alpha=0.8)
-                if i > 0:
-                    ax.plot([pcl[0, 0], point[0]],
-                            [pcl[0, 1], point[1]],
-                            [pcl[0, 2], point[2]],
-                            c='gray', linestyle='--', alpha=0.5, linewidth=2)
-
-        else:
-            # Create scatter points for legend
-            if idx == 1:  # Only create legend elements once
-                legend_elements = [plt.scatter([], [], c=color, s=50, edgecolor='k', alpha=0.8, label=label)
-                                   for color, label in zip(colors, labels)]
-            labels[1] = 'M'
-            for i, (point, color, label) in enumerate(zip(pcl, colors, labels)):
-                ax.scatter(*point, c=color, s=50, edgecolor='k', alpha=0.8)
-
-                if i > 0:
-                    ax.text(point[0], point[1], point[2] + 0.4,
-                            f' {label}',
-                            fontsize=10,
-                            color='black',
-                            weight='extra bold',
-                            horizontalalignment='center',
-                            verticalalignment='bottom',
-                            path_effects=[withStroke(linewidth=3, foreground='white')])
-                    ax.plot([pcl[0, 0], point[0]],
-                            [pcl[0, 1], point[1]],
-                            [pcl[0, 2], point[2]],
-                            c=color, linestyle='--', alpha=0.5, linewidth=2)
-
-            # Add rotation arrows for specific plots
-            if idx == 2:  # Third plot - M rotation to z-axis
-                create_curved_arrow(
-                    ax,
-                    pcls[1][1],  # Original M position
-                    pcl[1],  # New M position
-                    color='red',
-                    alpha=0.6
-                )
-
-            elif idx == 3:  # Fourth plot - A rotation around z-axis
-                create_curved_arrow(
-                    ax,
-                    pcls[2][2],  # Position of A before z-axis rotation
-                    pcl[2],  # Final position of A
-                    color='green',
-                    alpha=0.6
-                )
-
-        if len(pcl) >= 3:  # Make sure there are at least 3 points
-            last_three = pcl[-3:,:]  # Get the last three points
-            # Draw lines between all pairs of the last three points
-            for h in range(3):
-                j = (h + 1) % 3  # This cycles through 0,1,2 to connect all points
-                ax.plot([last_three[h][0], last_three[j][0]],
-                        [last_three[h][1], last_three[j][1]],
-                        [last_three[h][2], last_three[j][2]],
-                        c='black', linestyle='-', alpha=1, linewidth=1)
-
-        panel_letters = ['A', 'B', 'C', 'D']
-        ax.set_title(f'{panel_letters[idx]} | {title}',
-                     pad=15,
-                     fontweight='bold',
-                     bbox=dict(
-                         facecolor='white',
-                         edgecolor='gray',
-                         alpha=0.8,
-                         pad=5
-                     ),
-                     fontsize=MEDIUM_SIZE,
-                     color='darkblue',
-                     loc='left'  # This aligns the title to the left
-                     )
-        # ax.set_xlabel('X', labelpad=5)
-        # ax.set_ylabel('Y', labelpad=5)
-        # ax.set_zlabel('Z', labelpad=5)
-
-        ax.grid(True, linestyle='--', alpha=0.6)
-
-        ax.set_xlim([0, 5])
-        ax.set_ylim([0, 4])
-        ax.set_zlim([0, 8])
-        ax.set_box_aspect([1, 1, 1])
-
-        ax.view_init(elev=25, azim=45)
-
-
-    if idx > 0:
-        fig.legend(
-            handles=legend_elements,
-            loc='center',
-            bbox_to_anchor=(0.5, 0.02),
-            ncol=len(labels),
-            fontsize=8
-        )
-
-    plt.tight_layout()
-    plt.subplots_adjust(bottom=0.1, wspace=0.0, hspace=0.3)  # Changed wspace from 0.3 to 0.15
-    plt.savefig('point_cloud_visualization.png',
-                format='png',
-                bbox_inches='tight',
-                dpi=300)
-    plt.show()
-
-
 def plot_point_cloud(pcls, titles, colors, labels):
     plt.rcParams['figure.dpi'] = 300
     plt.rcParams['savefig.dpi'] = 300
 
-    # Create figure with minimal margins
+    # Create figure with GridSpec to control spacing
     fig = plt.figure(figsize=(7.2, 7.2))
 
-    # Remove default margins
-    plt.rcParams['figure.constrained_layout.use'] = True
-    plt.rcParams['figure.constrained_layout.h_pad'] = 0.05
-    plt.rcParams['figure.constrained_layout.w_pad'] = 0.0
-    plt.rcParams['figure.constrained_layout.hspace'] = 0.05
-    plt.rcParams['figure.constrained_layout.wspace'] = 0.0
+    # Create a black background for the borders
+    fig.patch.set_facecolor('black')
 
-    SMALL_SIZE = 8
-    MEDIUM_SIZE = 12
-    BIGGER_SIZE = 14
+    # Create GridSpec with larger gaps between subplots
+    gs = fig.add_gridspec(2, 2,
+                          hspace=0.005,  # Spacing between rows
+                          wspace=0.005,  # Spacing between columns
+                          left=0.0025,  # Left margin
+                          right=0.9975,  # Right margin
+                          top=0.9975,  # Top margin
+                          bottom=0.0025)  # Bottom margin
+
+    # Turn off constrained layout
+    plt.rcParams['figure.constrained_layout.use'] = False
+
+    SMALL_SIZE = 16
+    MEDIUM_SIZE = 20
+    BIGGER_SIZE = 24
 
     plt.rc('font', size=SMALL_SIZE)
     plt.rc('axes', titlesize=MEDIUM_SIZE)
@@ -289,7 +156,18 @@ def plot_point_cloud(pcls, titles, colors, labels):
     legend_elements = []
 
     for idx, (pcl, title) in enumerate(zip(pcls, titles)):
-        ax = fig.add_subplot(2, 2, idx + 1, projection='3d')
+        # Create subplot using GridSpec
+        row = idx // 2
+        col = idx % 2
+        ax = fig.add_subplot(gs[row, col], projection='3d')
+
+        # Set white background for each subplot
+        ax.set_facecolor('white')
+
+        # Make sure the axis background is also white
+        ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
         # Remove padding within each subplot
         ax.set_xticklabels([])
@@ -305,25 +183,25 @@ def plot_point_cloud(pcls, titles, colors, labels):
         if idx == 0:
             for i in range(2, 5):
                 point = pcl[i]
-                ax.scatter(*point, c='gray', s=50, edgecolor='k', alpha=0.8)
-                ax.scatter(*(pcl[0]), c='black', s=50, edgecolor='k', alpha=0.8)
+                ax.scatter(*point, c='gray', s=100, edgecolor='k', alpha=0.8)
+                ax.scatter(*(pcl[0]), c='black', s=100, edgecolor='k', alpha=0.8)
                 if i > 0:
                     ax.plot([pcl[0, 0], point[0]],
                             [pcl[0, 1], point[1]],
                             [pcl[0, 2], point[2]],
-                            c='gray', linestyle='--', alpha=0.5, linewidth=2)
+                            c='gray', linestyle='--', alpha=0.5, linewidth=3)
         else:
             if idx == 1:
                 legend_elements = [plt.scatter([], [], c=color, s=50, edgecolor='k', alpha=0.8, label=label)
                                    for color, label in zip(colors, labels)]
             labels[1] = 'M'
             for i, (point, color, label) in enumerate(zip(pcl, colors, labels)):
-                ax.scatter(*point, c=color, s=50, edgecolor='k', alpha=0.8)
+                ax.scatter(*point, c=color, s=100, edgecolor='k', alpha=0.8)
 
                 if i > 0:
                     ax.text(point[0], point[1], point[2] + 0.4,
                             f' {label}',
-                            fontsize=10,
+                            fontsize=SMALL_SIZE,
                             color='black',
                             weight='extra bold',
                             horizontalalignment='center',
@@ -332,7 +210,7 @@ def plot_point_cloud(pcls, titles, colors, labels):
                     ax.plot([pcl[0, 0], point[0]],
                             [pcl[0, 1], point[1]],
                             [pcl[0, 2], point[2]],
-                            c=color, linestyle='--', alpha=0.5, linewidth=2)
+                            c=color, linestyle='--', alpha=0.75, linewidth=3)
 
             if idx == 2:
                 create_curved_arrow(
@@ -360,56 +238,47 @@ def plot_point_cloud(pcls, titles, colors, labels):
                         [last_three[h][2], last_three[j][2]],
                         c='black', linestyle='-', alpha=1, linewidth=1)
 
+        # Just add panel letters without titles
         panel_letters = ['A', 'B', 'C', 'D']
-        ax.set_title(f'{panel_letters[idx]} | {title}',
-                     pad=2,  # Reduced padding
-                     fontweight='bold',
-                     bbox=dict(
-                         facecolor='white',
-                         edgecolor='gray',
-                         alpha=0.8,
-                         pad=2  # Reduced padding
-                     ),
-                     fontsize=MEDIUM_SIZE,
-                     color='darkblue',
-                     loc='center'
-                     )
+        ax.text2D(0.05, 0.9, panel_letters[idx],
+                  color='black',
+                  transform=ax.transAxes,
+                  fontsize=MEDIUM_SIZE,
+                  fontweight='bold',
+                  bbox=dict(
+                      facecolor='white',
+                      edgecolor='none',
+                      alpha=1,
+                      pad=0
+                  ))
 
         ax.grid(True, linestyle='--', alpha=0.6)
         ax.set_xlim([0, 5])
-        ax.set_ylim([0, 4])
+        ax.set_ylim([0, 5])
         ax.set_zlim([0, 8])
         ax.set_box_aspect([1, 1, 1])
         ax.view_init(elev=25, azim=45)
 
-    if idx > 0:
-        fig.legend(
-            handles=legend_elements,
-            loc='center',
-            bbox_to_anchor=(0.5, 0.02),
-            ncol=len(labels),
-            fontsize=8
-        )
-
-    # Use tight_layout with minimal padding
-    plt.tight_layout(pad=0.1, h_pad=0.2, w_pad=0.2)
-
-    # Save with minimal borders
-    plt.savefig('point_cloud_visualization.png',
-                format='png',
-                bbox_inches='tight',
-                pad_inches=0.1,
-                dpi=300)
     plt.show()
+
 def main():
     points = generate_random_points()
-    M = np.mean(points, axis=0)
     o = np.zeros(3)
-    size_sorted = np.argsort(np.linalg.norm(points,axis=1))
-    p1 = points[size_sorted[2],:].copy()
-    p2 = points[size_sorted[1],:].copy()
-    p3 = points[size_sorted[0],:].copy()
+    sizes = np.linalg.norm(points,axis=1)
+    size_sorted_indices = np.argsort(sizes)
+    size_x_sorted_indices = np.argsort(points[:,0])
 
+    new_size = [sizes[size_sorted_indices[2-i]] for i in range(3)]
+    new_size = np.clip(new_size,0,7)
+    p1 = points[size_x_sorted_indices[0],:].copy()
+    p1[0]=0
+    p1 *= (new_size[0] / np.linalg.norm(p1) )
+    p2 = points[size_x_sorted_indices[1],:].copy()
+    p2 *= (new_size[1] / np.linalg.norm(p2))
+    p3 = points[size_x_sorted_indices[2],:].copy()
+    p3 *= (new_size[2] / np.linalg.norm(p3))
+
+    M = np.mean([p1,p2,p3], axis=0)
     pcl_1 = np.vstack([o, M, p1, p2, p3])
     pcl_2 = rotate_point_cloud_to_align(M.copy(), pcl_1.copy())
     pcl_3 = rotate_point_z_to_x_axis((pcl_2[2, :]).copy(), pcl_2.copy())
@@ -422,6 +291,86 @@ def main():
     plot_point_cloud(pcl_list, titles, colors, labels)
 
 
+import numpy as np
+import matplotlib.pyplot as plt
+from itertools import combinations
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from itertools import combinations
+
+def visualize_point_cloud():
+    # Set random seed for reproducibility
+    np.random.seed(42)
+
+    # 1. Sample 10 points uniformly from [-1,1] x [-1,1]
+    num_points = 10
+    x = np.random.uniform(-1, 1, num_points)
+    y = np.random.uniform(-1, 1, num_points)
+
+    # Calculate z according to z = x^2 + y^2
+    z = x ** 2 + y ** 2
+
+    # Combine into point cloud array
+    orig_pcl = np.column_stack((x, y, z))
+
+    # Calculate plot limits with small padding
+    padding = 0.05  # Small padding for better visualization
+    x_min, x_max = orig_pcl[:, 0].min() - padding, orig_pcl[:, 0].max() + padding
+    y_min, y_max = orig_pcl[:, 1].min() - padding, orig_pcl[:, 1].max() + padding
+    z_min, z_max = orig_pcl[:, 2].min() - padding, orig_pcl[:, 2].max() + padding
+
+    # 2. Plot original point cloud with points only
+    fig1 = plt.figure(figsize=(8, 8))
+    ax1 = fig1.add_subplot(111, projection='3d')
+    ax1.scatter(orig_pcl[:, 0], orig_pcl[:, 1], orig_pcl[:, 2],
+                c='crimson', s=100)
+
+    # Set view limits
+    ax1.set_xlim([x_min, x_max])
+    ax1.set_ylim([y_min, y_max])
+    ax1.set_zlim([z_min, z_max])
+
+    # Adjust viewing angle for better visualization
+    ax1.view_init(elev=20, azim=45)
+
+    # Remove all axes and grid elements
+    ax1.set_axis_off()
+    plt.show()
+
+    # 3. Plot point cloud with edges between all points
+    fig2 = plt.figure(figsize=(8, 8))
+    ax2 = fig2.add_subplot(111, projection='3d')
+
+    # Plot points
+    ax2.scatter(orig_pcl[:, 0], orig_pcl[:, 1], orig_pcl[:, 2],
+                c='crimson', s=100)
+
+    # Plot edges between all pairs of points
+    for (i, j) in combinations(range(num_points), 2):
+        point1 = orig_pcl[i]
+        point2 = orig_pcl[j]
+        ax2.plot([point1[0], point2[0]],
+                 [point1[1], point2[1]],
+                 [point1[2], point2[2]],
+                 color='steelblue', alpha=0.5, linewidth=1)
+
+    # Set view limits
+    ax2.set_xlim([x_min, x_max])
+    ax2.set_ylim([y_min, y_max])
+    ax2.set_zlim([z_min, z_max])
+
+    # Adjust viewing angle for better visualization
+    ax2.view_init(elev=20, azim=45)
+
+    # Remove all axes and grid elements
+    ax2.set_axis_off()
+    plt.show()
+
+
 if __name__ == "__main__":
+    visualize_point_cloud()
     # a = [main() for i in range(1)]
-    a = [main() for i in range(40)]
+    # a = [main() for i in range(50)]
+    # a = [main() for i in range(60)]

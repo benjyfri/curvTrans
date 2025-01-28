@@ -151,6 +151,7 @@ def generate_descriptor(model, desc_name, pcdpath, keyptspath, descpath):
         start_time = time.time()
         desc_len = 32
         desc_len = 150
+        # desc_len = 75
         step_size = 100
         step_size = B
         iter_num = int(np.ceil(B / step_size))
@@ -175,7 +176,7 @@ def configArgsPCT():
     parser = argparse.ArgumentParser(description='Point Cloud Recognition')
     parser.add_argument('--wandb_proj', type=str, default='MLP-Contrastive-Ablation', metavar='N',
                         help='Name of the wandb project name to upload the run data')
-    parser.add_argument('--exp_name', type=str, default='n_cntr1_std01_long', metavar='N',
+    parser.add_argument('--exp_name', type=str, default='c_cntr_sep_1_std01_long', metavar='N',
                         help='Name of the experiment')
     parser.add_argument('--batch_size', type=int, default=1024, metavar='batch_size',
                         help='Size of batch)')
@@ -323,7 +324,10 @@ if __name__ == '__main__':
         'sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika'
     ]
 
-    experiment_id = time.strftime('%m%d%H%M')
+    args = configArgsPCT()
+    print(args.exp_name)
+    # experiment_id = time.strftime('%m%d%H%M')
+    experiment_id = args.exp_name
     model_str = experiment_id  # sys.argv[1]
     if not os.path.exists(f"SpinNet_desc_{model_str}/"):
         os.mkdir(f"SpinNet_desc_{model_str}")
@@ -339,7 +343,6 @@ if __name__ == '__main__':
     # model = nn.DataParallel(model, device_ids=[0])
     # model.load_state_dict(torch.load('../../pre-trained_models/3DMatch_best.pkl'))
 
-    args = configArgsPCT()
     model = shapeClassifier(args)
     model.load_state_dict(torch.load(f'.././models_weights/{args.exp_name}.pt'))
     model.to("cuda")
