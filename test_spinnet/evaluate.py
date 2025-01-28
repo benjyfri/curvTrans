@@ -60,6 +60,38 @@ def calculate_M_old(source_desc, target_desc):
             result.append([i, sourceNNidx[i][0]])
     return np.array(result)
 
+
+def find_points_compliance(arr, threshold=0.1):
+    """
+    Find indices of points where:
+    1. The highest value is NOT at the 0 entry.
+    2. The highest value is substantially larger than the second-highest value.
+
+    Args:
+        arr (np.ndarray): A numpy array of shape (num_of_points, 5).
+        threshold (float): The minimum difference between the highest and second-highest value to be considered "substantially larger".
+
+    Returns:
+        list: Indices of points that comply with both conditions.
+    """
+    # Get the indices of the maximum value in each row
+    max_indices = np.argmax(arr, axis=1)
+
+    # Condition 1: Max value is NOT at the 0 entry
+    not_at_zero_indices = np.where(max_indices != 0)[0]
+
+    # Find the highest and second-highest values for each row
+    sorted_values = np.sort(arr, axis=1)[:, ::-1]  # Sort in descending order
+    max_values = sorted_values[:, 0]
+    second_max_values = sorted_values[:, 1]
+
+    # Condition 2: Max value is substantially larger than the second-highest
+    substantial_diff_indices = np.where(max_values - second_max_values > threshold)[0]
+
+    # Combine both conditions (intersection of indices)
+    combined_indices = np.intersect1d(not_at_zero_indices, substantial_diff_indices)
+
+    return combined_indices
 def calculate_M(source_desc, target_desc):
     """
     Find the mutually closest point pairs in feature space, only including
@@ -68,13 +100,15 @@ def calculate_M(source_desc, target_desc):
     source_desc and target_desc are descriptors for 2 point cloud key points. [5000, 512]
     """
 
-    # Compute classifications based on the max argument of the first 5 entries
-    source_class = np.argmax(source_desc[:, :5], axis=1)
-    target_class = np.argmax(target_desc[:, :5], axis=1)
-
-    # Ignore points classified as "plane" (classification == 0)
-    valid_source_indices = np.where(source_class != 0)[0]
-    valid_target_indices = np.where(target_class != 0)[0]
+    # # Compute classifications based on the max argument of the first 5 entries
+    # source_class = np.argmax(source_desc[:, :5], axis=1)
+    # target_class = np.argmax(target_desc[:, :5], axis=1)
+    #
+    # # Ignore points classified as "plane" (classification == 0)
+    # valid_source_indices = np.where(source_class != 0)[0]
+    # valid_target_indices = np.where(target_class != 0)[0]
+    valid_source_indices = find_points_compliance(source_desc[:, :5], threshold=1)
+    valid_target_indices = find_points_compliance(target_desc[:, :5], threshold=1)
 
     # Handle cases where all points are ignored
     if len(valid_source_indices) == 0 or len(valid_target_indices) == 0:
@@ -101,7 +135,7 @@ def calculate_M(source_desc, target_desc):
         # Ensure mutual closest pair and same classification
         if (
             targetNNidx[sourceNNidx[i]] == i
-            and source_class[source_idx] == target_class[target_idx]
+            # and source_class[source_idx] == target_class[target_idx]
         ):
             result.append([source_idx.squeeze(), target_idx.squeeze()])
 
@@ -135,6 +169,13 @@ def register2Fragments(id1, id2, keyptspath, descpath, resultpath, desc_name='Sp
         target_desc = get_desc(descpath, cloud_bin_t, desc_name=desc_name)
         source_desc = np.nan_to_num(source_desc)
         target_desc = np.nan_to_num(target_desc)
+        # indices = np.r_[0:10, 20:30, 80:90, 100:110, 140:150]
+        # indices = np.r_[0:10, 20:30, 40:50, 60:70, 80:90, 100:110, 120:130, 140:150]
+        # indices = np.r_[0:5, 10:15, 20:25, 30:35, 40:45, 50:55, 60:65, 70:75, 80:85, 90:95, 100:105, 110:115, 120:125, 130:135, 140:145]
+        #
+        # # Apply slicing to source and target embeddings
+        # source_desc = source_desc[:, indices]
+        # target_desc = target_desc[:, indices]
         if source_desc.shape[0] > num_keypoints:
             rand_ind = np.random.choice(source_desc.shape[0], num_keypoints, replace=False)
             source_keypts = source_keypts[rand_ind]
@@ -154,8 +195,8 @@ def register2Fragments(id1, id2, keyptspath, descpath, resultpath, desc_name='Sp
         gtTrans = gtLog[key]
         frag1 = source_keypts[corr[:, 0]]
         frag2_pc = open3d.geometry.PointCloud()
-        # frag2_pc.points = open3d.utility.Vector3dVector(target_keypts[corr[:, 1]])
-        frag2_pc.points = open3d.utility.Vector3dVector(target_keypts)
+        frag2_pc.points = open3d.utility.Vector3dVector(target_keypts[corr[:, 1]])
+        # frag2_pc.points = open3d.utility.Vector3dVector(target_keypts)
         frag2_pc.transform(gtTrans)
         frag2 = np.asarray(frag2_pc.points)
         distance = np.sqrt(np.sum(np.power(frag1 - frag2, 2), axis=1))
@@ -239,60 +280,61 @@ if __name__ == '__main__':
     ]
     desc_name = 'SpinNet'
     # timestr = sys.argv[1]
-    timestr = r"01261127"
-    inliers_list = []
-    recall_list = []
-    inliers_ratio_list = []
-    num_keypoints = 5000
-    is_D3Feat_keypts = False
-    for scene in scene_list:
-        pcdpath = f"./../data/3DMatch/fragments/{scene}/"
-        interpath = f"./../data/3DMatch/intermediate-files-real/{scene}/"
-        gtpath = f'./../data/3DMatch/fragments/{scene}-evaluation/'
-        keyptspath = interpath  # os.path.join(interpath, "keypoints/")
-        descpath = os.path.join(".", f"{desc_name}_desc_{timestr}/{scene}")
-        gtLog = loadlog(gtpath)
-        logpath = f"log_result/{scene}-evaluation"
-        resultpath = os.path.join(".", f"pred_result/{scene}/{desc_name}_result_{timestr}")
-        if not os.path.exists(resultpath):
-            os.makedirs(resultpath)
-        if not os.path.exists(logpath):
-            os.makedirs(logpath)
+    # for timestr in ['z_cntr0_std01_long','a_cntr1_std005_long','b_cntr1_std01_long','c_cntr_sep_1_std01_long']:
+    for timestr in ['y_cntr0_std0_long','x_cntr0_std005_long']:
+        inliers_list = []
+        recall_list = []
+        inliers_ratio_list = []
+        num_keypoints = 5000
+        is_D3Feat_keypts = False
+        for scene in scene_list:
+            pcdpath = f"./../data/3DMatch/fragments/{scene}/"
+            interpath = f"./../data/3DMatch/intermediate-files-real/{scene}/"
+            gtpath = f'./../data/3DMatch/fragments/{scene}-evaluation/'
+            keyptspath = interpath  # os.path.join(interpath, "keypoints/")
+            descpath = os.path.join(".", f"{desc_name}_desc_{timestr}/{scene}")
+            gtLog = loadlog(gtpath)
+            logpath = f"log_result/{scene}-evaluation"
+            resultpath = os.path.join(".", f"pred_result/{scene}/{desc_name}_result_{timestr}")
+            if not os.path.exists(resultpath):
+                os.makedirs(resultpath)
+            if not os.path.exists(logpath):
+                os.makedirs(logpath)
 
-        # register each pair
-        num_frag = len(os.listdir(pcdpath))
-        print(f"Start Evaluate Descriptor {desc_name} for {scene}")
-        start_time = time.time()
-        for id1 in range(num_frag):
-            for id2 in range(id1 + 1, num_frag):
-                num_inliers, inlier_ratio, gt_flag = register2Fragments(id1, id2, keyptspath, descpath, resultpath,
-                                                                        desc_name)
-        print(f"Finish Evaluation, time: {time.time() - start_time:.2f}s")
+            # register each pair
+            num_frag = len(os.listdir(pcdpath))
+            print(f"Start Evaluate Descriptor {desc_name} for {scene}")
+            start_time = time.time()
+            for id1 in range(num_frag):
+                for id2 in range(id1 + 1, num_frag):
+                    num_inliers, inlier_ratio, gt_flag = register2Fragments(id1, id2, keyptspath, descpath, resultpath,
+                                                                            desc_name)
+            print(f"Finish Evaluation, time: {time.time() - start_time:.2f}s")
 
-        # evaluate
-        result = []
-        for id1 in range(num_frag):
-            for id2 in range(id1 + 1, num_frag):
-                line = read_register_result(id1, id2)
-                result.append([int(line[0]), float(line[1]), int(line[2])])
-        result = np.array(result)
-        indices_results = np.sum(result[:, 2] == 1)
-        correct_match = np.sum(result[:, 1] > 0.05)
-        recall = float(correct_match / indices_results) * 100
-        print(f"Correct Match {correct_match}, ground truth Match {indices_results}")
-        print(f"Recall {recall}%")
-        ave_num_inliers = np.sum(np.where(result[:, 1] > 0.05, result[:, 0], np.zeros(result.shape[0]))) / correct_match
-        print(f"Average Num Inliners: {ave_num_inliers}")
-        ave_inlier_ratio = np.sum(
-            np.where(result[:, 1] > 0.05, result[:, 1], np.zeros(result.shape[0]))) / correct_match
-        print(f"Average Num Inliner Ratio: {ave_inlier_ratio}")
-        recall_list.append(recall)
-        inliers_list.append(ave_num_inliers)
-        inliers_ratio_list.append(ave_inlier_ratio)
-    print(recall_list)
-    average_recall = sum(recall_list) / len(recall_list)
-    print(f"All 8 scene, average recall: {average_recall}%")
-    average_inliers = sum(inliers_list) / len(inliers_list)
-    print(f"All 8 scene, average num inliers: {average_inliers}")
-    average_inliers_ratio = sum(inliers_ratio_list) / len(inliers_list)
-    print(f"All 8 scene, average num inliers ratio: {average_inliers_ratio}")
+            # evaluate
+            result = []
+            for id1 in range(num_frag):
+                for id2 in range(id1 + 1, num_frag):
+                    line = read_register_result(id1, id2)
+                    result.append([int(line[0]), float(line[1]), int(line[2])])
+            result = np.array(result)
+            indices_results = np.sum(result[:, 2] == 1)
+            correct_match = np.sum(result[:, 1] > 0.05)
+            recall = float(correct_match / indices_results) * 100
+            print(f"Correct Match {correct_match}, ground truth Match {indices_results}")
+            print(f"Recall {recall}%")
+            ave_num_inliers = np.sum(np.where(result[:, 1] > 0.05, result[:, 0], np.zeros(result.shape[0]))) / correct_match
+            print(f"Average Num Inliners: {ave_num_inliers}")
+            ave_inlier_ratio = np.sum(
+                np.where(result[:, 1] > 0.05, result[:, 1], np.zeros(result.shape[0]))) / correct_match
+            print(f"Average Num Inliner Ratio: {ave_inlier_ratio}")
+            recall_list.append(recall)
+            inliers_list.append(ave_num_inliers)
+            inliers_ratio_list.append(ave_inlier_ratio)
+        print(recall_list)
+        average_recall = sum(recall_list) / len(recall_list)
+        print(f"All 8 scene, average recall: {average_recall}%")
+        average_inliers = sum(inliers_list) / len(inliers_list)
+        print(f"All 8 scene, average num inliers: {average_inliers}")
+        average_inliers_ratio = sum(inliers_ratio_list) / len(inliers_list)
+        print(f"All 8 scene, average num inliers ratio: {average_inliers_ratio}")
