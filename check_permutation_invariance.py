@@ -90,67 +90,66 @@ def check(graph_weight_mode=0):
     point_clouds_group = hdf5_file['point_clouds']
     num_point_clouds = len(point_clouds_group)
     indices = list(range(num_point_clouds))
-    normalize_lap = [True]
-    sorting_op = ["large"]
+    normalize_lap = [True, False]
     noise_size = [0.0,0.01,0.03,0.05,0.07, 0.1]
     all_runs_same_index_list = {}
-    for nlap in normalize_lap:
-        for sts_ort in sorting_op:
-            for std in noise_size:
-                run_name = "nlap: " + str(nlap) + "_std_" + str(std) +"_"+sts_ort + f'_mode:{graph_weight_mode}'
-                print(f'Run:  {run_name}')
-                same_index_list = []
-                for idx in range(num_point_clouds):
-                    if idx % 10000 == 0:
-                        print(f'------------{idx}------------')
-                    point_cloud_name = f"point_cloud_{indices[idx]}"
+    for std in noise_size:
+        for nlap in normalize_lap:
+            run_name = "nlap: " + str(nlap) + "_std_" + str(std)+ f'_mode:{graph_weight_mode}'
+            print(f'Run:  {run_name}')
+            same_index_list = []
+            for idx in range(num_point_clouds//50):
+                if idx % 10000 == 0:
+                    print(f'------------{idx*50}------------')
+                point_cloud_name = f"point_cloud_{indices[idx*50]}"
 
-                    info = {key: point_clouds_group[point_cloud_name].attrs[key] for key in
-                            point_clouds_group[point_cloud_name].attrs}
-                    class_label = info['class']
-                    angle = info['angle']
-                    radius = info['radius']
-                    [min_len, max_len] = [0.45, 0.55]
-                    bias = 0.25
-                    edge_label = info['edge']
-                    bounds, point_cloud = samplePcl(angle=angle, radius=radius, class_label=class_label, sampled_points=20,
-                                                    min_len=min_len,
-                                                    max_len=max_len, bias=bias, info=info, edge_label=edge_label)
-
-
-                    l = createLap(torch.from_numpy(point_cloud).float().unsqueeze(0), nlap, graph_weight_mode=graph_weight_mode)
-                    # Compute LPE embedding
-                    eigvecs, eigenvals = top_k_smallest_eigenvectors(l)
-                    indices_orig, fixed_eigs = sort_by_first_eigenvector(eigvecs)
-
-                    pcl_size = len(point_cloud)
-                    rot = R.random().as_matrix()
-                    # print(rot)
-                    point_cloud1 = np.matmul(point_cloud, rot.T)
-                    # point_cloud1 = point_cloud
-                    noise = np.random.normal(0, std, point_cloud.shape)
-                    # noise = np.random.normal(0, 0, point_cloud.shape)
-                    noisy_point_cloud = point_cloud1 + noise
-                    permuted_indices = np.concatenate(([0], (1 + np.random.permutation(pcl_size-1))))
-                    # permuted_indices = np.arange(41)
-                    noisy_point_cloud = noisy_point_cloud[permuted_indices]
+                info = {key: point_clouds_group[point_cloud_name].attrs[key] for key in
+                        point_clouds_group[point_cloud_name].attrs}
+                class_label = info['class']
+                angle = info['angle']
+                radius = info['radius']
+                [min_len, max_len] = [0.45, 0.55]
+                bias = 0.25
+                edge_label = info['edge']
+                bounds, point_cloud = samplePcl(angle=angle, radius=radius, class_label=class_label, sampled_points=20,
+                                                min_len=min_len,
+                                                max_len=max_len, bias=bias, info=info, edge_label=edge_label)
 
 
-                    l2 = createLap(torch.from_numpy(noisy_point_cloud).float().unsqueeze(0), nlap, graph_weight_mode=graph_weight_mode)
-                    # Compute LPE embedding
-                    eigvecs2, eigenvals2 = top_k_smallest_eigenvectors(l2)
-                    indices_noised, fixed_eigs2 = sort_by_first_eigenvector(eigvecs2)
+                l = createLap(torch.from_numpy(point_cloud).float().unsqueeze(0), nlap, graph_weight_mode=graph_weight_mode)
+                # Compute LPE embedding
+                eigvecs, eigenvals = top_k_smallest_eigenvectors(l)
+                indices_orig, fixed_eigs = sort_by_first_eigenvector(eigvecs)
+                indices_orig = indices_orig.squeeze().cpu().numpy()
+                pcl_size = len(point_cloud)
+                rot = R.random().as_matrix()
+                # print(rot)
+                point_cloud1 = np.matmul(point_cloud, rot.T)
+                # point_cloud1 = point_cloud
+                noise = np.random.normal(0, std, point_cloud.shape)
+                # noise = np.random.normal(0, 0, point_cloud.shape)
+                noisy_point_cloud = point_cloud1 + noise
+                permuted_indices = np.concatenate(([0], (1 + np.random.permutation(pcl_size-1))))
+                # permuted_indices = np.arange(41)
+                noisy_point_cloud = noisy_point_cloud[permuted_indices]
 
-                    base = np.arange(pcl_size)
 
-                    original_reordered_indices = base[indices_orig]
-                    noised_reordered_indices = (base[permuted_indices])[indices_noised]
-                    same_order = np.array_equal(original_reordered_indices, noised_reordered_indices)
-                    same_index_amount = np.count_nonzero(original_reordered_indices == noised_reordered_indices)
-                    same_index_list.append(same_index_amount)
+                l2 = createLap(torch.from_numpy(noisy_point_cloud).float().unsqueeze(0), nlap, graph_weight_mode=graph_weight_mode)
+                # Compute LPE embedding
+                eigvecs2, eigenvals2 = top_k_smallest_eigenvectors(l2)
+                indices_noised, fixed_eigs2 = sort_by_first_eigenvector(eigvecs2)
+                indices_noised = indices_noised.squeeze().cpu().numpy()
 
-                all_runs_same_index_list[run_name] = same_index_list
-                print(f'mean: {np.mean(same_index_list)}')
+                base = np.arange(pcl_size)
+
+                original_reordered_indices = base[indices_orig]
+                noised_reordered_indices = (base[permuted_indices])[indices_noised]
+                same_order = np.array_equal(original_reordered_indices, noised_reordered_indices)
+                same_index_amount = np.count_nonzero(original_reordered_indices == noised_reordered_indices)
+                same_index_list.append(same_index_amount)
+
+            all_runs_same_index_list[run_name] = same_index_list
+            print(f'mean: {np.mean(same_index_list)}')
     # plot_same_index_list(all_runs_same_index_list)
 
 if __name__ == '__main__':
