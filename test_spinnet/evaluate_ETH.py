@@ -114,7 +114,7 @@ def register2Fragments(id1, id2, keyptspath, descpath, resultpath, desc_name='pp
     cloud_bin_t = f'Hokuyo_{id2}'
     write_file = f'{cloud_bin_s}_{cloud_bin_t}.rt.txt'
     if os.path.exists(os.path.join(resultpath, write_file)):
-        #      print(f"{write_file} already exists.")
+        print(f"{write_file} already exists.")
         return 0, 0, 0
     pcd_s = get_pcd(pcdpath, cloud_bin_s)
     source_keypts = get_ETH_keypts(pcd_s, keyptspath, cloud_bin_s)
@@ -146,32 +146,32 @@ def register2Fragments(id1, id2, keyptspath, descpath, resultpath, desc_name='pp
         inlier_ratio = num_inliers / len(distance)
         gt_flag = 1
 
-        # calculate the transformation matrix using RANSAC, this is for Registration Recall.
-        source_pcd = open3d.geometry.PointCloud()
-        source_pcd.points = open3d.utility.Vector3dVector(source_keypts)
-        target_pcd = open3d.geometry.PointCloud()
-        target_pcd.points = open3d.utility.Vector3dVector(target_keypts)
-        s_desc = open3d.pipelines.registration.Feature()
-        s_desc.data = source_desc.T
-        t_desc = open3d.pipelines.registration.Feature()
-        t_desc.data = target_desc.T
-        result = open3d.pipelines.registration.registration_ransac_based_on_feature_matching(
-            source_pcd, target_pcd, s_desc, t_desc,
-            0.05,
-            open3d.pipelines.registration.TransformationEstimationPointToPoint(False), 3,
-            [open3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
-             open3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(0.05)],
-            open3d.pipelines.registration.RANSACConvergenceCriteria(50000, 1000))
-        # write the transformation matrix into .log file for evaluation.
-        with open(os.path.join(logpath, f'{desc_name}_{timestr}.log'), 'a+') as f:
-            trans = result.transformation
-            trans = np.linalg.inv(trans)
-            s1 = f'{id1}\t {id2}\t  37\n'
-            f.write(s1)
-            f.write(f"{trans[0, 0]}\t {trans[0, 1]}\t {trans[0, 2]}\t {trans[0, 3]}\t \n")
-            f.write(f"{trans[1, 0]}\t {trans[1, 1]}\t {trans[1, 2]}\t {trans[1, 3]}\t \n")
-            f.write(f"{trans[2, 0]}\t {trans[2, 1]}\t {trans[2, 2]}\t {trans[2, 3]}\t \n")
-            f.write(f"{trans[3, 0]}\t {trans[3, 1]}\t {trans[3, 2]}\t {trans[3, 3]}\t \n")
+        # # calculate the transformation matrix using RANSAC, this is for Registration Recall.
+        # source_pcd = open3d.geometry.PointCloud()
+        # source_pcd.points = open3d.utility.Vector3dVector(source_keypts)
+        # target_pcd = open3d.geometry.PointCloud()
+        # target_pcd.points = open3d.utility.Vector3dVector(target_keypts)
+        # s_desc = open3d.pipelines.registration.Feature()
+        # s_desc.data = source_desc.T
+        # t_desc = open3d.pipelines.registration.Feature()
+        # t_desc.data = target_desc.T
+        # result = open3d.pipelines.registration.registration_ransac_based_on_feature_matching(
+        #     source_pcd, target_pcd, s_desc, t_desc,
+        #     0.05,
+        #     open3d.pipelines.registration.TransformationEstimationPointToPoint(False), 3,
+        #     [open3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
+        #      open3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(0.05)],
+        #     open3d.pipelines.registration.RANSACConvergenceCriteria(50000, 1000))
+        # # write the transformation matrix into .log file for evaluation.
+        # with open(os.path.join(logpath, f'{desc_name}_{timestr}.log'), 'a+') as f:
+        #     trans = result.transformation
+        #     trans = np.linalg.inv(trans)
+        #     s1 = f'{id1}\t {id2}\t  37\n'
+        #     f.write(s1)
+        #     f.write(f"{trans[0, 0]}\t {trans[0, 1]}\t {trans[0, 2]}\t {trans[0, 3]}\t \n")
+        #     f.write(f"{trans[1, 0]}\t {trans[1, 1]}\t {trans[1, 2]}\t {trans[1, 3]}\t \n")
+        #     f.write(f"{trans[2, 0]}\t {trans[2, 1]}\t {trans[2, 2]}\t {trans[2, 3]}\t \n")
+        #     f.write(f"{trans[3, 0]}\t {trans[3, 1]}\t {trans[3, 2]}\t {trans[3, 3]}\t \n")
 
     s = f"{cloud_bin_s}\t{cloud_bin_t}\t{num_inliers}\t{inlier_ratio:.8f}\t{gt_flag}"
     with open(os.path.join(resultpath, f'{cloud_bin_s}_{cloud_bin_t}.rt.txt'), 'w+') as f:
@@ -199,6 +199,9 @@ if __name__ == '__main__':
     desc_name = 'SpinNet'
     # timestr = sys.argv[1]
     for timestr in ['ETH_x_cntr0_std005_long', 'ETH_y_cntr0_std0_long', 'ETH_z_cntr0_std01_long', 'ETH_a_cntr1_std005_long', 'ETH_b_cntr1_std01_long', 'ETH_c_cntr_sep_1_std01_long']:
+        print(f'++++++++++++++++++++++++++++++++++++++++++')
+        print(f'{timestr}')
+        print(f'++++++++++++++++++++++++++++++++++++++++++')
         inliers_list = []
         recall_list = []
         for scene in scene_list:

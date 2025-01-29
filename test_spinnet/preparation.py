@@ -79,33 +79,33 @@ def build_patch_input(pcd, keypts, vicinity=0.3, num_points_per_patch=2048):
     pts = np.array(pcd.points).astype(np.float32)
     num_patches = refer_pts.shape[0]
     tree = KDTree(pts[:, 0:3])
-    ind_local = tree.query_radius(refer_pts[:, 0:3], r=vicinity)
+    # ind_local = tree.query_radius(refer_pts[:, 0:3], r=vicinity)
+    _, ind_local = tree.query(refer_pts[:, 0:3], k=num_points_per_patch)
     local_patches = np.zeros([num_patches, num_points_per_patch, 3], dtype=float)
     for i in range(num_patches):
         local_neighbors = pts[ind_local[i], :]
-        if local_neighbors.shape[0] >= num_points_per_patch:
-            temp = np.random.choice(range(local_neighbors.shape[0]), num_points_per_patch, replace=False)
-            local_neighbors = local_neighbors[temp]
-            # local_neighbors[-1, :] = refer_pts[i, :]
-            local_neighbors[0, :] = refer_pts[i, :]
-        else:
-            fix_idx = np.asarray(range(local_neighbors.shape[0]))
-            while local_neighbors.shape[0] + fix_idx.shape[0] < num_points_per_patch:
-                fix_idx = np.concatenate((fix_idx, np.asarray(range(local_neighbors.shape[0]))), axis=0)
-            random_idx = np.random.choice(local_neighbors.shape[0], num_points_per_patch - fix_idx.shape[0],
-                                          replace=False)
-            choice_idx = np.concatenate((fix_idx, random_idx), axis=0)
-            local_neighbors = local_neighbors[choice_idx]
-            # local_neighbors[-1, :] = refer_pts[i, :]
-            local_neighbors[0, :] = refer_pts[i, :]
-
+        # if local_neighbors.shape[0] >= num_points_per_patch:
+        #     temp = np.random.choice(range(local_neighbors.shape[0]), num_points_per_patch, replace=False)
+        #     local_neighbors = local_neighbors[temp]
+        #     # local_neighbors[-1, :] = refer_pts[i, :]
+        #     local_neighbors[0, :] = refer_pts[i, :]
+        # else:
+        #     fix_idx = np.asarray(range(local_neighbors.shape[0]))
+        #     while local_neighbors.shape[0] + fix_idx.shape[0] < num_points_per_patch:
+        #         fix_idx = np.concatenate((fix_idx, np.asarray(range(local_neighbors.shape[0]))), axis=0)
+        #     random_idx = np.random.choice(local_neighbors.shape[0], num_points_per_patch - fix_idx.shape[0],
+        #                                   replace=False)
+        #     choice_idx = np.concatenate((fix_idx, random_idx), axis=0)
+        #     local_neighbors = local_neighbors[choice_idx]
+        #     # local_neighbors[-1, :] = refer_pts[i, :]
+        #     local_neighbors[0, :] = refer_pts[i, :]
+        local_neighbors[0, :] = refer_pts[i, :]
         local_neighbors = local_neighbors - refer_pts[i, :]
-        distances = np.linalg.norm(local_neighbors, axis=1)
-        sorted_indices = np.argsort(distances)
-        local_neighbors = local_neighbors[sorted_indices]
+        # distances = np.linalg.norm(local_neighbors, axis=1)
+        # sorted_indices = np.argsort(distances)
+        # local_neighbors = local_neighbors[sorted_indices]
         local_patches[i] = local_neighbors
     return local_patches
-
 
 def prepare_patch(pcdpath, filename, keyptspath, trans_matrix):
     pcd = get_pcd(pcdpath, filename)
