@@ -61,12 +61,17 @@ class shapeClassifier(nn.Module):
         distances = torch.cdist(point_cloud, point_cloud)
         weights = torch.exp(-distances ** 2)
         column_sums = weights.sum(dim=1)
-        inv_sqrt_col_sum = torch.rsqrt(column_sums + 1e-7)  # Safer reciprocal sqrt
-        laplacian = (
-                torch.eye(weights.size(1), device=weights.device)  # Identity matrix
-                - (inv_sqrt_col_sum.unsqueeze(2) * weights * inv_sqrt_col_sum.unsqueeze(1))
-        )
+        if self.lpe_normalize:
+            inv_sqrt_col_sum = torch.rsqrt(column_sums + 1e-7)  # Safer reciprocal sqrt
+            laplacian = (
+                    torch.eye(weights.size(1), device=weights.device)  # Identity matrix
+                    - (inv_sqrt_col_sum.unsqueeze(2) * weights * inv_sqrt_col_sum.unsqueeze(1))
+            )
+        else:
+            diag_matrix = torch.diag_embed(column_sums)
+            laplacian = diag_matrix - weights
         return laplacian
+
 
     def top_k_smallest_eigenvectors(self, graph, k):
         if k<1:
