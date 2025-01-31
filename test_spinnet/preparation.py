@@ -1,5 +1,24 @@
 import os
-
+scaling_factors_hardcoded_query = {
+    '7-scenes-redkitchen': [55.56, 41.67, 27.78, 27.78, 23.81, 20.83, 20.83, 18.52, 16.67, 16.67, 16.67, 15.15, 13.89, 13.89, 13.89],
+    'sun3d-home_at-home_at_scan1_2013_jan_1': [55.56, 41.67, 33.33, 27.78, 23.81, 20.83, 20.83, 18.52, 18.52, 16.67, 16.67, 15.15, 15.15, 13.89, 13.89],
+    'sun3d-home_md-home_md_scan9_2012_sep_30': [55.56, 41.67, 27.78, 27.78, 23.81, 20.83, 20.83, 18.52, 16.67, 16.67, 16.67, 15.15, 13.89, 13.89, 13.89],
+    'sun3d-hotel_uc-scan3':[55.56, 41.67, 33.33, 27.78, 27.78, 23.81, 20.83, 20.83, 18.52, 18.52, 16.67, 16.67, 16.67, 15.15, 15.15] ,
+    'sun3d-hotel_umd-maryland_hotel1': [55.56, 41.67, 33.33, 27.78, 23.81, 20.83, 20.83, 20.83, 18.52, 16.67, 16.67, 16.67, 15.15, 15.15, 13.89],
+    'sun3d-hotel_umd-maryland_hotel3': [55.56, 41.67, 27.78, 27.78, 23.81, 20.83, 20.83, 18.52, 18.52, 16.67, 16.67, 15.15, 15.15, 13.89, 13.89],
+    'sun3d-mit_76_studyroom-76-1studyroom2': [55.56, 41.67, 33.33, 27.78, 27.78, 23.81, 20.83, 20.83, 20.83, 18.52, 16.67, 16.67, 16.67, 16.67, 15.15],
+    'sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika':[55.56, 41.67, 33.33, 27.78, 27.78, 23.81, 20.83, 20.83, 20.83, 18.52, 18.52, 16.67, 16.67, 16.67, 16.67]
+}
+scaling_factors_hardcoded_queryR = {
+    '7-scenes-redkitchen': [10.42, 6.94, 5.38, 4.5, 4.07, 3.62, 3.33, 3.14, 2.92, 2.78, 2.65, 2.53, 2.42, 2.31, 2.28],
+    'sun3d-home_at-home_at_scan1_2013_jan_1': [11.11, 7.25, 5.75, 4.9, 4.39, 3.97, 3.62, 3.33, 3.14, 2.98, 2.82, 2.69, 2.56, 2.45, 2.42],
+    'sun3d-home_md-home_md_scan9_2012_sep_30':[10.42, 6.67, 5.21, 4.39, 3.88, 3.55, 3.27, 3.03, 2.82, 2.69, 2.56, 2.45, 2.35, 2.25, 2.22],
+    'sun3d-hotel_uc-scan3':[10.42, 6.67, 5.38, 4.63, 4.07, 3.62, 3.33, 3.14, 2.92, 2.78, 2.65, 2.53, 2.42, 2.31, 2.28] ,
+    'sun3d-hotel_umd-maryland_hotel1': [10.42, 6.67, 5.21, 4.39, 3.88, 3.55, 3.27, 3.03, 2.82, 2.69, 2.53, 2.42, 2.31, 2.22, 2.19],
+    'sun3d-hotel_umd-maryland_hotel3': [9.8, 6.17, 4.9, 4.27, 3.7, 3.4, 3.14, 2.92, 2.73, 2.56, 2.45, 2.35, 2.25, 2.16, 2.14],
+    'sun3d-mit_76_studyroom-76-1studyroom2': [9.8, 6.67, 5.21, 4.39, 3.97, 3.55, 3.27, 3.09, 2.87, 2.73, 2.6, 2.49, 2.42, 2.31, 2.28],
+    'sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika':[9.8, 6.17, 4.9, 4.17, 3.62, 3.27, 2.98, 2.78, 2.6, 2.49, 2.35, 2.25, 2.14, 2.06, 2.03]
+}
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import time
 import numpy as np
@@ -21,13 +40,36 @@ from models import shapeClassifier
 from plotting_functions import *
 import argparse
 
-def calcDist(src_knn_pcl):
+def calcDist_old(src_knn_pcl):
     pcl = src_knn_pcl[0].permute(1,2,0)
     median_of_median_axis = torch.median(torch.median((torch.max(pcl, dim=1)[0] - torch.min(pcl, dim=1)[0]), dim=0)[0])
     scale = 1 / median_of_median_axis
     return scale
-
-def create_emb(input,model, scales=[1,3,5,7,9,11,13,15]):
+def find_scaling_factor(model, desc_name, pcdpath, keyptspath, descpath, output_dim):
+    fragments = glob.glob(pcdpath + '*.ply')
+    num_frag = len(fragments)
+    all_local_pathces = []
+    yay = {"1":[],"2":[],"3":[],"4":[],"5":[],"6":[],"7":[],"8":[],"9":[],"10":[],"11":[],"12":[],"13":[],"14":[],"15":[]}
+    for j in range(num_frag):
+        keypts, local_patches  = prepare_patch(pcdpath, 'cloud_bin_' + str(j), keyptspath, None)
+        # keypts, local_patches =  prepare_patch(pcdpath, 'Hokuyo_' + str(j), keyptspath, None)
+        local_patches=torch.tensor(local_patches.astype(np.float32))
+        for scale in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]:
+            cur_input = local_patches[:, :21 * scale, :]
+            cur_input = farthest_point_sampling(cur_input, k=21)
+            yay[str(scale)].append(cur_input)
+    # cur_all_input = torch.cat(all_local_pathces, dim=0)
+    a = [round(calcDist((torch.cat(yay[str(scale)], dim=0))).item(), 2) for scale in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]]
+    # neighbors_centered = cur_all_input.permute(0, 2, 1).unsqueeze(2)
+    # scaling_factor = calcDist(neighbors_centered).item()
+    print(a)
+    return 1
+def calcDist(local_patches):
+    median_of_median_axis = torch.median(torch.median((torch.max(local_patches, dim=1)[0] - torch.min(local_patches, dim=1)[0]), dim=0)[0])
+    # mean_of_mean_axis = torch.mean(torch.mean((torch.max(local_patches, dim=1)[0] - torch.min(local_patches, dim=1)[0]), dim=0)[0])
+    scale = 1 / median_of_median_axis
+    return scale
+def create_emb_old(input,model, scales=[1,3,5,7,9,11,13,15]):
     cur_input = input[:, :21, :]
     neighbors_centered = cur_input.permute(0, 2, 1).unsqueeze(2)
     scaling_factor = calcDist(neighbors_centered).item()
@@ -44,6 +86,24 @@ def create_emb(input,model, scales=[1,3,5,7,9,11,13,15]):
         src_knn_pcl = scaling_factor * neighbors_centered
         cur_emb = model(src_knn_pcl).squeeze()
         emb = torch.cat((emb, cur_emb), dim=1)
+    return emb
+
+def create_emb(input, model, scaling_factors, scales=[1, 3, 5, 7, 9, 11, 13, 15]):
+    emb_list = []  # Store embeddings before concatenation
+
+    for scale, scaling_factor in zip(scales, scaling_factors):
+        cur_input = input[:, :21 * scale, :]
+        if scale>1:
+            cur_input = farthest_point_sampling(cur_input, k=21)  # Ensure function exists
+        cur_scaling_factor = calcDist(cur_input)
+        neighbors_centered = cur_input.permute(0, 2, 1).unsqueeze(2)
+        # src_knn_pcl = scaling_factor * neighbors_centered
+        src_knn_pcl = cur_scaling_factor * neighbors_centered
+
+        cur_emb = model(src_knn_pcl).squeeze()  # Ensure squeezing works as expected
+        emb_list.append(cur_emb)  # Store embeddings instead of direct concatenation
+
+    emb = torch.cat(emb_list, dim=1)  # Concatenate after loop
     return emb
 
 def get_keypts(keyptspath, filename):
@@ -79,31 +139,29 @@ def build_patch_input(pcd, keypts, vicinity=0.3, num_points_per_patch=2048):
     pts = np.array(pcd.points).astype(np.float32)
     num_patches = refer_pts.shape[0]
     tree = KDTree(pts[:, 0:3])
-    # ind_local = tree.query_radius(refer_pts[:, 0:3], r=vicinity)
-    _, ind_local = tree.query(refer_pts[:, 0:3], k=num_points_per_patch)
+    ind_local = tree.query_radius(refer_pts[:, 0:3], r=vicinity)
+    # _, ind_local = tree.query(refer_pts[:, 0:3], k=num_points_per_patch)
     local_patches = np.zeros([num_patches, num_points_per_patch, 3], dtype=float)
     for i in range(num_patches):
         local_neighbors = pts[ind_local[i], :]
-        # if local_neighbors.shape[0] >= num_points_per_patch:
-        #     temp = np.random.choice(range(local_neighbors.shape[0]), num_points_per_patch, replace=False)
-        #     local_neighbors = local_neighbors[temp]
-        #     # local_neighbors[-1, :] = refer_pts[i, :]
-        #     local_neighbors[0, :] = refer_pts[i, :]
-        # else:
-        #     fix_idx = np.asarray(range(local_neighbors.shape[0]))
-        #     while local_neighbors.shape[0] + fix_idx.shape[0] < num_points_per_patch:
-        #         fix_idx = np.concatenate((fix_idx, np.asarray(range(local_neighbors.shape[0]))), axis=0)
-        #     random_idx = np.random.choice(local_neighbors.shape[0], num_points_per_patch - fix_idx.shape[0],
-        #                                   replace=False)
-        #     choice_idx = np.concatenate((fix_idx, random_idx), axis=0)
-        #     local_neighbors = local_neighbors[choice_idx]
-        #     # local_neighbors[-1, :] = refer_pts[i, :]
-        #     local_neighbors[0, :] = refer_pts[i, :]
+        if local_neighbors.shape[0] >= num_points_per_patch:
+            temp = np.random.choice(range(local_neighbors.shape[0]), num_points_per_patch, replace=False)
+            local_neighbors = local_neighbors[temp]
+            # local_neighbors[-1, :] = refer_pts[i, :]
+        else:
+            fix_idx = np.asarray(range(local_neighbors.shape[0]))
+            while local_neighbors.shape[0] + fix_idx.shape[0] < num_points_per_patch:
+                fix_idx = np.concatenate((fix_idx, np.asarray(range(local_neighbors.shape[0]))), axis=0)
+            random_idx = np.random.choice(local_neighbors.shape[0], num_points_per_patch - fix_idx.shape[0],
+                                          replace=False)
+            choice_idx = np.concatenate((fix_idx, random_idx), axis=0)
+            local_neighbors = local_neighbors[choice_idx]
+            # local_neighbors[-1, :] = refer_pts[i, :]
         local_neighbors[0, :] = refer_pts[i, :]
         local_neighbors = local_neighbors - refer_pts[i, :]
-        # distances = np.linalg.norm(local_neighbors, axis=1)
-        # sorted_indices = np.argsort(distances)
-        # local_neighbors = local_neighbors[sorted_indices]
+        distances = np.linalg.norm(local_neighbors, axis=1)
+        sorted_indices = np.argsort(distances)
+        local_neighbors = local_neighbors[sorted_indices]
         local_patches[i] = local_neighbors
     return local_patches
 
@@ -129,10 +187,11 @@ def prepare_patch(pcdpath, filename, keyptspath, trans_matrix):
         trans_matrix.append(T)
 
     local_patches = build_patch_input(pcd, keypts, num_points_per_patch=301)  # [num_keypts, 1024, 4]
-    return local_patches
+    return keypts, local_patches
 
 
 def generate_descriptor(model, desc_name, pcdpath, keyptspath, descpath):
+    scaling_factors = scaling_factors_hardcoded_queryR[str(str.split(pcdpath, r'/')[-2])]
     model.eval()
     num_frag = len(os.listdir(pcdpath))
     num_desc = len(os.listdir(descpath))
@@ -141,7 +200,7 @@ def generate_descriptor(model, desc_name, pcdpath, keyptspath, descpath):
         print("Descriptor already prepared.")
         return
     for j in range(num_frag):
-        local_patches = prepare_patch(pcdpath, 'cloud_bin_' + str(j), keyptspath, trans_matrix)
+        keypts, local_patches = prepare_patch(pcdpath, 'cloud_bin_' + str(j), keyptspath, trans_matrix)
         input_ = torch.tensor(local_patches.astype(np.float32))
         B = input_.shape[0]
         input_ = input_.cuda()
@@ -150,7 +209,7 @@ def generate_descriptor(model, desc_name, pcdpath, keyptspath, descpath):
         desc_list = []
         start_time = time.time()
         desc_len = 32
-        desc_len = 150
+        desc_len = 15 * output_dim
         # desc_len = 75
         step_size = 100
         step_size = B
@@ -161,7 +220,9 @@ def generate_descriptor(model, desc_name, pcdpath, keyptspath, descpath):
             else:
                 input_ = (input_[k * step_size: (k + 1) * step_size, :, :])
 
-            desc = create_emb(input_,model, scales=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])
+            # desc = create_emb(input_,model, scales=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])
+            desc = create_emb(input_, model, scaling_factors=scaling_factors,
+                              scales=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
 
             desc_list.append(desc.view(desc.shape[0], desc_len).detach().cpu().numpy())
             del desc
@@ -323,44 +384,59 @@ if __name__ == '__main__':
         'sun3d-mit_76_studyroom-76-1studyroom2',
         'sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika'
     ]
-
+    model_names =['x_cntr0_std005_long','y_cntr0_std0_long','z_cntr0_std01_long','a_cntr1_std005_long','b_cntr1_std01_long','c_cntr_sep_1_std01_long']
+    model_names =['z_cntr0_std01_long','a_cntr1_std005_long','b_cntr1_std01_long','c_cntr_sep_1_std01_long']
+    # model_names =['c_cntr_sep_1_std01_long']
+    output_dims = [5,5,5,5,5,10]
+    output_dims = [5,5,5,10]
+    # output_dims = [10]
     args = configArgsPCT()
-    print(args.exp_name)
-    # experiment_id = time.strftime('%m%d%H%M')
-    experiment_id = args.exp_name
-    model_str = experiment_id  # sys.argv[1]
-    if not os.path.exists(f"SpinNet_desc_{model_str}/"):
-        os.mkdir(f"SpinNet_desc_{model_str}")
+    for model_name,output_dim in zip(model_names, output_dims):
+        print(f'------------------------------------------')
+        print(f'{model_name}, out_dim = {output_dim}')
+        print(f'------------------------------------------')
+        args.exp_name = model_name
+        args.output_dim = output_dim
+        print(args.exp_name)
+        # experiment_id = time.strftime('%m%d%H%M')
+        experiment_id = args.exp_name
+        model_str = experiment_id  # sys.argv[1]
+        if not os.path.exists(f"SpinNet_desc_{model_str}/"):
+            os.mkdir(f"SpinNet_desc_{model_str}")
 
-    # # dynamically load the model
-    # module_file_path = '../model.py'
-    # shutil.copy2(os.path.join('.', '../../network/SpinNet.py'), module_file_path)
-    # module_name = ''
-    # module_spec = importlib.util.spec_from_file_location(module_name, module_file_path)
-    # module = importlib.util.module_from_spec(module_spec)
-    # module_spec.loader.exec_module(module)
-    # model = module.Descriptor_Net(0.30, 9, 80, 40, 0.04, 30, '3DMatch')
-    # model = nn.DataParallel(model, device_ids=[0])
-    # model.load_state_dict(torch.load('../../pre-trained_models/3DMatch_best.pkl'))
+        # # dynamically load the model
+        # module_file_path = '../model.py'
+        # shutil.copy2(os.path.join('.', '../../network/SpinNet.py'), module_file_path)
+        # module_name = ''
+        # module_spec = importlib.util.spec_from_file_location(module_name, module_file_path)
+        # module = importlib.util.module_from_spec(module_spec)
+        # module_spec.loader.exec_module(module)
+        # model = module.Descriptor_Net(0.30, 9, 80, 40, 0.04, 30, '3DMatch')
+        # model = nn.DataParallel(model, device_ids=[0])
+        # model.load_state_dict(torch.load('../../pre-trained_models/3DMatch_best.pkl'))
 
-    model = shapeClassifier(args)
-    model.load_state_dict(torch.load(f'.././models_weights/{args.exp_name}.pt'))
-    model.to("cuda")
-    model.eval()
+        model = shapeClassifier(args)
+        model.load_state_dict(torch.load(f'.././models_weights/{args.exp_name}.pt',weights_only=True))
+        model.to("cuda")
+        model.eval()
 
-    all_trans_matrix = {}
-    is_rotate_dataset = False
-    is_D3Feat_keypts = False
-    for scene in scene_list:
-        pcdpath = f"./../data/3DMatch/fragments/{scene}/"
-        interpath = f"./../data/3DMatch/intermediate-files-real/{scene}/"
-        keyptspath = interpath
-        descpath = os.path.join('.', f"SpinNet_desc_{model_str}/{scene}/")
-        if not os.path.exists(descpath):
-            os.makedirs(descpath)
-        start_time = time.time()
-        print(f"Begin Processing {scene}")
-        generate_descriptor(model, desc_name='SpinNet', pcdpath=pcdpath, keyptspath=keyptspath, descpath=descpath)
-        print(f"Finish in {time.time() - start_time}s")
-    if is_rotate_dataset:
-        np.save(f"trans_matrix", all_trans_matrix)
+        all_trans_matrix = {}
+        is_rotate_dataset = False
+        is_D3Feat_keypts = False
+
+        for scene in scene_list:
+            pcdpath = f"./../data/3DMatch/fragments/{scene}/"
+            interpath = f"./../data/3DMatch/intermediate-files-real/{scene}/"
+            keyptspath = interpath
+            descpath = os.path.join('.', f"SpinNet_desc_{model_str}/{scene}/")
+            if not os.path.exists(descpath):
+                os.makedirs(descpath)
+            start_time = time.time()
+            print(f"Begin Processing {scene}")
+
+            # x = find_scaling_factor(model, desc_name='SpinNet', pcdpath=pcdpath, keyptspath=keyptspath, descpath=descpath, output_dim=output_dim)
+            # print(x)
+            generate_descriptor(model, desc_name='SpinNet', pcdpath=pcdpath, keyptspath=keyptspath, descpath=descpath)
+            print(f"Finish in {time.time() - start_time}s")
+        if is_rotate_dataset:
+            np.save(f"trans_matrix", all_trans_matrix)

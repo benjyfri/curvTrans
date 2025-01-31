@@ -94,13 +94,14 @@ def check(graph_weight_mode=0):
     noise_size = [0.0,0.01,0.03,0.05,0.07, 0.1]
     all_runs_same_index_list = {}
     for std in noise_size:
+        print()
         for nlap in normalize_lap:
             run_name = "nlap: " + str(nlap) + "_std_" + str(std)+ f'_mode:{graph_weight_mode}'
             print(f'Run:  {run_name}')
             same_index_list = []
             for idx in range(num_point_clouds//50):
-                if idx % 10000 == 0:
-                    print(f'------------{idx*50}------------')
+                # if (idx*50) % 10000 == 0:
+                #     print(f'------------{idx*50}------------')
                 point_cloud_name = f"point_cloud_{indices[idx*50]}"
 
                 info = {key: point_clouds_group[point_cloud_name].attrs[key] for key in
@@ -153,7 +154,15 @@ def check(graph_weight_mode=0):
     # plot_same_index_list(all_runs_same_index_list)
 
 if __name__ == '__main__':
-    check(graph_weight_mode=-1)
-    check(graph_weight_mode=0)
-    check(graph_weight_mode=1)
+    # check(graph_weight_mode=-1)
+    # check(graph_weight_mode=0)
+    # check(graph_weight_mode=1)
+    check(graph_weight_mode=0.1)
+    check(graph_weight_mode=0.2)
+    # check(graph_weight_mode=0.5)
+    # check(graph_weight_mode=0.75)
+    # check(graph_weight_mode=1.25)
+    # check(graph_weight_mode=1.5)
+    # check(graph_weight_mode=2)
+    # check(graph_weight_mode=5)
 

@@ -195,7 +195,7 @@ def plot_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, 
   )
 
   fig.show()
-def plot_correspondence_with_classification(point_cloud1, point_cloud2, point_cloud3, point_cloud4, embeddings3, embeddings4, rotation=None, translation=None, title=""):
+def plot_correspondence_with_classification_old(point_cloud1, point_cloud2, point_cloud3, point_cloud4, embeddings3, embeddings4, rotation=None, translation=None, title=""):
 
     """
     Plot four point clouds in an interactive 3D plot with Plotly.
@@ -289,6 +289,158 @@ def plot_correspondence_with_classification(point_cloud1, point_cloud2, point_cl
     fig.show()
 
 
+def plot_correspondence_with_classification(point_cloud1, embeddings1, point_cloud2=None, point_cloud3=None,
+                                            point_cloud4=None,
+                                            embeddings2=None, rotation=None, translation=None, title=""):
+    """
+    Plot one or four point clouds in an interactive 3D plot with Plotly.
+    Args:
+        point_cloud1 (np.ndarray): First point cloud of shape (N, 3).
+        embeddings1 (np.ndarray): Embeddings for point cloud 1.
+        point_cloud2 (np.ndarray, optional): Second point cloud of shape (N, 3).
+        point_cloud3 (np.ndarray, optional): Third point cloud of shape (N, 3).
+        point_cloud4 (np.ndarray, optional): Fourth point cloud of shape (N, 3).
+        embeddings2 (np.ndarray, optional): Embeddings for point cloud 3.
+        rotation (np.ndarray or None): Optional rotation matrix.
+        translation (np.ndarray or None): Optional translation vector.
+        title (str): Title of the plot.
+    """
+    # Determine if we're in single point cloud mode
+    single_cloud = all(pc is None for pc in [point_cloud2, point_cloud3, point_cloud4])
+
+    # Convert tensors to numpy if necessary
+    if isinstance(point_cloud1, torch.Tensor):
+        point_cloud1 = point_cloud1.cpu().detach().numpy()
+
+    if not single_cloud:
+        for idx, point_cloud in enumerate([point_cloud2, point_cloud3, point_cloud4]):
+            if isinstance(point_cloud, torch.Tensor):
+                locals()[f"point_cloud{idx + 2}"] = point_cloud.cpu().detach().numpy()
+
+    # Apply rotation and translation if provided
+    if rotation is not None and not single_cloud:
+        if isinstance(rotation, torch.Tensor):
+            rotation = rotation.cpu().detach().numpy()
+        point_cloud1 = np.matmul(point_cloud1, rotation.T) + translation.squeeze()
+        point_cloud3 = np.matmul(point_cloud3, rotation.T) + translation.squeeze()
+        axis = np.argmin(np.max(point_cloud1, axis=0))
+
+    # Initialize the figure
+    fig = go.Figure()
+
+    if single_cloud:
+        # Add single point cloud with embedding-based colors
+        colors = ['red', 'blue', 'green', 'pink', 'yellow']
+        names = ['plane', 'peak/pit', 'valley/ridge', 'saddle', 'edge']
+        max_embedding_index = np.argmax(embeddings1[:, :5], axis=1)
+        max_embedding_colors = np.array(colors)[max_embedding_index]
+
+        counter = {}
+        for name, color in zip(names, colors):
+            indices = np.where(max_embedding_colors == color)[0]
+            counter[name] = len(indices)
+            fig.add_trace(go.Scatter3d(
+                x=point_cloud1[indices, 0],
+                y=point_cloud1[indices, 1],
+                z=point_cloud1[indices, 2],
+                mode='markers',
+                marker=dict(size=2, color=color, opacity=0.8),
+                name=name
+            ))
+    else:
+        # Add point_cloud1 and point_cloud2 with grayish transparent colors
+        fig.add_trace(go.Scatter3d(
+            x=point_cloud1[:, 0], y=point_cloud1[:, 1], z=point_cloud1[:, 2],
+            mode='markers',
+            marker=dict(size=2, color='brown', opacity=0.5),
+            name='Point Cloud 1'
+        ))
+        fig.add_trace(go.Scatter3d(
+            x=point_cloud2[:, 0], y=point_cloud2[:, 1], z=point_cloud2[:, 2],
+            mode='markers',
+            marker=dict(size=2, color='darkgray', opacity=0.5),
+            name='Point Cloud 2'
+        ))
+
+        # Add embedding-based colors for point_cloud3 and point_cloud4
+        counter = {}
+        for point_cloud, embeddings, label in zip(
+                [point_cloud3, point_cloud4], [embeddings1, embeddings2], ["Point Cloud 3", "Point Cloud 4"]
+        ):
+            colors = ['red', 'blue', 'green', 'pink', 'yellow']
+            names = ['plane', 'peak/pit', 'valley/ridge', 'saddle', 'edge']
+            max_embedding_index = np.argmax(embeddings[:, :5], axis=1)
+            max_embedding_colors = np.array(colors)[max_embedding_index]
+            for name, color in zip(names, colors):
+                indices = np.where(max_embedding_colors == color)[0]
+                counter[name] = len(indices)
+                fig.add_trace(go.Scatter3d(
+                    x=point_cloud[indices, 0],
+                    y=point_cloud[indices, 1],
+                    z=point_cloud[indices, 2],
+                    mode='markers',
+                    marker=dict(size=2, color=color, opacity=0.8),
+                    name=f'{label} - {name}'
+                ))
+
+        # Add edges as a separate trace with visibility toggle
+        edges_trace = []
+        for i in range(len(point_cloud3)):
+            edges_trace.append(go.Scatter3d(
+                x=[point_cloud3[i, 0], point_cloud4[i, 0]],
+                y=[point_cloud3[i, 1], point_cloud4[i, 1]],
+                z=[point_cloud3[i, 2], point_cloud4[i, 2]],
+                mode='lines',
+                line=dict(color='black', width=2),
+                name='Edges',
+                showlegend=i == 0,  # Only show legend for the first edge
+            ))
+
+        # Add all edge traces to the figure
+        for trace in edges_trace:
+            fig.add_trace(trace)
+
+        # Create buttons for edge visibility toggle
+        updatemenus = [
+            dict(
+                type="buttons",
+                direction="left",
+                buttons=[
+                    dict(
+                        args=[{"visible": [True] * (len(fig.data) - len(edges_trace)) +
+                                          [True] * len(edges_trace)}],
+                        label="Show Edges",
+                        method="restyle"
+                    ),
+                    dict(
+                        args=[{"visible": [True] * (len(fig.data) - len(edges_trace)) +
+                                          [False] * len(edges_trace)}],
+                        label="Hide Edges",
+                        method="restyle"
+                    )
+                ],
+                pad={"r": 10, "t": 10},
+                showactive=True,
+                x=0.1,
+                xanchor="left",
+                y=1.1,
+                yanchor="top"
+            ),
+        ]
+        fig.update_layout(updatemenus=updatemenus)
+
+    # Update layout
+    fig.update_layout(
+        title=title + str(counter),
+        scene=dict(
+            xaxis=dict(title='X'),
+            yaxis=dict(title='Y'),
+            zaxis=dict(title='Z'),
+        ),
+        margin=dict(r=20, l=10, b=10, t=100)
+    )
+
+    fig.show()
 def save_4_point_clouds(point_cloud1, point_cloud2, point_cloud3, point_cloud4, filename="plot.html", rotation=None, translation=None, title="", dist_thresh=5):
   """
   Plot four point clouds in an interactive 3D plot with Plotly and save it.

@@ -1,5 +1,18 @@
 import os
-
+# scaling_factors_hardcoded = {
+#     'gazebo_summer': [10.32220458984375, 6.417322158813477, 5.009559631347656, 4.237317085266113, 3.735275983810425, 3.3757312297821045, 3.103226900100708, 2.889331579208374, 2.70857834815979, 2.5615227222442627, 2.431459426879883, 2.3200185298919678, 2.2235708236694336, 2.1366283893585205, 2.11397385597229]
+# , 'gazebo_winter':[13.32024097442627, 7.490845203399658, 5.6744232177734375, 4.707010269165039, 4.0800700187683105, 3.6573755741119385, 3.325899839401245, 3.0692789554595947, 2.8636817932128906, 2.6887903213500977, 2.5416977405548096, 2.418029308319092, 2.3094842433929443, 2.2159509658813477, 2.194293975830078]
+# ,
+#     'wood_autmn':[12.897363662719727, 7.443971633911133, 5.647600173950195, 4.709465503692627, 4.106546878814697, 3.671670913696289, 3.34374737739563, 3.08815598487854, 2.8795852661132812, 2.7065727710723877, 2.557424545288086, 2.4334781169891357, 2.3227617740631104, 2.225461006164551, 2.2020461559295654]
+# ,
+#     'wood_summer':[12.668914794921875, 7.33339786529541, 5.562127113342285, 4.632084846496582, 4.031224727630615, 3.610067844390869, 3.291415214538574, 3.0450525283813477, 2.843318462371826, 2.675147771835327, 2.5318946838378906, 2.406442403793335, 2.296908378601074, 2.2011005878448486, 2.178225517272949]
+# }
+scaling_factors_hardcoded = {
+    'gazebo_summer': [8.48, 5.55, 4.41, 3.77, 3.34, 3.03, 2.8, 2.61, 2.45, 2.32, 2.21, 2.12, 2.03, 1.95, 1.93],
+    'gazebo_winter':[6.37, 4.02, 3.14, 2.65, 2.33, 2.1, 1.92, 1.79, 1.67, 1.58, 1.5, 1.44, 1.38, 1.32, 1.31],
+    'wood_autmn':[6.89, 4.41, 3.47, 2.95, 2.6, 2.35, 2.17, 2.02, 1.9, 1.8, 1.71, 1.63, 1.56, 1.51, 1.49],
+    'wood_summer':[6.96, 4.44, 3.49, 2.96, 2.61, 2.36, 2.18, 2.03, 1.91, 1.81, 1.72, 1.65, 1.58, 1.53, 1.51]
+}
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import time
 import numpy as np
@@ -18,31 +31,33 @@ import importlib
 from plotting_functions import *
 import argparse
 
-def calcDist(src_knn_pcl):
-    pcl = src_knn_pcl[0].permute(1,2,0)
-    median_of_median_axis = torch.median(torch.median((torch.max(pcl, dim=1)[0] - torch.min(pcl, dim=1)[0]), dim=0)[0])
+# def calcDist(src_knn_pcl):
+#     pcl = src_knn_pcl[0].permute(1,2,0)
+#     median_of_median_axis = torch.median(torch.median((torch.max(pcl, dim=1)[0] - torch.min(pcl, dim=1)[0]), dim=0)[0])
+#     scale = 1 / median_of_median_axis
+#     return scale
+def calcDist(local_patches):
+    median_of_median_axis = torch.median(torch.median((torch.max(local_patches, dim=1)[0] - torch.min(local_patches, dim=1)[0]), dim=0)[0])
     scale = 1 / median_of_median_axis
     return scale
 
-def create_emb(input,model, scales=[1,3,5,7,9,11,13,15]):
-    cur_input = input[:, :21, :]
-    neighbors_centered = cur_input.permute(0, 2, 1).unsqueeze(2)
-    scaling_factor = calcDist(neighbors_centered).item()
-    src_knn_pcl = scaling_factor * neighbors_centered
-    emb = model(src_knn_pcl).squeeze()
-    pcls=[cur_input]
-    # multiscale embeddings
-    for scale in scales[1:]:
-        cur_input = input[:,:21*scale,:]
-        cur_input = farthest_point_sampling(cur_input, k=21)
-        pcls.append(cur_input)
-        neighbors_centered = cur_input.permute(0, 2, 1).unsqueeze(2)
-        scaling_factor = calcDist(neighbors_centered).item()
-        src_knn_pcl = scaling_factor * neighbors_centered
-        cur_emb = model(src_knn_pcl).squeeze()
-        emb = torch.cat((emb, cur_emb), dim=1)
-    return emb
+def create_emb(input, model, scaling_factors, scales=[1, 3, 5, 7, 9, 11, 13, 15]):
+    emb_list = []  # Store embeddings before concatenation
 
+    for scale, scaling_factor in zip(scales, scaling_factors):
+        cur_input = input[:, :21 * scale, :]
+        if scale>1:
+            cur_input = farthest_point_sampling(cur_input, k=21)  # Ensure function exists
+        # cur_scaling_factor = calcDist(cur_input)
+        neighbors_centered = cur_input.permute(0, 2, 1).unsqueeze(2)
+        src_knn_pcl = scaling_factor * neighbors_centered
+        # src_knn_pcl = cur_scaling_factor * neighbors_centered
+
+        cur_emb = model(src_knn_pcl).squeeze()  # Ensure squeezing works as expected
+        emb_list.append(cur_emb)  # Store embeddings instead of direct concatenation
+
+    emb = torch.cat(emb_list, dim=1)  # Concatenate after loop
+    return emb
 def configArgsPCT():
     parser = argparse.ArgumentParser(description='Point Cloud Recognition')
     parser.add_argument('--wandb_proj', type=str, default='MLP-Contrastive-Ablation', metavar='N',
@@ -217,7 +232,6 @@ def build_patch_input(pcd, keypts, vicinity=0.3, num_points_per_patch=2048):
         #     temp = np.random.choice(range(local_neighbors.shape[0]), num_points_per_patch, replace=False)
         #     local_neighbors = local_neighbors[temp]
         #     # local_neighbors[-1, :] = refer_pts[i, :]
-        #     local_neighbors[0, :] = refer_pts[i, :]
         # else:
         #     fix_idx = np.asarray(range(local_neighbors.shape[0]))
         #     while local_neighbors.shape[0] + fix_idx.shape[0] < num_points_per_patch:
@@ -227,7 +241,6 @@ def build_patch_input(pcd, keypts, vicinity=0.3, num_points_per_patch=2048):
         #     choice_idx = np.concatenate((fix_idx, random_idx), axis=0)
         #     local_neighbors = local_neighbors[choice_idx]
         #     # local_neighbors[-1, :] = refer_pts[i, :]
-        #     local_neighbors[0, :] = refer_pts[i, :]
         local_neighbors[0, :] = refer_pts[i, :]
         local_neighbors = local_neighbors - refer_pts[i, :]
         # distances = np.linalg.norm(local_neighbors, axis=1)
@@ -255,10 +268,28 @@ def prepare_patch(pcdpath, filename, keyptspath, trans_matrix):
     #     trans_matrix.append(T)
     # local_patches = build_patch_input(pcd, keypts, des_r)  # [num_keypts, 1024, 4]
     local_patches = build_patch_input(pcd, keypts, num_points_per_patch=301) # [num_keypts, 1024, 4]
-    return local_patches
-
+    return keypts,local_patches
+def find_scaling_factor(model, desc_name, pcdpath, keyptspath, descpath, output_dim):
+    fragments = glob.glob(pcdpath + '*.ply')
+    num_frag = len(fragments)
+    all_local_pathces = []
+    yay = {"1":[],"2":[],"3":[],"4":[],"5":[],"6":[],"7":[],"8":[],"9":[],"10":[],"11":[],"12":[],"13":[],"14":[],"15":[]}
+    for j in range(num_frag):
+        keypts, local_patches =  prepare_patch(pcdpath, 'Hokuyo_' + str(j), keyptspath, None)
+        local_patches=torch.tensor(local_patches.astype(np.float32))
+        for scale in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]:
+            cur_input = local_patches[:, :21 * scale, :]
+            cur_input = farthest_point_sampling(cur_input, k=21)
+            yay[str(scale)].append(cur_input)
+    # cur_all_input = torch.cat(all_local_pathces, dim=0)
+    a = [calcDist((torch.cat(yay[str(scale)], dim=0))).item() for scale in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]]
+    # neighbors_centered = cur_all_input.permute(0, 2, 1).unsqueeze(2)
+    # scaling_factor = calcDist(neighbors_centered).item()
+    print(a)
+    return 1
 
 def generate_descriptor(model, desc_name, pcdpath, keyptspath, descpath, output_dim):
+    scaling_factors = scaling_factors_hardcoded[str(str.split(pcdpath, r'/')[-2])]
     model.eval()
     fragments = glob.glob(pcdpath + '*.ply')
     num_frag = len(fragments)
@@ -268,7 +299,7 @@ def generate_descriptor(model, desc_name, pcdpath, keyptspath, descpath, output_
         print("Descriptor already prepared.")
         return
     for j in range(num_frag):
-        local_patches = prepare_patch(pcdpath, 'Hokuyo_' + str(j), keyptspath, trans_matrix)
+        keypts,local_patches = prepare_patch(pcdpath, 'Hokuyo_' + str(j), keyptspath, trans_matrix)
         input_ = torch.tensor(local_patches.astype(np.float32))
         B = input_.shape[0]
         input_ = input_.cuda()
@@ -287,8 +318,7 @@ def generate_descriptor(model, desc_name, pcdpath, keyptspath, descpath, output_
                 input_ = (input_[k * step_size:, :, :])
             else:
                 input_ = (input_[k * step_size: (k + 1) * step_size, :, :])
-
-            desc = create_emb(input_, model, scales=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+            desc = create_emb(input_, model, scaling_factors=scaling_factors,scales=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
             if torch.count_nonzero(torch.isnan(desc))>0:
                 print(desc)
                 raise Exception("Nan value occurred!!")
@@ -310,6 +340,7 @@ def run_preparation_ETH():
         'wood_summer',
     ]
     model_names =['x_cntr0_std005_long','y_cntr0_std0_long','z_cntr0_std01_long','a_cntr1_std005_long','b_cntr1_std01_long','c_cntr_sep_1_std01_long']
+    # model_names =['z_cntr0_std01_long','a_cntr1_std005_long','b_cntr1_std01_long','c_cntr_sep_1_std01_long']
     output_dims = [5,5,5,5,5,10]
     args = configArgsPCT()
     for model_name,output_dim in zip(model_names, output_dims):
@@ -327,7 +358,7 @@ def run_preparation_ETH():
             os.mkdir(f"SpinNet_desc_{model_str}")
 
         model = shapeClassifier(args)
-        model.load_state_dict(torch.load(f'.././models_weights/{args.exp_name}.pt'))
+        model.load_state_dict(torch.load(f'.././models_weights/{args.exp_name}.pt', weights_only=True))
         model.to("cuda")
         model.eval()
         # # dynamically load the model
@@ -354,6 +385,8 @@ def run_preparation_ETH():
                 os.makedirs(descpath)
             start_time = time.time()
             print(f"Begin Processing {scene}")
+            # x = find_scaling_factor(model, desc_name='SpinNet', pcdpath=pcdpath, keyptspath=keyptspath, descpath=descpath, output_dim=output_dim)
+            # print(x)
             generate_descriptor(model, desc_name='SpinNet', pcdpath=pcdpath, keyptspath=keyptspath, descpath=descpath, output_dim=output_dim)
             print(f"Finish in {time.time() - start_time}s")
             if is_rotate_dataset:

@@ -101,8 +101,8 @@ def calculate_M(source_desc, target_desc):
     """
 
     # # Compute classifications based on the max argument of the first 5 entries
-    # source_class = np.argmax(source_desc[:, :5], axis=1)
-    # target_class = np.argmax(target_desc[:, :5], axis=1)
+    source_class = np.argmax(source_desc[:, :5], axis=1)
+    target_class = np.argmax(target_desc[:, :5], axis=1)
     #
     # # Ignore points classified as "plane" (classification == 0)
     # valid_source_indices = np.where(source_class != 0)[0]
@@ -169,7 +169,10 @@ def register2Fragments(id1, id2, keyptspath, descpath, resultpath, desc_name='Sp
         target_desc = get_desc(descpath, cloud_bin_t, desc_name=desc_name)
         source_desc = np.nan_to_num(source_desc)
         target_desc = np.nan_to_num(target_desc)
-        # indices = np.r_[0:10, 20:30, 80:90, 100:110, 140:150]
+
+        indices = np.r_[0:10, 20:30, 80:90, 100:110, 140:150]
+        # indices = np.r_[0:5, 10:15, 20:25, 30:35, 40:45, 50:55, 60:65, 70:75]
+        # indices = np.r_[0:5, 10:15, 20:25]
         # indices = np.r_[0:10, 20:30, 40:50, 60:70, 80:90, 100:110, 120:130, 140:150]
         # indices = np.r_[0:5, 10:15, 20:25, 30:35, 40:45, 50:55, 60:65, 70:75, 80:85, 90:95, 100:105, 110:115, 120:125, 130:135, 140:145]
         #
@@ -280,8 +283,12 @@ if __name__ == '__main__':
     ]
     desc_name = 'SpinNet'
     # timestr = sys.argv[1]
-    # for timestr in ['z_cntr0_std01_long','a_cntr1_std005_long','b_cntr1_std01_long','c_cntr_sep_1_std01_long']:
-    for timestr in ['y_cntr0_std0_long','x_cntr0_std005_long']:
+    for timestr in ['z_cntr0_std01_long','a_cntr1_std005_long','b_cntr1_std01_long','c_cntr_sep_1_std01_long']:
+    # for timestr in ['c_cntr_sep_1_std01_long']:
+    # for timestr in ['y_cntr0_std0_long','x_cntr0_std005_long']:
+        print(f'++++++++++++++++++++++++++++++++++++++++++')
+        print(f'{timestr}')
+        print(f'++++++++++++++++++++++++++++++++++++++++++')
         inliers_list = []
         recall_list = []
         inliers_ratio_list = []

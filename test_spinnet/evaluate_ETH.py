@@ -52,14 +52,16 @@ def calculate_M(source_desc, target_desc):
     """
 
     # # Compute classifications based on the max argument of the first 5 entries
-    # source_class = np.argmax(source_desc[:, :5], axis=1)
-    # target_class = np.argmax(target_desc[:, :5], axis=1)
+    source_class = np.argmax(source_desc[:, :5], axis=1)
+    target_class = np.argmax(target_desc[:, :5], axis=1)
     #
     # # Ignore points classified as "plane" (classification == 0)
-    # valid_source_indices = np.where(source_class != 0)[0]
-    # valid_target_indices = np.where(target_class != 0)[0]
-    valid_source_indices = find_points_compliance(source_desc[:, :5], threshold=1)
-    valid_target_indices = find_points_compliance(target_desc[:, :5], threshold=1)
+    valid_source_indices = np.where(source_class != 0)[0]
+    valid_target_indices = np.where(target_class != 0)[0]
+    valid_source_indices = np.where(source_class != 10)[0]
+    valid_target_indices = np.where(target_class != 10)[0]
+    valid_source_indices = find_points_compliance(source_desc[:, :5], threshold=5)
+    valid_target_indices = find_points_compliance(target_desc[:, :5], threshold=5)
 
     # Handle cases where all points are ignored
     if len(valid_source_indices) == 0 or len(valid_target_indices) == 0:
@@ -125,7 +127,15 @@ def register2Fragments(id1, id2, keyptspath, descpath, resultpath, desc_name='pp
     target_desc = get_desc(descpath, cloud_bin_t, desc_name=desc_name)
     source_desc = np.nan_to_num(source_desc)
     target_desc = np.nan_to_num(target_desc)
-
+    # indices = np.r_[0:10, 20:30, 80:90, 100:110, 140:150]
+    indices = np.r_[0:5, 10:15, 20:25, 30:35, 40:45, 50:55, 60:65, 70:75]
+    indices = np.r_[0:5, 10:15, 20:25]
+    # indices = np.r_[0:10, 20:30, 40:50, 60:70, 80:90, 100:110, 120:130, 140:150]
+    # indices = np.r_[0:5, 10:15, 20:25, 30:35, 40:45, 50:55, 60:65, 70:75, 80:85, 90:95, 100:105, 110:115, 120:125, 130:135, 140:145]
+    #
+    # # Apply slicing to source and target embeddings
+    source_desc = source_desc[:, indices]
+    target_desc = target_desc[:, indices]
     key = f'{cloud_bin_s.split("_")[-1]}_{cloud_bin_t.split("_")[-1]}'
     if key not in gtLog.keys():
         num_inliers = 0
@@ -138,7 +148,8 @@ def register2Fragments(id1, id2, keyptspath, descpath, resultpath, desc_name='pp
         gtTrans = gtLog[key]
         frag1 = source_keypts[corr[:, 0]]
         frag2_pc = open3d.geometry.PointCloud()
-        frag2_pc.points = open3d.utility.Vector3dVector(target_keypts[corr[:, 1]])
+        # frag2_pc.points = open3d.utility.Vector3dVector(target_keypts[corr[:, 1]])
+        frag2_pc.points = open3d.utility.Vector3dVector(target_keypts)
         frag2_pc.transform(gtTrans)
         frag2 = np.asarray(frag2_pc.points)
         distance = np.sqrt(np.sum(np.power(frag1 - frag2, 2), axis=1))
@@ -189,7 +200,7 @@ def read_register_result(id1, id2):
 
 
 if __name__ == '__main__':
-    run_preparation_ETH()
+    # run_preparation_ETH()
     scene_list = [
         'gazebo_summer',
         'gazebo_winter',
