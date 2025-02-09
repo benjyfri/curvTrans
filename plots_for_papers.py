@@ -7,6 +7,8 @@ from matplotlib.patches import Polygon
 import matplotlib.colors as mcolors
 from matplotlib.patheffects import withStroke
 
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 def generate_random_points():
     matrix = np.random.uniform(1, 6, (3, 3))
     return matrix
@@ -369,8 +371,160 @@ def visualize_point_cloud():
     plt.show()
 
 
+def plot_surfaces():
+    def create_grid(x_range=(-2, 2), y_range=(-2, 2), points=100):
+        x = np.linspace(x_range[0], x_range[1], points)
+        y = np.linspace(y_range[0], y_range[1], points)
+        return np.meshgrid(x, y)
+
+    def saddle_ridge(x, y):
+        # return np.sin(x) + np.cos(y)
+        return x ** 2 - 2*y ** 2
+
+    def ridge(x, y):
+        return -np.exp(-0.5 * x ** 2)
+
+    def peak(x, y):
+        return -((x ** 2 + y ** 2) / 4)
+
+    def minimal_surface(x, y):
+        # return np.sin(x) * np.cosh(y)
+        return x ** 2 - y ** 2
+
+    def plane(x, y):
+        return np.zeros_like(x)
+
+    def saddle_valley(x, y):
+        # return x ** 2 - y ** 2
+        return 2* x ** 2 - y ** 2
+
+    def valley(x, y):
+        return np.exp(-0.5 * x ** 2)
+
+    def pit(x, y):
+        return (x ** 2 + y ** 2) / 4
+
+    # Create figure with gridspec
+    fig = plt.figure(figsize=(15, 15))
+
+    # Create GridSpec with different row and column sizes
+    gs = gridspec.GridSpec(4, 4, height_ratios=[0.2, 1, 1, 1], width_ratios=[0.2, 1, 1, 1], figure=fig)
+
+    # Add padding between plots
+    plt.subplots_adjust(left=0, right=1, bottom=0, top=1, wspace=0.075, hspace=0.075)
+    plt.subplots_adjust(left=0, right=1, bottom=0, top=1, wspace=0.0, hspace=0.0)
+
+    # Define header texts
+    k_headers = ['K < 0', 'K = 0', 'K > 0']
+    h_headers = ['H < 0', 'H = 0', 'H > 0']
+
+    # Add K values at the top with borders
+    for i, text in enumerate(k_headers, 1):
+        ax = fig.add_subplot(gs[0, i])
+        ax.text(0.5, 0.5, text, ha='center', va='center', fontsize=50, fontweight='bold')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color('black')
+            spine.set_linewidth(3)
+
+    # Add H values on the left with borders
+    for i, text in enumerate(h_headers, 1):
+        ax = fig.add_subplot(gs[i, 0])
+        ax.text(0.5, 0.5, text, ha='center', va='center', fontsize=50, fontweight='bold', rotation=90)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color('black')
+            spine.set_linewidth(3)
+
+    # Add corner cell
+    ax_corner = fig.add_subplot(gs[0, 0])
+    ax_corner.set_xticks([])
+    ax_corner.set_yticks([])
+    for spine in ax_corner.spines.values():
+        spine.set_visible(True)
+        spine.set_color('black')
+        spine.set_linewidth(3)
+
+    # Define different colormaps for variety
+    first = 'plasma'
+    second = 'autumn'
+    third = 'winter'
+    colormaps = [first, second, third,first, second, third,first, second, third]
+    # Define the functions and their titles for each subplot
+    surface_functions = [
+        (saddle_ridge, 'A', (1, 1)),
+        (ridge, 'B', (1, 2)),
+        (peak, 'C', (1, 3)),
+        (minimal_surface, 'D', (2, 1)),
+        (plane, 'E', (2, 2)),
+        (None, 'Not possible', (2, 3)),
+        (saddle_valley, 'F', (3, 1)),
+        (valley, 'G', (3, 2)),
+        (pit, 'H', (3, 3))
+    ]
+
+    # Create the surface plots
+    for idx, (func, title, pos) in enumerate(surface_functions):
+        if func is not None:
+            ax = fig.add_subplot(gs[pos[0], pos[1]], projection='3d')
+            X, Y = create_grid()
+            Z = func(X, Y)
+
+            # Create the surface plot with different colormaps
+            surf = ax.plot_surface(X, Y, Z, cmap=colormaps[idx], antialiased=True)
+
+            # Customize the plot
+            # ax.set_title(title, pad=0, fontsize=50, x=0.075,y=0.925, color='purple', fontweight=1000)
+            ax.set_title(title, pad=0, fontsize=50, x=0.9,y=0.075, color='gray', fontweight=1000)
+            ax.view_init(elev=30, azim=45)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+
+            # Add black border
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+                spine.set_color('black')
+                spine.set_linewidth(1)
+            rect = plt.Rectangle(
+                (ax.get_position().x0, ax.get_position().y0),
+                ax.get_position().width,
+                ax.get_position().height,
+                transform=fig.transFigure,
+                color='black',
+                linewidth=3,
+                fill=False
+            )
+            fig.patches.append(rect)
+        else:
+            # For the "Not possible" case
+            ax = fig.add_subplot(gs[pos[0], pos[1]])
+            ax.text(0.5, 0.5, 'Not possible',
+                    horizontalalignment='center',
+                    verticalalignment='center',
+                    fontsize=50)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            # Add black border
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+                spine.set_color('black')
+                spine.set_linewidth(1)
+
+    # Add a black border around the entire figure
+    border_rect = plt.Rectangle(
+        (0, 0), 1, 1, transform=fig.transFigure,
+        color='black', linewidth=3, fill=False
+    )
+    fig.patches.append(border_rect)
+    plt.show()
 if __name__ == "__main__":
-    visualize_point_cloud()
+    # visualize_point_cloud()
     # a = [main() for i in range(1)]
     # a = [main() for i in range(50)]
     # a = [main() for i in range(60)]
+    plot_surfaces()
