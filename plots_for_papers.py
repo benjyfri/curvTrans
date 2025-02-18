@@ -71,7 +71,7 @@ class Arrow3D(FancyArrowPatch):
         return np.min(zs)
 
 
-def create_curved_arrow(ax, start, end, n_points=15, color='purple', alpha=0.6):
+def create_curved_arrow(ax, start, end, n_points=12, color='purple', alpha=0.6):
     # Calculate the midpoint and displacement vector
     mid = (start + end) / 2
     displacement = end - start
@@ -106,8 +106,8 @@ def create_curved_arrow(ax, start, end, n_points=15, color='purple', alpha=0.6):
                 [points[i][1], points[i + 1][1]],
                 [points[i][2], points[i + 1][2]],
                 mutation_scale=30,
-                lw=1.5,
-                # lw=5,
+                # lw=1.5,
+                lw=3,
                 arrowstyle='-|>',
                 color=color,
                 alpha=alpha
@@ -118,6 +118,7 @@ def create_curved_arrow(ax, start, end, n_points=15, color='purple', alpha=0.6):
     return arrows
 
 
+
 def plot_point_cloud(pcls, titles, colors, labels):
     plt.rcParams['figure.dpi'] = 300
     plt.rcParams['savefig.dpi'] = 300
@@ -126,7 +127,7 @@ def plot_point_cloud(pcls, titles, colors, labels):
     fig = plt.figure(figsize=(7.2, 7.2))
 
     # Create a black background for the borders
-    fig.patch.set_facecolor('black')
+    # fig.patch.set_facecolor('black')
 
     # Create GridSpec with larger gaps between subplots
     gs = fig.add_gridspec(2, 2,
@@ -167,9 +168,9 @@ def plot_point_cloud(pcls, titles, colors, labels):
         ax.set_facecolor('white')
 
         # Make sure the axis background is also white
-        ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-        ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-        ax.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
         # Remove padding within each subplot
         ax.set_xticklabels([])
@@ -180,7 +181,7 @@ def plot_point_cloud(pcls, titles, colors, labels):
         ax.set_zlabel('')
 
         # Reduce spacing around the actual plot
-        ax.dist = 10  # Adjust camera distance
+        # ax.dist = 10  # Adjust camera distance
 
         if idx == 0:
             for i in range(2, 5):
@@ -220,7 +221,8 @@ def plot_point_cloud(pcls, titles, colors, labels):
                     pcls[1][1],
                     pcl[1],
                     color='red',
-                    alpha=0.6
+                    alpha=0.4,
+                    n_points=12
                 )
             elif idx == 3:
                 create_curved_arrow(
@@ -228,7 +230,8 @@ def plot_point_cloud(pcls, titles, colors, labels):
                     pcls[2][2],
                     pcl[2],
                     color='green',
-                    alpha=0.6
+                    alpha=0.4,
+                    n_points=15
                 )
 
         if len(pcl) >= 3:
@@ -242,11 +245,12 @@ def plot_point_cloud(pcls, titles, colors, labels):
 
         # Just add panel letters without titles
         panel_letters = ['A', 'B', 'C', 'D']
-        ax.text2D(0.05, 0.9, panel_letters[idx],
-                  color='black',
+        # ax.set_title(title, pad=0, fontsize=50, x=0.9, y=0.075, color='gray', fontweight=1000)
+        ax.text2D(0.075, 0.9, panel_letters[idx],
+                  color='gray',
                   transform=ax.transAxes,
-                  fontsize=MEDIUM_SIZE,
-                  fontweight='bold',
+                  fontsize=20,
+                  fontweight=1000,
                   bbox=dict(
                       facecolor='white',
                       edgecolor='none',
@@ -255,16 +259,21 @@ def plot_point_cloud(pcls, titles, colors, labels):
                   ))
 
         ax.grid(True, linestyle='--', alpha=0.6)
-        ax.set_xlim([0, 5])
-        ax.set_ylim([0, 5])
+        ax.set_xlim([0, 4.5])
+        ax.set_ylim([0, 4.5])
         ax.set_zlim([0, 8])
         ax.set_box_aspect([1, 1, 1])
         ax.view_init(elev=25, azim=45)
 
     plt.show()
+    return plt
 
-def main():
+def main(i=0):
     points = generate_random_points()
+    print(points)
+    points = np.array([[2.15886298, 5.50488619, 1.5282085 ],
+ [1.40084327, 1.43710485, 5.28841026],
+ [5.57066292, 3.88908508, 3.49825685]])
     o = np.zeros(3)
     sizes = np.linalg.norm(points,axis=1)
     size_sorted_indices = np.argsort(sizes)
@@ -290,7 +299,8 @@ def main():
     colors = ["black", "red", "green", "blue", "orange"]
     labels = ["Point_Of_interest", "Center_Of_Mass (M)", "A", "B", "C"]
 
-    plot_point_cloud(pcl_list, titles, colors, labels)
+    plt = plot_point_cloud(pcl_list, titles, colors, labels)
+    plt.savefig(f"{i}.png")
 
 
 import numpy as np
@@ -415,8 +425,11 @@ def plot_surfaces():
     plt.subplots_adjust(left=0, right=1, bottom=0, top=1, wspace=0.0, hspace=0.0)
 
     # Define header texts
-    k_headers = ['K < 0', 'K = 0', 'K > 0']
-    h_headers = ['H < 0', 'H = 0', 'H > 0']
+    # k_headers = ['K < 0', 'K = 0', 'K > 0']
+    # h_headers = ['H < 0', 'H = 0', 'H > 0']
+    # Define header texts
+    k_headers = ['K < 0', 'K > 0', 'K = 0']
+    h_headers = ['H < 0', 'H > 0', 'H = 0']
 
     # Add K values at the top with borders
     for i, text in enumerate(k_headers, 1):
@@ -452,19 +465,35 @@ def plot_surfaces():
     # Define different colormaps for variety
     first = 'plasma'
     second = 'autumn'
-    third = 'winter'
-    colormaps = [first, second, third,first, second, third,first, second, third]
+    second = 'winter'
+    third = 'autumn'
+    # third = 'winter'
+    flat = 'Greys_r'
+    # colormaps = [first, second, third,first, flat, third,first, second, third]
+    # # Define the functions and their titles for each subplot
+    # surface_functions = [
+    #     (saddle_ridge, 'A', (1, 1)),
+    #     (ridge, 'B', (1, 2)),
+    #     (peak, 'C', (1, 3)),
+    #     (minimal_surface, 'D', (2, 1)),
+    #     (plane, 'E', (2, 2)),
+    #     (None, 'Not possible', (2, 3)),
+    #     (saddle_valley, 'F', (3, 1)),
+    #     (valley, 'G', (3, 2)),
+    #     (pit, 'H', (3, 3))
+    # ]
+    colormaps = [first, second, third,first, second, third,first, second, flat]
     # Define the functions and their titles for each subplot
     surface_functions = [
         (saddle_ridge, 'A', (1, 1)),
-        (ridge, 'B', (1, 2)),
-        (peak, 'C', (1, 3)),
-        (minimal_surface, 'D', (2, 1)),
-        (plane, 'E', (2, 2)),
-        (None, 'Not possible', (2, 3)),
-        (saddle_valley, 'F', (3, 1)),
-        (valley, 'G', (3, 2)),
-        (pit, 'H', (3, 3))
+        (peak, 'B', (1, 2)),
+        (ridge, 'C', (1, 3)),
+        (saddle_valley, 'D', (2, 1)),
+        (pit, 'E', (2, 2)),
+        (valley, 'F', (2, 3)),
+        (minimal_surface, 'G', (3, 1)),
+        (None, 'Not possible', (3, 2)),
+        (plane, 'H', (3, 3))
     ]
 
     # Create the surface plots
@@ -499,7 +528,7 @@ def plot_surfaces():
                 linewidth=3,
                 fill=False
             )
-            fig.patches.append(rect)
+            # fig.patches.append(rect)
         else:
             # For the "Not possible" case
             ax = fig.add_subplot(gs[pos[0], pos[1]])
@@ -520,11 +549,11 @@ def plot_surfaces():
         (0, 0), 1, 1, transform=fig.transFigure,
         color='black', linewidth=3, fill=False
     )
-    fig.patches.append(border_rect)
+    # fig.patches.append(border_rect)
     plt.show()
 if __name__ == "__main__":
     # visualize_point_cloud()
-    # a = [main() for i in range(1)]
-    # a = [main() for i in range(50)]
+    a = [main() for i in range(1)]
+    # a = [(print(f"----------{i}----------"), main(i)) for i in range(100)]
     # a = [main() for i in range(60)]
-    plot_surfaces()
+    # plot_surfaces()
