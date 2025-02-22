@@ -249,7 +249,7 @@ def create_3MLP32N2deg_lpe0eig36_args(name='3MLP32N2deg_lpe0eig36'):
     cls_args_shape.lpe_dim = 0
     cls_args_shape.output_dim = 5
     cls_args_shape.use_lap_reorder = 1
-    cls_args_shape.lap_eigenvalues_dim = 5
+    cls_args_shape.lap_eigenvalues_dim = 0
     return cls_args_shape, 1, 1
 
 def check_pairings_modelnet():
@@ -323,7 +323,7 @@ def check_registration_modelnet(model_name):
     pcts = [1]
     runsac_iterations = [1000]
     use_triangles=[False,True]
-    models_names = ['a_cntr01_std007','a_cntr03_std007', 'a_cntr05_std007']
+    models_names = [model_name]
     nn_modes = [2,4]
     for nn_mode in nn_modes:
         for scales, receptive_field in zip(scales_list, receptive_fields_list):
@@ -347,6 +347,7 @@ def check_registration_modelnet(model_name):
                                     cls_args, _, _ = create_3MLP32N2deg_lpe0eig36_args(name=model_name)
                                     cls_args.num_neurons_per_layer = 64
                                     cls_args.num_mlp_layers = 5
+                                    cls_args.output_dim = 4
                                     worst_losses, losses_rot, losses_trans, final_thresh_list, final_inliers_list, point_distance_list, iter_2_ransac_convergence, combined_dict = (
                                         test_multi_scale_using_embedding_predator_modelnet_geo(cls_args=cls_args,
                                                                                            tri=tri,
@@ -687,12 +688,14 @@ def find_top_three_directories_with_lowest_means(base_dir, k=3):
 
 if __name__ == '__main__':
     # base_directory = r"C:\Users\benjy\Desktop\curvTrans\0101run"
+    # base_directory = r"C:\Users\Owner\PycharmProjects\curvTrans\0101run"
     # result = find_top_three_directories_with_lowest_means(base_directory, k=10)
     # for r in result:
     #     print(r)
     # exit(0)
     # model_name = "a_cntr01_std005_64"
-    model_name = "b_cntr1_std01_long"
+    model_name = "ZZ_cntr0_std01_long"
+    # model_name = "ZZ_cntr0_std01_long_no_edges"
 
     # viewStabilityWithPartial()
     # checkSizeModelnet()
@@ -706,7 +709,7 @@ if __name__ == '__main__':
     # checkDiameterPCLSynthetic()
     # exit(0)
     # check_registration_modelnet(model_name)
-    # # check_registration_3dmatch(model_name)
+    # # # check_registration_3dmatch(model_name)
     # exit(0)
 
 
@@ -736,7 +739,8 @@ if __name__ == '__main__':
     # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="one", rgb=False, add_noise=False)
     # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.9, rgb=False, add_noise=False)
     # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="0.5", rgb=False, add_noise=True)
-    visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="1", rgb=False, add_noise=True)
+    # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="1", rgb=False, add_noise=True)
+    vis2(model_name=model_name, args_shape=cls_args,scaling_factor="1", rgb=False, add_noise=True)
     # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor="1.5", rgb=False, add_noise=False)
     # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=1.2, rgb=False, add_noise=False)
     # # visualizeShapesWithEmbeddingsCorners(model_name=model_name, args_shape=cls_args,scaling_factor=0.77, rgb=False, add_noise=True)

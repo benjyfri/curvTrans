@@ -103,8 +103,19 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                 contrastive_point_cloud = contrastive_point_cloud + contrastive_noise
                 contrastive_point_cloud = contrastive_point_cloud - contrastive_point_cloud[0, :]
         else:
-            point_cloud2 = torch.tensor((0))
-            contrastive_point_cloud = torch.tensor((0))
+            # point_cloud2 = torch.tensor((0))
+            # contrastive_point_cloud = torch.tensor((0))
+            orig_norm_point = torch.tensor([-info['d'], -info['e'], 1], dtype=torch.float32, device=point_cloud1.device)
+            if not (angle >0 or radius > 0):
+                if ((class_label in [1,2] and info['k1'] + info['k2'] > 0) or
+                        (class_label==3 and (abs(info['k1']) >  abs(info['k2'])))):
+                    orig_norm_point *= -1
+
+            normal_vec = torch.matmul(orig_norm_point, (torch.tensor(rot_orig, dtype=torch.float32)).T)
+            normal_vec = ( normal_vec / torch.norm(normal_vec) )
+            # plot_point_clouds(point_cloud1,normal_vec.reshape(1, 3), title=f"{[angle, radius, info['k1'], info['k2']]}")
+            return {"point_cloud": point_cloud1, "info": info, "normal_vec": normal_vec}
+
         # if class_label in [0,1,2,3]:
         #     if  radius>0 or angle>0:
         #         plot_point_clouds(point_cloud1 @ rot_orig, point_cloud2 @ pos_rot, contrastive_point_cloud @ neg_rot, np.load("one_clean.npy"),axis_range=None,
@@ -580,7 +591,8 @@ def generate_room_corner_with_points(n_points, bias=0.0):
     points3 = np.stack((np.random.uniform(0, upper_bound3, N3), np.zeros(N3), -np.random.uniform(0, upper_bound3, N3)), axis=-1)
     points = np.vstack((center, points1,points2,points3))
 
-    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    # center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[0]
     points = points - points[center_point_idx, :]
 
     # must fix - is wrong! first point must be centered!
@@ -626,7 +638,8 @@ def generate_surfaces_angles_and_sample(N, angle,min_len,max_len, bounds=None):
     points = np.stack((x_coords, y_coords, z_coords), axis=-1)
     center = np.array([0,0,0])
     points = np.vstack((center,points))
-    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    # center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[0]
     points = points - points[center_point_idx, :]
 
     # must fix - is wrong! first point must be centered!
@@ -730,7 +743,8 @@ def sample_sphere_point_cloud(radius, num_of_points, top_half=True, bounds=None)
     centering = radius if top_half else -radius
     points = np.vstack([(np.array([0, 0, 0])).reshape(1, 3), point_cloud - (np.array([0,0,centering]))])
 
-    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    # center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[0]
     points = points - points[center_point_idx, :]
     points[center_point_idx, :] = (points[0, :]).copy()
     points[0, :] = np.array([[0, 0, 0]])
@@ -806,7 +820,8 @@ def sample_pyramid(n_points, head_angle_rad, min_len,max_len, bias=0.0, bounds=N
 
     points = np.vstack([tip.reshape(1,3), sampled_points])
 
-    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    # center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0, 1, 2])]
+    center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[0]
     # center_point_idx = np.argsort(np.linalg.norm(points, axis=1))[np.random.choice([0,1])]
     points = points - points[center_point_idx, :]
     points[center_point_idx, :] = (points[0, :]).copy()

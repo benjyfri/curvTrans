@@ -418,13 +418,13 @@ def visualizeShapesWithEmbeddingsCorners(model_name=None, args_shape=None, scali
     pcls, label = load_data()
     shapes = [47,86]
     # shapes = [47,86, 174, 51]
-    # shapes = [47, 86, 162, 174, 176, 179]
-    shapes = [86]
+    shapes = [47, 86, 162, 174, 176, 179]
+    # shapes = [86]
     # shapes = [10, 17, 24, 47]
     # shapes = range(10)
     for k in shapes:
         pointcloud = pcls[k][:]
-        pointcloud = np.load("pcl1.npy")
+        # pointcloud = np.load("pcl1.npy")
         # bin_file = "000098.bin"
         # pointcloud = read_bin_file(bin_file)
         noisy_pointcloud = pointcloud
@@ -506,6 +506,85 @@ def visualizeShapesWithEmbeddingsCorners(model_name=None, args_shape=None, scali
             )
         fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
         fig_max_embedding.show()
+
+
+import numpy as np
+import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+from matplotlib import cm
+
+
+def vis2(model_name=None, args_shape=None, scaling_factor=None, rgb=False,
+                                         add_noise=True):
+    shapes = [47, 86, 162, 174, 176, 179]
+    shapes = [86,174]
+
+    colormaps = [cm.Reds, cm.Blues, cm.Greens, cm.Purples, cm.Oranges, cm.cool, cm.winter, cm.summer]
+    colormaps = [cm.Greys, cm.Blues, cm.Greens, cm.Reds, cm.Oranges]
+    colormaps = [cm.viridis, cm.plasma, cm.inferno, cm.magma, cm.cividis]
+    colormaps = [cm.plasma, cm.plasma, cm.plasma, cm.plasma, cm.plasma]
+    # colormaps = [cm.cool, cm.winter, cm.summer, cm.autumn, cm.Blues, cm.Greens, cm.Purples, cm.Oranges]
+
+    # for k in range(len(pcls)):
+    for class_num in [0,1,2,3,4]:
+        for k in shapes:
+            pointcloud = np.load(f"{k}.npy")
+            noisy_pointcloud = pointcloud
+
+            pointcloud = noisy_pointcloud.astype(np.float32)
+            colors, scaling_fac = classifyPoints(model_name=model_name, pcl_src=pointcloud, pcl_interest=pointcloud,
+                                                 args_shape=args_shape, scaling_factor=scaling_factor)
+
+            colors = colors.detach().cpu().numpy().squeeze()
+            colors = colors[:, :5]
+
+            # class_num = 2
+
+            max_embedding_index = np.argmax(colors, axis=1)
+            max_embedding_index = class_num * np.ones_like(max_embedding_index)
+            max_embedding_weights = np.max(colors, axis=1)  # Get the confidence scores
+            max_embedding_weights = colors[:,class_num]  # Get the confidence scores
+            # Normalize weights to [0, 1] range
+            max_embedding_weights = (max_embedding_weights - np.min(max_embedding_weights)) / (
+                        np.max(max_embedding_weights) - np.min(max_embedding_weights) + 1e-6)
+            # max_embedding_weights = 0.3333 + max_embedding_weights / 1.5
+            # Map weights to colors using class-specific colormaps
+            mapped_colors = [colormaps[i](max_embedding_weights[j])[:3] for j, i in enumerate(max_embedding_index)]
+            mapped_colors = np.array(mapped_colors)
+
+            layout = go.Layout(
+                title=f"Point Cloud with Embedding-based Colors {k}",
+                scene=dict(
+                    xaxis_title='X',
+                    yaxis_title='Y',
+                    zaxis_title='Z'
+                )
+            )
+
+            data_max_embedding = []
+            names = ['plane', 'peak/pit', 'valley/ridge', 'saddle', 'corner']
+
+            for i in range(len(colormaps)):
+                indices = np.where(max_embedding_index == i)[0]
+                if len(indices) > 0:
+                    data_max_embedding.append(
+                        go.Scatter3d(
+                            x=pointcloud[indices, 0],
+                            y=pointcloud[indices, 1],
+                            z=pointcloud[indices, 2],
+                            mode='markers',
+                            marker=dict(
+                                size=2.5,
+                                opacity=1,
+                                color=[f'rgb({r * 255},{g * 255},{b * 255})' for r, g, b in mapped_colors[indices]]
+                            ),
+                            name=f'Max Value Embedding - {names[i]}'
+                        )
+                    )
+
+            fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
+            fig_max_embedding.show()
+
 
 def visualizeShapesWithEmbeddings3dMatchCorners(model_name=None, args_shape=None, scaling_factor=None, rgb=False):
     train_set = IndoorDataset(data_augmentation=False)

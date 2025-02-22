@@ -95,10 +95,10 @@ def create_emb(input, model, scaling_factors, scales=[1, 3, 5, 7, 9, 11, 13, 15]
         cur_input = input[:, :21 * scale, :]
         if scale>1:
             cur_input = farthest_point_sampling(cur_input, k=21)  # Ensure function exists
-        cur_scaling_factor = calcDist(cur_input)
+        # cur_scaling_factor = calcDist(cur_input)
         neighbors_centered = cur_input.permute(0, 2, 1).unsqueeze(2)
-        # src_knn_pcl = scaling_factor * neighbors_centered
-        src_knn_pcl = cur_scaling_factor * neighbors_centered
+        src_knn_pcl = scaling_factor * neighbors_centered
+        # src_knn_pcl = cur_scaling_factor * neighbors_centered
 
         cur_emb = model(src_knn_pcl).squeeze()  # Ensure squeezing works as expected
         emb_list.append(cur_emb)  # Store embeddings instead of direct concatenation
@@ -198,10 +198,14 @@ def generate_descriptor(model, desc_name, pcdpath, keyptspath, descpath):
     trans_matrix = []
     if num_frag == num_desc:
         print("Descriptor already prepared.")
-        return
+        # return
     for j in range(num_frag):
         keypts, local_patches = prepare_patch(pcdpath, 'cloud_bin_' + str(j), keyptspath, trans_matrix)
+        # noise = np.clip(-0.05,0.05, np.random.normal(loc=0, scale=0.01, size=local_patches.shape))
+        # local_patches = local_patches + noise
+        # local_patches = local_patches - local_patches[:,0,:].reshape(5000,1,3)
         input_ = torch.tensor(local_patches.astype(np.float32))
+        # a = calcDist(input_)
         B = input_.shape[0]
         input_ = input_.cuda()
         model = model.cuda()
@@ -251,7 +255,7 @@ def configArgsPCT():
                         help='margin used for contrastive loss')
     parser.add_argument('--use_lap_reorder', type=int, default=1, metavar='N',
                         help='reorder points by laplacian order ')
-    parser.add_argument('--lap_eigenvalues_dim', type=int, default=5, metavar='N',
+    parser.add_argument('--lap_eigenvalues_dim', type=int, default=0, metavar='N',
                         help='use eigenvalues in as input')
     parser.add_argument('--use_second_deg', type=int, default=1, metavar='N',
                         help='use second degree embedding ')
@@ -386,10 +390,11 @@ if __name__ == '__main__':
     ]
     model_names =['x_cntr0_std005_long','y_cntr0_std0_long','z_cntr0_std01_long','a_cntr1_std005_long','b_cntr1_std01_long','c_cntr_sep_1_std01_long']
     model_names =['z_cntr0_std01_long','a_cntr1_std005_long','b_cntr1_std01_long','c_cntr_sep_1_std01_long']
+    model_names =['ZZ_cntr0_std01_long', "ZZ_cntr0_std01_long_no_edges"]
     # model_names =['c_cntr_sep_1_std01_long']
-    output_dims = [5,5,5,5,5,10]
-    output_dims = [5,5,5,10]
-    # output_dims = [10]
+    # output_dims = [5,5,5,5,5,10]
+    # output_dims = [5,5,5,10]
+    output_dims = [5,4]
     args = configArgsPCT()
     for model_name,output_dim in zip(model_names, output_dims):
         print(f'------------------------------------------')

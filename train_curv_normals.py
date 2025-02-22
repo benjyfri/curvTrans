@@ -9,52 +9,49 @@ import torch
 import torch.nn as nn
 from models import MLP, TransformerNetwork, TransformerNetworkPCT, shapeClassifier
 from data import BasicPointCloudDataset
-from torch.autograd import Variable
-import matplotlib.pyplot as plt
-import seaborn as sns
-from torch.profiler import profile, record_function, ProfilerActivity
+torch.set_default_dtype(torch.float32)
 import torch.nn.functional as F
 
-def normalized_triplet_loss(orig_emb, pos_emb, neg_emb, margin=5.0):
-    # Normalize all embeddings
-    orig_emb = F.normalize(orig_emb, p=2, dim=1)
-    pos_emb = F.normalize(pos_emb, p=2, dim=1)
-    neg_emb = F.normalize(neg_emb, p=2, dim=1)
 
-    # Compute triplet loss with normalized embeddings
-    return nn.TripletMarginLoss(margin=margin)(orig_emb, pos_emb, neg_emb)
-def test(model, dataloader, loss_function, device, args):
+def test(model, dataloader, device):
     model.eval()  # Set the model to evaluation mode
-    total_loss = 0.0
-    total_acc_loss = 0.0
+    total_K1_loss = 0.0
+    total_K2_loss = 0.0
+    total_normal_loss = 0.0
     count = 0
-    label_correct = {label: 0 for label in range(5)}
-    label_total = {label: 0 for label in range(5)}
+    mseLoss = nn.MSELoss()
 
     with torch.no_grad():
         for batch in dataloader:
-            pcl, info = batch['point_cloud'].to(device), batch['info']
-            label = info['class'].to(device).long()
-            output = model((pcl.permute(0, 2, 1)).unsqueeze(2))
-            output = output.squeeze()
-            loss = loss_function(output, label)
-            output = output[:,:5]
-            preds = output.max(dim=1)[1]
-            total_acc_loss += torch.mean((preds == label).float()).item()
-            total_loss += loss.item()
+            pcl = batch['point_cloud'].to(device).float()
+            normals_orig = batch['normal_vec'].to(device).float()
+            # info = batch['info']
+            # K1_orig = info['k1'].to(device).float()
+            # K2_orig = info['k2'].to(device).float()
+            output = (model((pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
+            # output = F.normalize(output, p=2, dim=1)
+            # K1 = output[:, 0]
+            # K2 = output[:, 1]
+            # normals = output[:, 2:]
+            normals = output
+            # K1_loss = mseLoss(K1_orig, K1)
+            # K2_loss = mseLoss(K2_orig, K2)
+            # normals_loss = mseLoss(normals_orig, normals)
+            normals_loss = torch.min(
+                (normals_orig - normals).pow(2).sum(1),  # Case 1: Direct matching
+                (normals_orig + normals).pow(2).sum(1)  # Case 2: Inverted matching
+            ).mean()
+
+            # total_K1_loss += K1_loss.item()
+            # total_K2_loss += K2_loss.item()
+            total_normal_loss += normals_loss.item()
             count += 1
-            for label_name in range(5):
-                correct_mask = (preds == label_name) & (label == label_name)
-                label_correct[label_name] += correct_mask.sum().item()
-                label_total[label_name] += (label == label_name).sum().item()
 
-    # Overall accuracy
-    test_acc = (total_acc_loss / (count))
-    label_accuracies = {label: label_correct[label] / label_total[label] if label_total[label] != 0 else 0.0
-                        for label in range(5)}
-    average_loss = total_loss / (count)
+    batch_K1_loss = (total_K1_loss / count)
+    batch_K2_loss = (total_K2_loss / count)
+    batch_normal_loss = (total_normal_loss / count)
 
-    return average_loss, test_acc, label_accuracies
+    return batch_K1_loss, batch_K2_loss, batch_normal_loss
 
 
 
@@ -68,13 +65,15 @@ def train_and_test(args):
     print(args)
     num_epochs = args.epochs
     learning_rate = args.lr
-    if args.output_dim>=5:
+    if args.output_dim==5:
         train_dataset = BasicPointCloudDataset(file_path="train_surfaces_05X05.h5" , args=args)
         test_dataset = BasicPointCloudDataset(file_path='test_surfaces_05X05.h5' , args=args)
-    if args.output_dim==4:
+    elif args.output_dim==4:
         train_dataset = BasicPointCloudDataset(file_path="train_surfaces_05X05_no_edge.h5" , args=args)
         test_dataset = BasicPointCloudDataset(file_path="test_surfaces_05X05_no_edge.h5" , args=args)
-
+    else:
+        train_dataset = BasicPointCloudDataset(file_path="train_surfaces_05X05_no_edge.h5" , args=args)
+        test_dataset = BasicPointCloudDataset(file_path='test_surfaces_05X05_no_edge.h5' , args=args)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     model = shapeClassifier(args).to(device)
@@ -82,100 +81,74 @@ def train_and_test(args):
     print(f'Num of parameters in NN: {num_params}')
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+    # optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     # milestones = np.linspace(args.lr_jumps,num_epochs,num_epochs//args.lr_jumps)
     milestones = [args.lr_jumps * (i) for i in range(1,num_epochs//args.lr_jumps + 1)]
     scheduler = MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
 
-    tripletMarginLoss = nn.TripletMarginLoss(margin=args.contr_margin)
-    criterion = nn.CrossEntropyLoss(reduction='mean')
     mseLoss = nn.MSELoss()
-    contr_loss_weight = args.contr_loss_weight
-    data_in_1_cube = args.cube
-    emb_start = 0 if (args.output_dim==5) else 5
     # Training loop
     for epoch in range(num_epochs):
         model.train()  # Set the model to training mode
-        total_train_loss = 0.0
-        total_train_contrastive_loss = 0.0
-        total_train_contrastive_positive_loss = 0.0
-        total_train_contrastive_negative_loss = 0.0
-        total_train_acc_loss = 0.0
+        total_K1_loss = 0.0
+        total_K2_loss = 0.0
+        total_normal_loss = 0.0
         count = 0
         # Use tqdm to create a progress bar for the training loop
         with tqdm(train_dataloader, desc=f'Epoch {epoch + 1}/{num_epochs}', leave=False) as tqdm_bar:
             for batch in tqdm_bar:
-                pcl, info = batch['point_cloud'].to(device), batch['info']
-                if data_in_1_cube:
-                    pcl /= torch.max(torch.abs(pcl))
-                label = info['class'].to(device).long()
+                pcl = batch['point_cloud'].to(device).float()  # Explicitly convert to float32
+                normals_orig = batch['normal_vec'].to(device).float()
+                # info = batch['info']
+                # K1_orig = info['k1'].to(device).float()  # Convert to float32
+                # K2_orig = info['k2'].to(device).float()
                 output = (model((pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
+                # output = F.normalize(output, p=2, dim=1)
 
-                orig_classification = output[:, :5]
-                orig_emb = output[:, emb_start:]
-                classification_loss = torch.tensor((0))
-                if args.classification == 1:
-                    classification_loss = criterion(orig_classification, label)
+                # K1 = output[:, 0]
+                # K2 = output[:, 1]
+                # normals = output[:, 2:]
+                normals = output
+                # K1_loss = mseLoss(K1_orig, K1)
+                # K2_loss = mseLoss(K2_orig, K2)
+                # normals_loss = mseLoss(normals_orig, normals)
+                normals_loss = torch.min(
+                    (normals_orig - normals).pow(2).sum(1),
+                    (normals_orig + normals).pow(2).sum(1)
+                ).mean()
 
-                if args.contr_loss_weight != 0:
-                    pos_pcl = batch['point_cloud2'].to(device)
-                    neg_pcl = batch['contrastive_point_cloud'].to(device)
-
-                    output_pos_pcl = (model((pos_pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
-
-                    output_neg_pcl = (model((neg_pcl.permute(0, 2, 1)).unsqueeze(2))).squeeze()
-
-                    pos_emb = output_pos_pcl[:, emb_start:]
-                    neg_emb = output_neg_pcl[:, emb_start:]
-                    # contrstive_loss = tripletMarginLoss(orig_emb, pos_emb, neg_emb)
-                    contrstive_loss = normalized_triplet_loss(orig_emb, pos_emb, neg_emb, margin=args.contr_margin)
-                    total_train_contrastive_positive_loss += mseLoss(orig_emb, pos_emb)
-                    total_train_contrastive_negative_loss += mseLoss(orig_emb, neg_emb)
-                    total_train_contrastive_loss += contrstive_loss
-                else:
-                    contrstive_loss = torch.tensor((0))
-
-
-                new_awesome_loss = classification_loss + (contr_loss_weight * contrstive_loss)
+                new_awesome_loss = normals_loss
+                # new_awesome_loss = K1_loss + K2_loss + normals_loss
+                # new_awesome_loss = K1_loss + K2_loss
                 optimizer.zero_grad()
                 new_awesome_loss.backward()
                 optimizer.step()
 
                 current_lr = optimizer.param_groups[0]['lr']
 
-                total_train_loss += classification_loss.item()
-                preds = orig_classification.max(dim=1)[1]
-                total_train_acc_loss += torch.mean((preds == label).float()).item()
+                # total_K1_loss += K1_loss.item()
+                # total_K2_loss += K2_loss.item()
+                total_normal_loss += normals_loss.item()
 
                 count = count + 1
 
-                tqdm_bar.set_postfix(train_loss=f'{(classification_loss.item()):.4f}')
+        train_K1_loss = (total_K1_loss / count)
+        train_K2_loss = (total_K2_loss / count)
+        train_normal_loss = (total_normal_loss / count)
+        print(f'train_K1_loss: {train_K1_loss}')
+        print(f'train_K2_loss: {train_K2_loss}')
+        print(f'train_normal_loss: {train_normal_loss}')
+        test_K1_loss, test_K2_loss, test_normal_loss = test(model, test_dataloader, device)
 
-        classification_train_loss = (total_train_loss / count)
-        classification_acc_train = (total_train_acc_loss / (count))
-        contrastive_train_loss = (total_train_contrastive_loss / (count))
-        contrastive_positive_train_loss = (total_train_contrastive_positive_loss / (count))
-        contrastive_negative_train_loss = (total_train_contrastive_negative_loss / (count))
-        print(f'contrastive_loss: {contrastive_train_loss}')
-        print(f'contrastive_positive_MSEloss: {contrastive_positive_train_loss}')
-        print(f'contrastive_negative_MSEloss: {contrastive_negative_train_loss}')
-
-        if args.classification == 1:
-            test_loss, acc_test, label_accuracies = test(model, test_dataloader, criterion, device, args)
-            print(f'LR: {current_lr}')
-
-            print({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
-            for key in label_accuracies:
-                print("label_" + str(key), ":", label_accuracies[key])
-
+        print(f'test_K1_loss: {test_K1_loss}')
+        print(f'test_K2_loss: {test_K2_loss}')
+        print(f'test_normal_loss: {test_normal_loss}')
+        print(f'LR: {current_lr}')
         scheduler.step()
 
         if args.use_wandb:
-            if args.classification == 1:
-                wandb.log({"epoch": epoch, "train_loss": classification_train_loss ,"test_loss": test_loss, "acc_train": classification_acc_train, "acc_test": acc_test})
-                for key in label_accuracies:
-                    wandb.log({"epoch": epoch, "label_"+str(key) : label_accuracies[key]})
-            if args.contr_loss_weight!=0:
-                wandb.log({"epoch": epoch, "contrastive_loss":contrastive_train_loss})
+            wandb.log({"epoch": epoch, "train_K1_loss": train_K1_loss, "train_K2_loss": train_K2_loss, "train_normal_loss": train_normal_loss,
+                       "test_K1_loss": test_K1_loss, "test_K2_loss": test_K2_loss, "test_normal_loss": test_normal_loss})
     return model
 
 def configArgsPCT():
@@ -323,17 +296,8 @@ import cProfile
 import pstats
 if __name__ == '__main__':
     args = configArgsPCT()
-    # cProfile.runctx('train_and_test(args)')
-    # args.epochs=1
-    # profiler = cProfile.Profile()
-    # cProfile.runctx('train_and_test(args=args)', globals(), locals(), sort='tottime')
-    # stats = pstats.Stats(profiler)
-    # stats.sort_stats(pstats.SortKey.TIME)
-    # stats.print_stats()
-    # exit(0)
     model = train_and_test(args)
     torch.save(model.state_dict(), f'{args.exp_name}.pt')
-    # model = input_visualized_importance()
-    testPretrainedModel(args, model=model.to('cuda'))
+    # testPretrainedModel(args, model=model.to('cuda'))
 
 

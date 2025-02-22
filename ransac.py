@@ -26,8 +26,8 @@ from threedmatch import *
 from indoor import *
 from modelnet import ModelNetHdf
 import transforms
-# from dataset import ModelNetPairDataset
-# from configGeo import make_cfg
+from geo_modelnet.dataset import ModelNetPairDataset
+from geo_modelnet.config import make_cfg
 def farthest_point_sampling(point_cloud, k):
     N, _ = point_cloud.shape
 
@@ -596,6 +596,7 @@ def test_multi_scale_using_embedding_predator_modelnet_geo(cls_args=None,num_wor
     combined_dict = {}
     # test_dataset = test_predator_data(partial_p_keep= [0.5, 0.5])
     cfg = make_cfg()
+    cfg.data.dataset_root = os.path.join(os.getcwd(),"data", "Modelnet")
     train_dataset = ModelNetPairDataset(
         cfg.data.dataset_root,
         "train",
@@ -618,9 +619,10 @@ def test_multi_scale_using_embedding_predator_modelnet_geo(cls_args=None,num_wor
     all_scalings_1 = []
     all_scalings_2 = []
     for i in range(size):
-        if i%100 ==0:
+        if i%10 ==0:
             print(f'------------{i}------------')
-
+        if i>amount_of_samples:
+            break
         data = train_dataset.__getitem__(i)
         raw_points, src_pcd, tgt_pcd, transform = data['raw_points'], data['ref_points'], data['src_points'], data['transform']
         GT_rot = transform[0:3, 0:3].T

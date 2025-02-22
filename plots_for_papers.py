@@ -295,7 +295,7 @@ def main(i=0):
     pcl_3 = rotate_point_z_to_x_axis((pcl_2[2, :]).copy(), pcl_2.copy())
 
     pcl_list = [pcl_1, pcl_1, pcl_2, pcl_3]
-    titles = ["Original Point Cloud", "Map To Canonical Order", "Rotated M onto Z-axis", "Largest Norm onto XZ Plane"]
+    titles = ["Original Point Cloud", "Map To Canonplots_for_papers.pyical Order", "Rotated M onto Z-axis", "Largest Norm onto XZ Plane"]
     colors = ["black", "red", "green", "blue", "orange"]
     labels = ["Point_Of_interest", "Center_Of_Mass (M)", "A", "B", "C"]
 
@@ -422,7 +422,7 @@ def plot_surfaces():
 
     # Add padding between plots
     plt.subplots_adjust(left=0, right=1, bottom=0, top=1, wspace=0.075, hspace=0.075)
-    plt.subplots_adjust(left=0, right=1, bottom=0, top=1, wspace=0.0, hspace=0.0)
+    plt.subplots_adjust(left=0, right=1, bottom=0, top=1, wspace=0.25, hspace=0.25)
 
     # Define header texts
     # k_headers = ['K < 0', 'K = 0', 'K > 0']
@@ -434,22 +434,24 @@ def plot_surfaces():
     # Add K values at the top with borders
     for i, text in enumerate(k_headers, 1):
         ax = fig.add_subplot(gs[0, i])
-        ax.text(0.5, 0.5, text, ha='center', va='center', fontsize=50, fontweight='bold')
+        ax.text(0.5, 0.2, text, ha='center', va='center', fontsize=50, fontweight='bold')
         ax.set_xticks([])
         ax.set_yticks([])
         for spine in ax.spines.values():
-            spine.set_visible(True)
+            # spine.set_visible(True)
+            spine.set_visible(False)
             spine.set_color('black')
             spine.set_linewidth(3)
 
     # Add H values on the left with borders
     for i, text in enumerate(h_headers, 1):
         ax = fig.add_subplot(gs[i, 0])
-        ax.text(0.5, 0.5, text, ha='center', va='center', fontsize=50, fontweight='bold', rotation=90)
+        ax.text(0.8, 0.5, text, ha='center', va='center', fontsize=50, fontweight='bold', rotation=90)
         ax.set_xticks([])
         ax.set_yticks([])
         for spine in ax.spines.values():
-            spine.set_visible(True)
+            # spine.set_visible(True)
+            spine.set_visible(False)
             spine.set_color('black')
             spine.set_linewidth(3)
 
@@ -458,7 +460,8 @@ def plot_surfaces():
     ax_corner.set_xticks([])
     ax_corner.set_yticks([])
     for spine in ax_corner.spines.values():
-        spine.set_visible(True)
+        # spine.set_visible(True)
+        spine.set_visible(False)
         spine.set_color('black')
         spine.set_linewidth(3)
 
@@ -532,10 +535,10 @@ def plot_surfaces():
         else:
             # For the "Not possible" case
             ax = fig.add_subplot(gs[pos[0], pos[1]])
-            ax.text(0.5, 0.5, 'Not possible',
+            ax.text(0.5, 0.5, 'Not \nPossible',
                     horizontalalignment='center',
                     verticalalignment='center',
-                    fontsize=50)
+                    fontsize=60)
             ax.set_xticks([])
             ax.set_yticks([])
             # Add black border
@@ -553,7 +556,7 @@ def plot_surfaces():
     plt.show()
 if __name__ == "__main__":
     # visualize_point_cloud()
-    a = [main() for i in range(1)]
+    # a = [main() for i in range(1)]
     # a = [(print(f"----------{i}----------"), main(i)) for i in range(100)]
     # a = [main() for i in range(60)]
-    # plot_surfaces()
+    plot_surfaces()
