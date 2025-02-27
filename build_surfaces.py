@@ -86,8 +86,8 @@ def updateDataSet(label_to_update=4,new_file_path_train = "train_surfaces_05x05.
         addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.05, max_curv=3, counter=27500, size=2, amount_of_pcl=2500, radius=1)
         print(f'Finished train valley Cylinders')
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=4, epsilon=0.05, max_curv=5, counter=30000, size=2.5, amount_of_pcl=10000)
-        print(f'Finished train saddle surfaces')
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=4, epsilon=0.05, max_curv=5, counter=30000, size=2.5, amount_of_pcl=10000)
+        # print(f'Finished train saddle surfaces')
 
         addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.05, max_curv=5, counter=40000, size=3, amount_of_pcl=2500)
         print(f'Finished train HALFSPACE flat surfaces')
@@ -107,8 +107,8 @@ def updateDataSet(label_to_update=4,new_file_path_train = "train_surfaces_05x05.
         print(f'Finished train HALFSPACE ridge ANGLES')
         addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.05, max_curv=3, counter=46875, size=3, amount_of_pcl=625, radius=1, edge=2)
         print(f'Finished train HALFSPACE valley CYLINDERS')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=4, epsilon=0.05, max_curv=5, counter=47500, size=3, amount_of_pcl=2500)
-        print(f'Finished train HALFSPACE saddle surfaces')
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=4, epsilon=0.05, max_curv=5, counter=47500, size=3, amount_of_pcl=2500)
+        # print(f'Finished train HALFSPACE saddle surfaces')
 
     with h5py.File(new_file_path_test, "r+") as new_hdf5_test_file:
         point_clouds_group = new_hdf5_test_file.get("point_clouds")
@@ -137,8 +137,8 @@ def updateDataSet(label_to_update=4,new_file_path_train = "train_surfaces_05x05.
         addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=2, boundary=1, epsilon=0.05, max_curv=3, counter=2750, size=2, amount_of_pcl=250, radius=1)
         print(f'Finished test valley Cylinders')
 
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=4, epsilon=0.05, max_curv=5, counter=3000, size=2.5, amount_of_pcl=1000)
-        print(f'Finished test saddle surfaces')
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=3, boundary=4, epsilon=0.05, max_curv=5, counter=3000, size=2.5, amount_of_pcl=1000)
+        # print(f'Finished test saddle surfaces')
 
         addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.05, max_curv=5, counter=4000, size=3, amount_of_pcl=250)
         print(f'Finished test HALFSPACE flat surfaces')
@@ -158,12 +158,12 @@ def updateDataSet(label_to_update=4,new_file_path_train = "train_surfaces_05x05.
         print(f'Finished test HALFSPACE ridge ANGLES')
         addIfMatchingLabel(point_clouds_group, gaussian_curv=0, mean_curv=-1, label=4, boundary=1, epsilon=0.05, max_curv=3, counter=4691, size=3, amount_of_pcl=63, radius=1, edge=2)
         print(f'Finished test HALFSPACE valley CYLINDERS')
-        addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=4, epsilon=0.05, max_curv=5, counter=4754, size=3, amount_of_pcl=250)
-        print(f'Finished test HALFSPACE saddle surfaces')
+        # addIfMatchingLabel(point_clouds_group, gaussian_curv=-1, mean_curv=-33, label=4, boundary=4, epsilon=0.05, max_curv=5, counter=4754, size=3, amount_of_pcl=250)
+        # print(f'Finished test HALFSPACE saddle surfaces')
 
 def createDataSetOld():
-    new_file_path_train = "train_surfaces_05X05_no_edges.h5"
-    new_file_path_test = "test_surfaces_05X05_no_edges.h5"
+    new_file_path_train = "train_surfaces_05X05_only_bumps.h5"
+    new_file_path_test = "test_surfaces_05X05_only_bumps.h5"
     #for each shpae
     boundaries =[0.5, 0.5,0,5, 1.8]
     epsilons = [0.05, 0.2, 0.2, 0.2]
@@ -200,9 +200,9 @@ def createDataSetOld():
                      size=2, amount_of_pcl=2500, radius=1)
         print(f'Finished train valley Cylinders')
 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=3, boundary=4, epsilon=0.05, max_curv=5, counter=30000,
-                     size=2.5, amount_of_pcl=10000)
-        print(f'Finished train saddle surfaces')
+        # addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=3, boundary=4, epsilon=0.05, max_curv=5, counter=30000,
+        #              size=2.5, amount_of_pcl=10000)
+        # print(f'Finished train saddle surfaces')
 
         # addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.05, max_curv=5, counter=40000,
         #              size=3, amount_of_pcl=2500)
@@ -261,9 +261,9 @@ def createDataSetOld():
                      radius=1)
         print(f'Finished test valley Cylinders')
 
-        addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=3, boundary=4, epsilon=0.05, max_curv=5, counter=3000,
-                     size=2.5, amount_of_pcl=1000)
-        print(f'Finished test saddle surfaces')
+        # addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=-1, mean_curv=-33, label=3, boundary=4, epsilon=0.05, max_curv=5, counter=3000,
+        #              size=2.5, amount_of_pcl=1000)
+        # print(f'Finished test saddle surfaces')
 
         # addDataToSet(point_clouds_group=point_clouds_group,gaussian_curv=0, mean_curv=0, label=4, boundary=1, epsilon=0.05, max_curv=5, counter=4000, size=3, amount_of_pcl=250)
         # print(f'Finished test HALFSPACE flat surfaces')

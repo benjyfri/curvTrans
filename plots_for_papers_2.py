@@ -194,9 +194,10 @@ def plot_original_point_cloud(pcl, panel_letter='A'):
     ax.scatter(*(pcl[0]), c='black', s=100, edgecolor='k', alpha=0.8)
 
     # Plot other points and their connections to origin
+    colors = ['gray', 'blue', 'green', 'red']
     for i in range(2, 5):
         point = pcl[i]
-        ax.scatter(*point, c='gray', s=100, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=colors[i-1], s=100, edgecolor='k', alpha=0.8)
         ax.plot([pcl[0, 0], point[0]],
                 [pcl[0, 1], point[1]],
                 [pcl[0, 2], point[2]],
@@ -309,8 +310,9 @@ def plot_points_only(pcl, panel_letter='E'):
     points_to_plot = [pcl[0]] + list(pcl[2:])  # Origin and three points
 
     # Plot points without any connections
-    for point in points_to_plot:
-        ax.scatter(*point, c='gray', s=100, edgecolor='k', alpha=0.8)
+    colors = ['gray', 'blue', 'green', 'red']
+    for i, point in enumerate(points_to_plot):
+        ax.scatter(*point, c=colors[i], s=100, edgecolor='k', alpha=0.8)
 
     # Keep the grid and 3D setup, just remove connections
     ax.grid(True, linestyle='--', alpha=0.6)
@@ -337,7 +339,7 @@ def plot_1d_mapping(pcl, values, panel_letter='F'):
     fig = plt.figure(figsize=(7.2, 7.2))
 
     # Create subplot layout with appropriate spacing
-    gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1], hspace=0.1)
+    gs = gridspec.GridSpec(2, 1, height_ratios=[3, 0.5], hspace=0.1)
 
     # 3D subplot for original points
     ax1 = fig.add_subplot(gs[0], projection='3d')
@@ -348,9 +350,10 @@ def plot_1d_mapping(pcl, values, panel_letter='F'):
     # Plot only the original points in 3D (excluding center of mass)
     points_to_plot = [pcl[0]] + list(pcl[2:])  # Origin and three points
     colors = ['gray', 'blue', 'green', 'red']
+    colors = ['gray', 'blue', 'green', 'red']
 
     for point, color in zip(points_to_plot, colors):
-        ax1.scatter(*point, c=color, s=100, edgecolor='k', alpha=0.8)
+        ax1.scatter(*point, c=color, s=300, edgecolor='k', alpha=0.8)
 
     # Set 3D plot properties
     ax1.grid(True, linestyle='--', alpha=0.6)
@@ -369,8 +372,10 @@ def plot_1d_mapping(pcl, values, panel_letter='F'):
 
     # Plot 1D points with matching colors
     y_positions = np.zeros_like(values)
+    values =  values[1:]
+    colors =  colors[1:]
     for i, (value, color) in enumerate(zip(values, colors)):
-        ax2.scatter(value, y_positions[i], c=color, s=100, edgecolor='k', alpha=0.8)
+        ax2.scatter(value, y_positions[i], c=color, s=300, edgecolor='k', alpha=0.8)
 
         # Add value labels
         ax2.annotate(f'{value:.1f}',
@@ -408,11 +413,12 @@ def plot_point_cloud(pcls, titles, colors, labels):
     figures = []
 
     # Call specific plotting function for each visualization
+
+    figures.append(plot_points_only(pcls[0]))
     figures.append(plot_original_point_cloud(pcls[0]))
     figures.append(plot_canonical_order(pcls[1], colors, labels))
     figures.append(plot_rotated_m(pcls[2], colors, labels, pcls[1]))
     figures.append(plot_largest_norm(pcls[3], colors, labels, pcls[2]))
-    figures.append(plot_points_only(pcls[0]))
 
     # Create array of points without center of mass for 1D mapping
     mapping_values = [2.1, -3.3, -4.5, 5.0]

@@ -110,10 +110,11 @@ class BasicPointCloudDataset(torch.utils.data.Dataset):
                 if ((class_label in [1,2] and info['k1'] + info['k2'] > 0) or
                         (class_label==3 and (abs(info['k1']) >  abs(info['k2'])))):
                     orig_norm_point *= -1
-
+            if angle > 0 and class_label==1:
+                orig_norm_point *= -1
             normal_vec = torch.matmul(orig_norm_point, (torch.tensor(rot_orig, dtype=torch.float32)).T)
             normal_vec = ( normal_vec / torch.norm(normal_vec) )
-            # plot_point_clouds(point_cloud1,normal_vec.reshape(1, 3), title=f"{[angle, radius, info['k1'], info['k2']]}")
+            # plot_point_clouds(point_cloud1,normal_vec.reshape(1, 3), title=f"{class_label}: {[angle, radius, info['k1'], info['k2']]}")
             return {"point_cloud": point_cloud1, "info": info, "normal_vec": normal_vec}
 
         # if class_label in [0,1,2,3]:
