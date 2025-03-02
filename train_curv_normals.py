@@ -294,22 +294,26 @@ def configArgsPCT():
                         help='How many points where sampled around centroid')
     args = parser.parse_args()
     return args
-
-
-if __name__ == '__main__':
-    # args = configArgsPCT()
-    # model = train_and_test(args)
-    # torch.save(model.state_dict(), f'{args.exp_name}.pt')
-
+def test_curvatures():
     args = configArgsPCT()
     print(args.exp_name)
     test_dataset = BasicPointCloudDataset(file_path='test_surfaces_05X05_no_edge.h5', args=args)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     model = shapeClassifier(args)
-    model.load_state_dict(torch.load(f'{args.exp_name}.pt',weights_only=True))
+    model.load_state_dict(torch.load(f'{args.exp_name}.pt', weights_only=True))
     model.to('cuda')
-    output = test_curvatues(model, test_dataloader, 'cuda', args)
-    print(output)
+    list_K = []
+    list_H = []
+    for i in range(100):
+        if i % 10 == 0:
+            print(f"---------------{i}---------------")
+        cur_H, cur_K = test_curvatues(model, test_dataloader, 'cuda', args)
+        list_H.append(cur_H)
+        list_K.append(cur_K)
+    print(f"++++++++")
+    print(f"H mean: {torch.mean(torch.as_tensor(list_H)).item()}")
+    print(f"K mean: {torch.mean(torch.as_tensor(list_K)).item()}")
+    print(f"++++++++")
 
     args = configArgsPCT()
     args.exp_name = "f_norm"
@@ -318,9 +322,24 @@ if __name__ == '__main__':
     test_dataset = BasicPointCloudDataset(file_path='test_surfaces_05X05_no_edge.h5', args=args)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     model = shapeClassifier(args)
-    model.load_state_dict(torch.load(f'{args.exp_name}.pt',weights_only=True))
+    model.load_state_dict(torch.load(f'{args.exp_name}.pt', weights_only=True))
     model.to('cuda')
-    output = test_curvatues(model, test_dataloader, 'cuda', args)
-    print(output)
+    list_K = []
+    list_H = []
+    for i in range(100):
+        if i % 10 == 0:
+            print(f"---------------{i}---------------")
+        cur_H, cur_K = test_curvatues(model, test_dataloader, 'cuda', args)
+        list_H.append(cur_H)
+        list_K.append(cur_K)
+    print(f"++++++++")
+    print(f"H mean: {torch.mean(torch.as_tensor(list_H)).item()}")
+    print(f"K mean: {torch.mean(torch.as_tensor(list_K)).item()}")
+    print(f"++++++++")
 
 
+if __name__ == '__main__':
+    # args = configArgsPCT()
+    # model = train_and_test(args)
+    # torch.save(model.state_dict(), f'{args.exp_name}.pt')
+    test_curvatures()

@@ -289,8 +289,8 @@ if __name__ == '__main__':
     # for timestr in ['z_cntr0_std01_long','a_cntr1_std005_long','b_cntr1_std01_long','c_cntr_sep_1_std01_long']:
     # for timestr in ['first_try']:
     # for timestr in ['c_cntr_sep_1_std01_long']:
-    # for timestr in ['ZZ_cntr0_std01_long', "ZZ_cntr0_std01_long_no_edges"]:
-    for timestr in ["ZZ_cntr0_std01_long_no_edges"]:
+    for timestr in ['ZZ_cntr0_std01_long', "ZZ_cntr0_std01_long_no_edges"]:
+    # for timestr in ["ZZ_cntr0_std01_long_no_edges"]:
         print(f'++++++++++++++++++++++++++++++++++++++++++')
         print(f'{timestr}')
         print(f'++++++++++++++++++++++++++++++++++++++++++')

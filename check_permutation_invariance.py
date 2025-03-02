@@ -99,10 +99,10 @@ def check(graph_weight_mode=0):
             run_name = "nlap: " + str(nlap) + "_std_" + str(std)+ f'_mode:{graph_weight_mode}'
             print(f'Run:  {run_name}')
             same_index_list = []
-            for idx in range(num_point_clouds//50):
+            for idx in range(num_point_clouds//10):
                 # if (idx*50) % 10000 == 0:
                 #     print(f'------------{idx*50}------------')
-                point_cloud_name = f"point_cloud_{indices[idx*50]}"
+                point_cloud_name = f"point_cloud_{indices[idx*10]}"
 
                 info = {key: point_clouds_group[point_cloud_name].attrs[key] for key in
                         point_clouds_group[point_cloud_name].attrs}
@@ -153,16 +153,69 @@ def check(graph_weight_mode=0):
             print(f'mean: {np.mean(same_index_list)}')
     # plot_same_index_list(all_runs_same_index_list)
 
+
+import matplotlib.pyplot as plt
+
+
+def plot_runs_old():
+    x_axis = [0, 0.01, 0.03, 0.05, 0.07, 0.1]
+
+    runs = {
+        "mode_0_5": ([21, 17.47, 13.23, 10.69, 9.07, 7.3], [21, 17.43, 13.18, 10.47, 8.68, 6.97]),
+        "mode_1": ([21, 17.23, 13.06, 10.64, 8.9, 7.19], [21, 17.43, 13.31, 10.72, 8.94, 7.26]),
+        "mode_2": ([21, 17.2, 12.89, 10.47, 8.87, 7.03], [21, 17.53, 13.27, 10.71, 9.12, 7.3]),
+        "mode_5": ([21, 17.21, 12.97, 10.43, 8.67, 7.03], [21, 17.47, 13.19, 10.78, 9.12, 7.29])
+    }
+
+    colors = ["blue", "green", "red", "purple"]  # Assign unique colors
+
+    plt.figure(figsize=(8, 6))
+
+    for (label, (unnormalized, normalized)), color in zip(runs.items(), colors):
+        plt.plot(x_axis, normalized, label=f"{label} (normalized)", color=color, linestyle="-")
+        plt.plot(x_axis, unnormalized, label=f"{label} (unnormalized)", color=color, linestyle="--")
+
+    plt.xlabel("X-axis")
+    plt.ylabel("Y-axis")
+    plt.title("Comparison of Normalized and Unnormalized Runs")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+def plot_runs():
+    x_axis = [0, 0.01, 0.03, 0.05, 0.07, 0.1]
+
+    runs = {
+        "mode_0_5": ([21, 17.47, 13.23, 10.69, 9.07, 7.3], [21, 17.43, 13.18, 10.47, 8.68, 6.97]),
+        "mode_1": ([21, 17.23, 13.06, 10.64, 8.9, 7.19], [21, 17.43, 13.31, 10.72, 8.94, 7.26]),
+        "mode_2": ([21, 17.2, 12.89, 10.47, 8.87, 7.03], [21, 17.53, 13.27, 10.71, 9.12, 7.3]),
+        "mode_5": ([21, 17.21, 12.97, 10.43, 8.67, 7.03], [21, 17.47, 13.19, 10.78, 9.12, 7.29])
+    }
+
+    colors = ["blue", "green", "red", "purple"]  # Assign unique colors
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharex=True, sharey=True)
+    axes = axes.flatten()
+
+    for ax, ((label, (unnormalized, normalized)), color) in zip(axes, zip(runs.items(), colors)):
+        ax.plot(x_axis, normalized, label=f"{label} (normalized)", color=color, linestyle="-", marker='o')
+        ax.plot(x_axis, unnormalized, label=f"{label} (unnormalized)", color=color, linestyle="--", marker='s')
+        ax.set_title(label)
+        ax.legend()
+        ax.grid(True)
+
+    fig.suptitle("Comparison of Normalized and Unnormalized Runs")
+    fig.supxlabel("X-axis")
+    fig.supylabel("Y-axis")
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == '__main__':
-    # check(graph_weight_mode=-1)
-    # check(graph_weight_mode=0)
-    # check(graph_weight_mode=1)
-    check(graph_weight_mode=0.1)
-    check(graph_weight_mode=0.2)
     # check(graph_weight_mode=0.5)
-    # check(graph_weight_mode=0.75)
-    # check(graph_weight_mode=1.25)
-    # check(graph_weight_mode=1.5)
+    # check(graph_weight_mode=1)
     # check(graph_weight_mode=2)
     # check(graph_weight_mode=5)
+    # Call the function to plot the runs
+    plot_runs()
 

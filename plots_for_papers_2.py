@@ -156,6 +156,7 @@ def setup_3d_plot():
     ax.set_ylabel('')
     ax.set_zlabel('')
 
+
     return fig, ax
 
 
@@ -172,7 +173,8 @@ def plot_common_elements(ax, pcl, panel_letter):
 
     # Add panel letter
     ax.text2D(0.075, 0.9, panel_letter,
-              color='gray',
+              # color='gray',
+              color='black',
               transform=ax.transAxes,
               fontsize=20,
               fontweight=1000,
@@ -187,17 +189,18 @@ def plot_common_elements(ax, pcl, panel_letter):
     ax.view_init(elev=25, azim=45)
 
 
-def plot_original_point_cloud(pcl, panel_letter='A'):
+def plot_original_point_cloud(pcl, panel_letter='B'):
     fig, ax = setup_3d_plot()
 
     # Plot origin point
-    ax.scatter(*(pcl[0]), c='black', s=100, edgecolor='k', alpha=0.8)
+    ax.scatter(*(pcl[0]), c='black', s=300, edgecolor='k', alpha=0.8)
 
     # Plot other points and their connections to origin
     colors = ['gray', 'blue', 'green', 'red']
+    colors = ['black', 'blue', 'green', 'red']
     for i in range(2, 5):
         point = pcl[i]
-        ax.scatter(*point, c=colors[i-1], s=100, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=colors[i-1], s=300, edgecolor='k', alpha=0.8)
         ax.plot([pcl[0, 0], point[0]],
                 [pcl[0, 1], point[1]],
                 [pcl[0, 2], point[2]],
@@ -208,7 +211,7 @@ def plot_original_point_cloud(pcl, panel_letter='A'):
     return fig
 
 
-def plot_canonical_order(pcl, colors, labels, panel_letter='B'):
+def plot_canonical_order(pcl, colors, labels, panel_letter='D'):
     fig, ax = setup_3d_plot()
 
     # Create legend elements
@@ -221,7 +224,7 @@ def plot_canonical_order(pcl, colors, labels, panel_letter='B'):
 
     # Plot points and connections
     for i, (point, color, label) in enumerate(zip(pcl, colors, labels)):
-        ax.scatter(*point, c=color, s=100, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=color, s=300, edgecolor='k', alpha=0.8)
 
         if i > 0:
             # Add point labels
@@ -245,12 +248,12 @@ def plot_canonical_order(pcl, colors, labels, panel_letter='B'):
     return fig
 
 
-def plot_rotated_m(pcl, colors, labels, prev_pcl, panel_letter='C'):
+def plot_rotated_m(pcl, colors, labels, prev_pcl, panel_letter='E'):
     fig, ax = setup_3d_plot()
 
     # Plot points and connections similar to canonical order
     for i, (point, color, label) in enumerate(zip(pcl, colors, labels)):
-        ax.scatter(*point, c=color, s=100, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=color, s=300, edgecolor='k', alpha=0.8)
 
         if i > 0:
             ax.text(point[0], point[1], point[2] + 0.4,
@@ -274,12 +277,12 @@ def plot_rotated_m(pcl, colors, labels, prev_pcl, panel_letter='C'):
     return fig
 
 
-def plot_largest_norm(pcl, colors, labels, prev_pcl, panel_letter='D'):
+def plot_largest_norm(pcl, colors, labels, prev_pcl, panel_letter='F'):
     fig, ax = setup_3d_plot()
 
     # Plot points and connections
     for i, (point, color, label) in enumerate(zip(pcl, colors, labels)):
-        ax.scatter(*point, c=color, s=100, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=color, s=300, edgecolor='k', alpha=0.8)
 
         if i > 0:
             ax.text(point[0], point[1], point[2] + 0.4,
@@ -303,7 +306,7 @@ def plot_largest_norm(pcl, colors, labels, prev_pcl, panel_letter='D'):
     return fig
 
 
-def plot_points_only(pcl, panel_letter='E'):
+def plot_points_only(pcl, panel_letter='A'):
     fig, ax = setup_3d_plot()
 
     # Plot only origin and three points (skip center of mass)
@@ -311,8 +314,9 @@ def plot_points_only(pcl, panel_letter='E'):
 
     # Plot points without any connections
     colors = ['gray', 'blue', 'green', 'red']
+    colors = ['black', 'blue', 'green', 'red']
     for i, point in enumerate(points_to_plot):
-        ax.scatter(*point, c=colors[i], s=100, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=colors[i], s=300, edgecolor='k', alpha=0.8)
 
     # Keep the grid and 3D setup, just remove connections
     ax.grid(True, linestyle='--', alpha=0.6)
@@ -324,7 +328,8 @@ def plot_points_only(pcl, panel_letter='E'):
 
     # Add panel letter
     ax.text2D(0.075, 0.9, panel_letter,
-              color='gray',
+              # color='gray',
+              color='black',
               transform=ax.transAxes,
               fontsize=20,
               fontweight=1000,
@@ -334,7 +339,7 @@ def plot_points_only(pcl, panel_letter='E'):
     return fig
 
 
-def plot_1d_mapping(pcl, values, panel_letter='F'):
+def plot_1d_mapping(pcl, values, panel_letter='C', title=""):
     # Create figure with specific size to match other plots
     fig = plt.figure(figsize=(7.2, 7.2))
 
@@ -350,7 +355,7 @@ def plot_1d_mapping(pcl, values, panel_letter='F'):
     # Plot only the original points in 3D (excluding center of mass)
     points_to_plot = [pcl[0]] + list(pcl[2:])  # Origin and three points
     colors = ['gray', 'blue', 'green', 'red']
-    colors = ['gray', 'blue', 'green', 'red']
+    colors = ['black', 'blue', 'green', 'red']
 
     for point, color in zip(points_to_plot, colors):
         ax1.scatter(*point, c=color, s=300, edgecolor='k', alpha=0.8)
@@ -370,10 +375,13 @@ def plot_1d_mapping(pcl, values, panel_letter='F'):
     ax2 = fig.add_subplot(gs[1])
     ax2.set_facecolor('white')
 
+    # Add title to the 1D subplot
+    ax2.set_title(title, fontsize=12, pad=10)
+
     # Plot 1D points with matching colors
     y_positions = np.zeros_like(values)
-    values =  values[1:]
-    colors =  colors[1:]
+    values = values[1:]
+    colors = colors[1:]
     for i, (value, color) in enumerate(zip(values, colors)):
         ax2.scatter(value, y_positions[i], c=color, s=300, edgecolor='k', alpha=0.8)
 
@@ -397,7 +405,8 @@ def plot_1d_mapping(pcl, values, panel_letter='F'):
 
     # Add panel letter
     ax1.text2D(0.075, 0.9, panel_letter,
-               color='gray',
+              # color='gray',
+              color='black',
                transform=ax1.transAxes,
                fontsize=20,
                fontweight=1000,
@@ -405,7 +414,6 @@ def plot_1d_mapping(pcl, values, panel_letter='F'):
 
     plt.tight_layout()
     return fig
-
 def plot_point_cloud(pcls, titles, colors, labels):
     plt.rcParams['figure.dpi'] = 300
     plt.rcParams['savefig.dpi'] = 300
@@ -416,13 +424,13 @@ def plot_point_cloud(pcls, titles, colors, labels):
 
     figures.append(plot_points_only(pcls[0]))
     figures.append(plot_original_point_cloud(pcls[0]))
+    # Create array of points without center of mass for 1D mapping
+    mapping_values = [2.1, -1, 3, 0]
+    figures.append(plot_1d_mapping(pcls[0], mapping_values))
     figures.append(plot_canonical_order(pcls[1], colors, labels))
     figures.append(plot_rotated_m(pcls[2], colors, labels, pcls[1]))
     figures.append(plot_largest_norm(pcls[3], colors, labels, pcls[2]))
 
-    # Create array of points without center of mass for 1D mapping
-    mapping_values = [2.1, -3.3, -4.5, 5.0]
-    figures.append(plot_1d_mapping(pcls[0], mapping_values))
 
     # Save figures
     for i, fig in enumerate(figures):
