@@ -169,22 +169,23 @@ def plot_common_elements(ax, pcl, panel_letter):
             ax.plot([last_three[h][0], last_three[j][0]],
                     [last_three[h][1], last_three[j][1]],
                     [last_three[h][2], last_three[j][2]],
-                    c='black', linestyle='-', alpha=1, linewidth=1)
+                    c='black', linestyle='-', alpha=1, linewidth=3)
 
     # Add panel letter
     ax.text2D(0.075, 0.9, panel_letter,
               # color='gray',
               color='black',
               transform=ax.transAxes,
-              fontsize=20,
+              fontsize=40,
               fontweight=1000,
+              family='serif',
               bbox=dict(facecolor='white', edgecolor='none', alpha=1, pad=0))
 
     # Set common view properties
     ax.grid(True, linestyle='--', alpha=0.6)
     ax.set_xlim([0, 4.5])
     ax.set_ylim([0, 4.5])
-    ax.set_zlim([0, 8])
+    ax.set_zlim([0, 8.5])
     ax.set_box_aspect([1, 1, 1])
     ax.view_init(elev=25, azim=45)
 
@@ -193,18 +194,19 @@ def plot_original_point_cloud(pcl, panel_letter='B'):
     fig, ax = setup_3d_plot()
 
     # Plot origin point
-    ax.scatter(*(pcl[0]), c='black', s=300, edgecolor='k', alpha=0.8)
+    ax.scatter(*(pcl[0]), c='black', s=500, edgecolor='k', alpha=0.8)
 
     # Plot other points and their connections to origin
     colors = ['gray', 'blue', 'green', 'red']
     colors = ['black', 'blue', 'green', 'red']
+    colors = ['black', 'green', 'blue', 'orange']
     for i in range(2, 5):
         point = pcl[i]
-        ax.scatter(*point, c=colors[i-1], s=300, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=colors[i-1], s=500, edgecolor='k', alpha=0.8)
         ax.plot([pcl[0, 0], point[0]],
                 [pcl[0, 1], point[1]],
                 [pcl[0, 2], point[2]],
-                c='gray', linestyle='--', alpha=0.5, linewidth=3)
+                c='black', linestyle='--', alpha=0.75, linewidth=5)
 
     plot_common_elements(ax, pcl, panel_letter)
     plt.tight_layout()
@@ -224,24 +226,24 @@ def plot_canonical_order(pcl, colors, labels, panel_letter='D'):
 
     # Plot points and connections
     for i, (point, color, label) in enumerate(zip(pcl, colors, labels)):
-        ax.scatter(*point, c=color, s=300, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=color, s=500, edgecolor='k', alpha=0.8)
 
         if i > 0:
             # Add point labels
-            ax.text(point[0], point[1], point[2] + 0.4,
+            ax.text(point[0], point[1]- 0.1, point[2] + 0.25,
                     f' {label}',
-                    fontsize=16,
+                    fontsize=25,
                     color='black',
                     weight='extra bold',
                     horizontalalignment='center',
                     verticalalignment='bottom',
-                    path_effects=[withStroke(linewidth=3, foreground='white')])
+                    path_effects=[withStroke(linewidth=5, foreground='white')])
 
             # Add connections to origin
             ax.plot([pcl[0, 0], point[0]],
                     [pcl[0, 1], point[1]],
                     [pcl[0, 2], point[2]],
-                    c=color, linestyle='--', alpha=0.75, linewidth=3)
+                    c=color, linestyle='--', alpha=0.75, linewidth=5)
 
     plot_common_elements(ax, pcl, panel_letter)
     plt.tight_layout()
@@ -253,21 +255,21 @@ def plot_rotated_m(pcl, colors, labels, prev_pcl, panel_letter='E'):
 
     # Plot points and connections similar to canonical order
     for i, (point, color, label) in enumerate(zip(pcl, colors, labels)):
-        ax.scatter(*point, c=color, s=300, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=color, s=500, edgecolor='k', alpha=0.8)
 
         if i > 0:
-            ax.text(point[0], point[1], point[2] + 0.4,
+            ax.text(point[0], point[1]- 0.1, point[2] + 0.25,
                     f' {label}',
-                    fontsize=16,
+                    fontsize=25,
                     color='black',
                     weight='extra bold',
                     horizontalalignment='center',
                     verticalalignment='bottom',
-                    path_effects=[withStroke(linewidth=3, foreground='white')])
+                    path_effects=[withStroke(linewidth=5, foreground='white')])
             ax.plot([pcl[0, 0], point[0]],
                     [pcl[0, 1], point[1]],
                     [pcl[0, 2], point[2]],
-                    c=color, linestyle='--', alpha=0.75, linewidth=3)
+                    c=color, linestyle='--', alpha=0.75, linewidth=5)
 
     # Add curved arrow
     create_curved_arrow(ax, prev_pcl[1], pcl[1], color='red', alpha=0.4, n_points=12)
@@ -282,21 +284,21 @@ def plot_largest_norm(pcl, colors, labels, prev_pcl, panel_letter='F'):
 
     # Plot points and connections
     for i, (point, color, label) in enumerate(zip(pcl, colors, labels)):
-        ax.scatter(*point, c=color, s=300, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=color, s=500, edgecolor='k', alpha=0.8)
 
         if i > 0:
-            ax.text(point[0], point[1], point[2] + 0.4,
+            ax.text(point[0], point[1]- 0.1, point[2] + 0.25,
                     f' {label}',
-                    fontsize=16,
+                    fontsize=25,
                     color='black',
                     weight='extra bold',
                     horizontalalignment='center',
                     verticalalignment='bottom',
-                    path_effects=[withStroke(linewidth=3, foreground='white')])
+                    path_effects=[withStroke(linewidth=5, foreground='white')])
             ax.plot([pcl[0, 0], point[0]],
                     [pcl[0, 1], point[1]],
                     [pcl[0, 2], point[2]],
-                    c=color, linestyle='--', alpha=0.75, linewidth=3)
+                    c=color, linestyle='--', alpha=0.75, linewidth=5)
 
     # Add curved arrow
     create_curved_arrow(ax, prev_pcl[2], pcl[2], color='green', alpha=0.4, n_points=15)
@@ -315,8 +317,9 @@ def plot_points_only(pcl, panel_letter='A'):
     # Plot points without any connections
     colors = ['gray', 'blue', 'green', 'red']
     colors = ['black', 'blue', 'green', 'red']
+    colors = ['black', 'green', 'blue', 'orange']
     for i, point in enumerate(points_to_plot):
-        ax.scatter(*point, c=colors[i], s=300, edgecolor='k', alpha=0.8)
+        ax.scatter(*point, c=colors[i], s=500, edgecolor='k', alpha=0.8)
 
     # Keep the grid and 3D setup, just remove connections
     ax.grid(True, linestyle='--', alpha=0.6)
@@ -331,8 +334,9 @@ def plot_points_only(pcl, panel_letter='A'):
               # color='gray',
               color='black',
               transform=ax.transAxes,
-              fontsize=20,
+              fontsize=40,
               fontweight=1000,
+              family='serif',
               bbox=dict(facecolor='white', edgecolor='none', alpha=1, pad=0))
 
     plt.tight_layout()
@@ -345,6 +349,7 @@ def plot_1d_mapping(pcl, values, panel_letter='C', title=""):
 
     # Create subplot layout with appropriate spacing
     gs = gridspec.GridSpec(2, 1, height_ratios=[3, 0.5], hspace=0.1)
+    gs = gridspec.GridSpec(2, 1, height_ratios=[7, 0.5], hspace=0.01)
 
     # 3D subplot for original points
     ax1 = fig.add_subplot(gs[0], projection='3d')
@@ -356,15 +361,16 @@ def plot_1d_mapping(pcl, values, panel_letter='C', title=""):
     points_to_plot = [pcl[0]] + list(pcl[2:])  # Origin and three points
     colors = ['gray', 'blue', 'green', 'red']
     colors = ['black', 'blue', 'green', 'red']
+    colors = ['black', 'green', 'blue', 'orange']
 
     for point, color in zip(points_to_plot, colors):
-        ax1.scatter(*point, c=color, s=300, edgecolor='k', alpha=0.8)
+        ax1.scatter(*point, c=color, s=500, edgecolor='k', alpha=0.8)
 
     # Set 3D plot properties
     ax1.grid(True, linestyle='--', alpha=0.6)
     ax1.set_xlim([0, 4.5])
     ax1.set_ylim([0, 4.5])
-    ax1.set_zlim([0, 8])
+    ax1.set_zlim([0, 8.5])
     ax1.set_box_aspect([1, 1, 1])
     ax1.view_init(elev=25, azim=45)
     ax1.set_xticklabels([])
@@ -382,35 +388,46 @@ def plot_1d_mapping(pcl, values, panel_letter='C', title=""):
     y_positions = np.zeros_like(values)
     values = values[1:]
     colors = colors[1:]
+    letters = ['C','B','A']
+    # letters = ['A','B','C']
     for i, (value, color) in enumerate(zip(values, colors)):
-        ax2.scatter(value, y_positions[i], c=color, s=300, edgecolor='k', alpha=0.8)
+        ax2.scatter(value, y_positions[i], c=color, s=500, edgecolor='k', alpha=0.8)
 
         # Add value labels
-        ax2.annotate(f'{value:.1f}',
+        ax2.annotate(f'{letters[i]}',
                      (value, 0),
                      xytext=(0, 10),
                      textcoords='offset points',
                      ha='center',
-                     va='bottom')
+                     va='bottom',
+                     fontsize=25,
+                     weight='bold')
 
     # Add horizontal line
-    ax2.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+    # ax2.axhline(y=0, color='black', linestyle='-', alpha=0.2, linewidth=1)
 
     # Customize 1D plot
     ax2.set_ylim([-1, 1])
     ax2.set_yticks([])
+    ax2.tick_params(axis='x', which='major', length=8, width=2)  # Make ticks point downward
+
+    # Make bottom line more prominent
+    ax2.spines['bottom'].set_linewidth(2)
+    ax2.spines['bottom'].set_color('black')
+    # ax2.set_xticks([])
     ax2.spines['left'].set_visible(False)
     ax2.spines['right'].set_visible(False)
     ax2.spines['top'].set_visible(False)
 
     # Add panel letter
-    ax1.text2D(0.075, 0.9, panel_letter,
+    ax1.text2D(0.04, 0.89, panel_letter,
               # color='gray',
               color='black',
                transform=ax1.transAxes,
-               fontsize=20,
+               fontsize=42,
                fontweight=1000,
-               bbox=dict(facecolor='white', edgecolor='none', alpha=1, pad=0))
+              family='serif',
+               bbox=dict(facecolor='white', edgecolor='none', alpha=0, pad=0))
 
     plt.tight_layout()
     return fig
@@ -422,14 +439,15 @@ def plot_point_cloud(pcls, titles, colors, labels):
 
     # Call specific plotting function for each visualization
 
-    figures.append(plot_points_only(pcls[0]))
-    figures.append(plot_original_point_cloud(pcls[0]))
+    figures.append(plot_points_only(pcls[0],panel_letter="I"))
+    figures.append(plot_original_point_cloud(pcls[0],panel_letter="II"))
     # Create array of points without center of mass for 1D mapping
-    mapping_values = [2.1, -1, 3, 0]
-    figures.append(plot_1d_mapping(pcls[0], mapping_values))
-    figures.append(plot_canonical_order(pcls[1], colors, labels))
-    figures.append(plot_rotated_m(pcls[2], colors, labels, pcls[1]))
-    figures.append(plot_largest_norm(pcls[3], colors, labels, pcls[2]))
+    mapping_values = [2.1, -1, 2, 0]
+    mapping_values = [2.1, 2, 0, -1]
+    figures.append(plot_1d_mapping(pcls[0], mapping_values,panel_letter="III"))
+    figures.append(plot_canonical_order(pcls[1], colors, labels,panel_letter="IV"))
+    figures.append(plot_rotated_m(pcls[2], colors, labels, pcls[1],panel_letter="V"))
+    figures.append(plot_largest_norm(pcls[3], colors, labels, pcls[2],panel_letter="VI"))
 
 
     # Save figures
@@ -468,6 +486,7 @@ def main(i=0):
               "Largest Norm onto XZ Plane"]
     colors = ["black", "red", "green", "blue", "orange"]
     labels = ["Point_Of_interest", "Center_Of_Mass (M)", "A", "B", "C"]
+    labels = ["Point_Of_interest", "Center_Of_Mass (M)", "C", "B", "A"]
 
     figures = plot_point_cloud(pcl_list, titles, colors, labels)
 
