@@ -11,8 +11,8 @@ def samplePoints(a, b, c, d, e, count):
         return a * x**2 + b * y**2 + c * x * y + d * x + e * y
 
     # Generate random points within the range [-1, 1] for both x and y
-    x_samples = np.random.uniform(-2, 2, count)
-    y_samples = np.random.uniform(-2, 2, count)
+    x_samples = np.random.uniform(-0.5, 0.5, count)
+    y_samples = np.random.uniform(-0.5, 0.5, count)
 
     # Evaluate the surface function at the random points
     z_samples = surface_function(x_samples, y_samples)
@@ -459,8 +459,219 @@ def plotPcl(a, b, c, d, e, sample_count=40):
     )
     fig.show()
 
+def plotFunc(a, b, c, d, e, sampled_points=None):
+    # Create a grid of points for the surface
+    x = np.linspace(-0.5, 0.5, 100)
+    y = np.linspace(-0.5, 0.5, 100)
+    x, y = np.meshgrid(x, y)
 
-def plotFunc(a, b, c, d, e,sampled_points=None):
+    # Compute the surface using the generated coefficients
+    z = a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y
+
+    # Create 3D surface plot using Plotly
+    fig = go.Figure()
+
+    # Add the surface with viridis colormap and increased transparency
+    surface_trace = go.Surface(
+        x=x, y=y, z=z,
+        colorscale='viridis',
+        opacity=0.7,
+        showscale=False,
+        name='Surface'
+    )
+    fig.add_trace(surface_trace)
+
+    # Add the a*x^2 curve (parabola along x-axis)
+    x_curve = np.linspace(-0.5, 0.5, 100)
+    y_curve = np.zeros(100)  # Fixed at y=0
+    z_curve = a * x_curve ** 2  # a*x^2 curve
+
+    fig.add_trace(go.Scatter3d(
+        x=x_curve,
+        y=y_curve,
+        z=z_curve,
+        mode='lines',
+        line=dict(
+            color='orange',  # Orange
+            width=5
+        ),
+        name='a*x^2',
+        showlegend=False
+    ))
+
+    # Add the b*y^2 curve (parabola along y-axis)
+    x_curve2 = np.zeros(100)  # Fixed at x=0
+    y_curve2 = np.linspace(-0.5, 0.5, 100)
+    z_curve2 = b * y_curve2 ** 2  # b*y^2 curve
+
+    fig.add_trace(go.Scatter3d(
+        x=x_curve2,
+        y=y_curve2,
+        z=z_curve2,
+        mode='lines',
+        line=dict(
+            color='navy',  # Indigo
+            width=5
+        ),
+        name='b*y^2',
+        showlegend=False
+    ))
+
+    # Calculate ranges for consistent aspect ratio
+    x_range = np.ptp(x)
+    y_range = np.ptp(y)
+    z_range = np.ptp(z)
+    max_range = max(x_range, y_range, z_range)
+    aspect_ratio = dict(
+        x=x_range / max_range,
+        y=y_range / max_range,
+        z=z_range / max_range
+    )
+
+    # Add sampled points as regular spherical red dots
+    points_trace = None
+    if sampled_points is not None:
+        points_trace = go.Scatter3d(
+            x=[point[0] for point in sampled_points],
+            y=[point[1] for point in sampled_points],
+            z=[point[2] for point in sampled_points],
+            mode='markers',
+            marker=dict(
+                size=4,
+                color='red',
+                symbol='circle',
+                opacity=1.0
+            ),
+            name='Sampled Points',
+            showlegend=False
+        )
+        fig.add_trace(points_trace)
+    points_trace2 = None
+    if sampled_points is not None:
+        points_trace2 = go.Scatter3d(
+            x=[point[0] for point in sampled_points],
+            y=[point[1] for point in sampled_points],
+            z=[point[2] for point in sampled_points],
+            mode='markers',
+            marker=dict(
+                size=4,
+                color='green',
+                symbol='circle',
+                opacity=1.0
+            ),
+            name='Sampled Points',
+            showlegend=False
+        )
+        fig.add_trace(points_trace2)
+
+    points_trace3 = go.Scatter3d(
+        x=[0 for point in sampled_points],
+        y=[0 for point in sampled_points],
+        z=[0 for point in sampled_points],
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='black',
+            symbol='circle',
+            opacity=1.0
+        ),
+        name='Sampled Points',
+        showlegend=False
+    )
+    fig.add_trace(points_trace3)
+
+    # Modify the button list to include the curves in visibility toggling
+    button_list = []
+
+    # Show all elements
+    button_list.append(dict(
+        label="Show All",
+        method="update",
+        args=[{"visible": [True, True, True, True if points_trace is not None else None,True if points_trace2 is not None else None]},
+              {"title": "Generated Surface with Curves"}]
+    ))
+
+    # Surface only
+    button_list.append(dict(
+        label="Surface Only",
+        method="update",
+        args=[{"visible": [True, False, False, False, False]},
+              {"title": "Generated Surface"}]
+    ))
+
+    # Curves only
+    button_list.append(dict(
+        label="Curves Only",
+        method="update",
+        args=[{"visible": [False, True, True, False, False]},
+              {"title": "Quadratic Curves"}]
+    ))
+
+    # Points only (if available)
+    if points_trace is not None:
+        button_list.append(dict(
+            label="Points Only",
+            method="update",
+            args=[{"visible": [False, False, False, True, False]},
+                  {"title": "Sampled Points"}]
+        ))
+    # Points only (if available)
+    if points_trace2 is not None:
+        button_list.append(dict(
+            label="Points Only",
+            method="update",
+            args=[{"visible": [False, False, False, False, True]},
+                  {"title": "Sampled Points"}]
+        ))
+
+    # Define camera position explicitly
+    camera = dict(
+        eye=dict(x=1.5, y=1.5, z=1.0),  # Camera position (viewpoint)
+        center=dict(x=0, y=0, z=0),     # Point camera is looking at
+        up=dict(x=0, y=0, z=1)          # Camera up vector
+    )
+
+    # Update layout
+    fig.update_layout(
+        title="Generated Surface with Quadratic Components",
+        scene=dict(
+            xaxis=dict(
+                title='X',
+                showgrid=False,
+                showticklabels=False,
+                zeroline=False
+            ),
+            yaxis=dict(
+                title='Y',
+                showgrid=False,
+                showticklabels=False,
+                zeroline=False
+            ),
+            zaxis=dict(
+                title='Z',
+                showgrid=False,
+                showticklabels=False,
+                zeroline=False
+            ),
+            aspectmode='manual',
+            aspectratio=aspect_ratio,
+            camera=camera  # Apply the camera settings
+        ),
+        margin=dict(r=20, l=10, b=50, t=70),
+        showlegend=False,
+        updatemenus=[dict(
+            type="buttons",
+            direction="right",
+            active=0,
+            x=0.1,
+            y=1.15,
+            buttons=button_list
+        )]
+    )
+
+    # Show the plot
+    fig.show()
+def plotFunc_old(a, b, c, d, e, sampled_points=None):
     # Create a grid of points for the surface
     x = np.linspace(-2, 2, 100)
     y = np.linspace(-2, 2, 100)
@@ -469,19 +680,22 @@ def plotFunc(a, b, c, d, e,sampled_points=None):
     # Compute the surface using the generated coefficients
     z = a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y
 
-    # Compute the distance from each point to the origin
-    distance_to_origin = np.sqrt(x**2 + y**2)
+    # Create 3D surface plot using Plotly
+    fig = go.Figure()
 
-    # Create a mask for points within a radius of 0.25 from the origin
-    mask = distance_to_origin <= 0.25
+    # Add the surface with viridis colormap and increased transparency
+    surface_trace = go.Surface(
+        x=x, y=y, z=z,
+        colorscale='viridis',
+        showscale=True,
+        opacity=0.7,
+        name='Surface'
+    )
+    fig.add_trace(surface_trace)
 
-    # Create 3D surface plot using Plotly Express
-    fig = px.scatter_3d(x=x.flatten(), y=y.flatten(), z=z.flatten(), color=mask.flatten(),
-                        color_continuous_scale=['blue', 'red'], title="Generated Surface",
-                        labels={'x': 'X', 'y': 'Y', 'z': 'Z'}, range_color=[0, 1])
-
-    x_range = np.ptp(x)  # Peak-to-peak range for X
-    y_range = np.ptp(y)  # Peak-to-peak range for Y
+    # Calculate ranges for consistent aspect ratio
+    x_range = np.ptp(x)
+    y_range = np.ptp(y)
     z_range = np.ptp(z)
     max_range = max(x_range, y_range, z_range)
     aspect_ratio = dict(
@@ -489,30 +703,78 @@ def plotFunc(a, b, c, d, e,sampled_points=None):
         y=y_range / max_range,
         z=z_range / max_range
     )
-    # Determine aspect ratio based on ranges
-    max_range = max(x_range, y_range, z_range)
-    aspect_ratio = dict(
-        x=x_range / max_range,
-        y=y_range / max_range,
-        z=z_range / max_range
+
+    # Add sampled points as regular spherical red dots
+    points_trace = None
+    if sampled_points is not None:
+        points_trace = go.Scatter3d(
+            x=[point[0] for point in sampled_points],
+            y=[point[1] for point in sampled_points],
+            z=[point[2] for point in sampled_points],
+            mode='markers',
+            marker=dict(
+                size=4,
+                color='red',
+                symbol='circle',
+                opacity=1.0
+            ),
+            name='Sampled Points'
+        )
+        fig.add_trace(points_trace)
+
+    # Add buttons for toggling visibility
+    button_list = []
+
+    # Button for showing both surface and points
+    button_list.append(dict(
+        label="Show Both",
+        method="update",
+        args=[{"visible": [True, True]},
+              {"title": "Surface and Sampled Points"}]
+    ))
+
+    # Button for showing only the surface
+    button_list.append(dict(
+        label="Surface Only",
+        method="update",
+        args=[{"visible": [True, False]},
+              {"title": "Surface Only"}]
+    ))
+
+    # Button for showing only the points
+    if points_trace is not None:
+        button_list.append(dict(
+            label="Points Only",
+            method="update",
+            args=[{"visible": [False, True]},
+                  {"title": "Sampled Points Only"}]
+        ))
+
+    # Add dropdown menu for visibility control
+    fig.update_layout(
+        updatemenus=[dict(
+            type="buttons",
+            direction="right",
+            active=0,
+            x=0.1,
+            y=1.15,
+            buttons=button_list
+        )]
     )
 
-    if sampled_points is not None:
-        for i, point in enumerate(sampled_points):
-            fig.add_trace(go.Scatter3d(x=[point[0]], y=[point[1]], z=[point[2]],
-                                       mode='markers+text', text=[f'{i + 1}'],
-                                       marker=dict(size=25, color='yellow'), name='Point Cloud'),)
-
+    # Update layout
     fig.update_layout(
+        title="Generated Surface",
         scene=dict(
             xaxis=dict(title='X'),
             yaxis=dict(title='Y'),
             zaxis=dict(title='Z'),
-        aspectmode='manual',
-        aspectratio=aspect_ratio
+            aspectmode='manual',
+            aspectratio=aspect_ratio
         ),
-        margin=dict(r=20, l=10, b=10, t=50)
+        margin=dict(r=20, l=10, b=50, t=70)  # Increased top margin for buttons
     )
+
     # Show the plot
     fig.show()
 def plotMultiplePcls(parameter_sets,names=[], index=1):
@@ -777,8 +1039,11 @@ def plot_point_clouds(point_cloud1, point_cloud2=None):
 
 
 if __name__ == '__main__':
+    x=2
+    plotFunc(2, -2, 0, 0, 0, sampled_points=samplePoints(2, -2, 0, 0, 0, 30))
+    x=2
     # updateDataSet(label_to_update=0)
-    createDataSetOld()
+    # createDataSetOld()
     # updateDataSet(label_to_update=1)
     # updateDataSet(label_to_update=2)
     # updateDataSet(label_to_update=3)

@@ -15,10 +15,11 @@ from matplotlib.colors import LinearSegmentedColormap
 import matplotlib as mpl
 
 
-def visualize_classified_point_cloud(pcl, model_name, args_shape, scaling_factor="1",
+def visualize_classified_point_cloud_grad(pcl, model_name, args_shape, scaling_factor="1",
                                      zoom_point_indices=None, zoom_k=21, fig_size=(12, 10)):
     """
     Visualize point cloud with classification-based coloring and zoomed patches for each class
+    Creates separate plots for the main point cloud and each zoomed view
 
     Args:
         pcl: Input point cloud (numpy array of shape Nx3)
@@ -29,11 +30,7 @@ def visualize_classified_point_cloud(pcl, model_name, args_shape, scaling_factor
         zoom_k: Number of nearest neighbors to show in zoomed view
         fig_size: Figure size (width, height) in inches
     """
-    # Add slight noise for better visibility of structure
-    # noise = np.clip(np.random.normal(0.0, scale=0.01, size=(pcl.shape)),
-    #                 a_min=-0.05, a_max=0.05)
-    # noise = noise / 4
-    # noisy_pcl = pcl + noise
+    # Use original point cloud
     noisy_pcl = pcl
 
     # Get classification outputs
@@ -43,11 +40,22 @@ def visualize_classified_point_cloud(pcl, model_name, args_shape, scaling_factor
                                          args_shape=args_shape,
                                          scaling_factor=scaling_factor)
 
-    # Get raw classification scores (first 4 classes - adjust if needed)
-    class_scores = colors.detach().cpu().numpy().squeeze()[:, :4]
+    # Get raw classification scores including the edge class (index 4)
+    all_class_scores = colors.detach().cpu().numpy().squeeze()
+    class_scores = all_class_scores[:, :4]  # First 4 classes (non-edge)
+    edge_scores = all_class_scores[:, 4]  # Edge class scores
 
-    # Get the predicted class for each point
+    # Get the predicted class for each point from the first 4 classes
     predicted_class = np.argmax(class_scores, axis=1)
+
+    # Create a mask for non-edge points (where edge score is not the highest)
+    non_edge_mask = np.zeros(len(predicted_class), dtype=bool)
+
+    # For each point, check if any of the first 4 class scores is higher than the edge score
+    for i in range(len(predicted_class)):
+        max_non_edge_score = np.max(class_scores[i])
+        if max_non_edge_score > edge_scores[i]:
+            non_edge_mask[i] = True
 
     # Normalize scores within each class for coloring
     normalized_scores = np.zeros_like(class_scores)
@@ -63,12 +71,13 @@ def visualize_classified_point_cloud(pcl, model_name, args_shape, scaling_factor
 
     # Create color maps for each class
     class_colors = ['blue', 'green', 'red', 'grey']
+    class_colors = ['grey', 'red', 'green', 'blue']
     color_values = []
 
     for i in range(len(noisy_pcl)):
         cls = predicted_class[i]
         intensity = normalized_scores[i, cls]
-
+        intensity =0
         # Get base color
         base_color = class_colors[cls]
 
@@ -90,52 +99,48 @@ def visualize_classified_point_cloud(pcl, model_name, args_shape, scaling_factor
     if zoom_point_indices is None:
         zoom_point_indices = {}
         for class_idx in range(4):
-            class_mask = predicted_class == class_idx
+            # Combine class mask with non-edge mask to get only non-edge points of this class
+            class_mask = (predicted_class == class_idx) & non_edge_mask
             if np.any(class_mask):
                 # Get the point with highest classification confidence for this class
-                class_confidence = class_scores[class_mask, class_idx]
-                highest_conf_idx = np.where(class_mask)[0][np.argmax(class_confidence)]
+                class_points_indices = np.where(class_mask)[0]
+                class_confidence = class_scores[class_points_indices, class_idx]
+                highest_conf_idx = class_points_indices[np.argmax(class_confidence)]
                 zoom_point_indices[class_idx] = highest_conf_idx
+            else:
+                # Fallback if no non-edge points are available for this class
+                print(f"Warning: No non-edge points found for class {class_names[class_idx]}.")
+                # Try to find any point of this class, even if it's an edge
+                original_class_mask = predicted_class == class_idx
+                if np.any(original_class_mask):
+                    class_confidence = class_scores[original_class_mask, class_idx]
+                    highest_conf_idx = np.where(original_class_mask)[0][np.argmax(class_confidence)]
+                    zoom_point_indices[class_idx] = highest_conf_idx
 
-    # Create fixed 2x3 subplots layout
-    num_classes = len(zoom_point_indices)
-    subplot_specs = [
-        [{'type': 'scene'}, {'type': 'scene'}, {'type': 'scene'}],
-        [{'type': 'scene'}, {'type': 'scene'}, {'type': 'scene'}]
-    ]
+    # Create a list to store all figures
+    figures = []
 
-    column_widths = [0.4, 0.3, 0.3]
-    row_heights = [0.6, 0.4]
-
-    fig = make_subplots(
-        rows=len(subplot_specs),
-        cols=len(subplot_specs[0]),
-        column_widths=column_widths,
-        row_heights=row_heights,
-        specs=subplot_specs,
-        subplot_titles=["Surface Classification"] + [f"{class_names[class_idx]} Zoom" for class_idx in
-                                                     zoom_point_indices]
-    )
+    # Create main point cloud figure
+    main_fig = go.Figure()
 
     # Add main point cloud
-    fig.add_trace(
+    main_fig.add_trace(
         go.Scatter3d(
             x=noisy_pcl[:, 0],
             y=noisy_pcl[:, 1],
             z=noisy_pcl[:, 2],
             mode='markers',
             marker=dict(
-                size=2,
+                size=5,
                 color=color_values,
             ),
-            name='Classified Points'
-        ),
-        row=1, col=1
+            showlegend=False
+        )
     )
 
     # Add zoom points to main plot
     for class_idx, point_idx in zoom_point_indices.items():
-        fig.add_trace(
+        main_fig.add_trace(
             go.Scatter3d(
                 x=[noisy_pcl[point_idx, 0]],
                 y=[noisy_pcl[point_idx, 1]],
@@ -150,130 +155,310 @@ def visualize_classified_point_cloud(pcl, model_name, args_shape, scaling_factor
                         width=1
                     )
                 ),
-                name=f'{class_names[class_idx]} Zoom Point'
-            ),
-            row=1, col=1
+                showlegend=False
+            )
         )
 
-    # Add zoomed views for each class
-    zoom_col_idx = 2
-    zoom_row_idx = 1
-
-    for class_idx, point_idx in zoom_point_indices.items():
-        # Get nearest neighbors for zoom
-        zoom_patch_indices = get_k_nearest_neighbors_indices(noisy_pcl, noisy_pcl[point_idx], k=zoom_k)
-        zoom_patch = noisy_pcl[zoom_patch_indices]
-        zoom_colors = [color_values[i] for i in zoom_patch_indices]
-
-        # Add zoomed point cloud
-        fig.add_trace(
-            go.Scatter3d(
-                x=zoom_patch[:, 0],
-                y=zoom_patch[:, 1],
-                z=zoom_patch[:, 2],
-                mode='markers',
-                marker=dict(
-                    size=4,
-                    color=zoom_colors,
-                ),
-                name=f'{class_names[class_idx]} Zoom'
-            ),
-            row=zoom_row_idx, col=zoom_col_idx
-        )
-
-        # Highlight center point in zoom
-        fig.add_trace(
-            go.Scatter3d(
-                x=[noisy_pcl[point_idx, 0]],
-                y=[noisy_pcl[point_idx, 1]],
-                z=[noisy_pcl[point_idx, 2]],
-                mode='markers',
-                marker=dict(
-                    size=8,
-                    color=class_colors[class_idx],
-                    symbol='circle',
-                    line=dict(
-                        color='black',
-                        width=1
-                    )
-                ),
-                name=f'{class_names[class_idx]} Center'
-            ),
-            row=zoom_row_idx, col=zoom_col_idx
-        )
-
-        # Move to next position
-        zoom_col_idx += 1
-        if zoom_col_idx > len(subplot_specs[0]):
-            zoom_col_idx = 1
-            zoom_row_idx += 1
-
-    # Update layout
-    fig.update_layout(
-        title=f"Point Cloud Surface Classification with Class-Specific Zooms",
-        width=1200,
-        height=800,
+    # Update main figure layout
+    main_fig.update_layout(
+        title="Surface Classification",
+        width=fig_size[0] * 100,
+        height=fig_size[1] * 100,
         scene=dict(
             aspectmode='data',
             xaxis_title='X',
             yaxis_title='Y',
             zaxis_title='Z'
         ),
-        legend=dict(
-            yanchor="top",
-            y=0.99,
-            xanchor="left",
-            x=0.01
-        )
+        showlegend=False
     )
 
-    # Update all scene layouts - for a 2x3 grid we need scene1 through scene5
-    for i in range(1, 6):
-        scene_key = f'scene{i + 1}'
-        fig.update_layout({
-            scene_key: dict(
-                aspectmode='data',
-                xaxis_title='X',
-                yaxis_title='Y',
-                zaxis_title='Z'
-            )
-        })
+    figures.append(main_fig)
 
-    # Add legend for class colors
-    for i, (cls_name, cls_color) in enumerate(zip(class_names, class_colors)):
-        fig.add_trace(
-            go.Scatter3d(
-                x=[None], y=[None], z=[None],
-                mode='markers',
-                marker=dict(size=10, color=cls_color),
-                name=cls_name,
-                showlegend=True
+    # # Create separate zoom figures for each class
+    # for class_idx, point_idx in zoom_point_indices.items():
+    #     zoom_fig = go.Figure()
+    #
+    #     # Get nearest neighbors for zoom
+    #     zoom_patch_indices = get_k_nearest_neighbors_indices(noisy_pcl, noisy_pcl[point_idx], k=zoom_k)
+    #     zoom_patch = noisy_pcl[zoom_patch_indices]
+    #     zoom_colors = [color_values[i] for i in zoom_patch_indices]
+    #
+    #     # Add zoomed point cloud
+    #     zoom_fig.add_trace(
+    #         go.Scatter3d(
+    #             x=zoom_patch[:, 0],
+    #             y=zoom_patch[:, 1],
+    #             z=zoom_patch[:, 2],
+    #             mode='markers',
+    #             marker=dict(
+    #                 size=4,
+    #                 color=zoom_colors,
+    #             ),
+    #             showlegend=False
+    #         )
+    #     )
+    #
+    #     # Highlight center point in zoom
+    #     zoom_fig.add_trace(
+    #         go.Scatter3d(
+    #             x=[noisy_pcl[point_idx, 0]],
+    #             y=[noisy_pcl[point_idx, 1]],
+    #             z=[noisy_pcl[point_idx, 2]],
+    #             mode='markers',
+    #             marker=dict(
+    #                 size=8,
+    #                 color=class_colors[class_idx],
+    #                 symbol='circle',
+    #                 line=dict(
+    #                     color='black',
+    #                     width=1
+    #                 )
+    #             ),
+    #             showlegend=False
+    #         )
+    #     )
+    #
+    #     # Update zoom figure layout
+    #     zoom_fig.update_layout(
+    #         title=f"{class_names[class_idx]} Zoom",
+    #         width=fig_size[0] * 70,
+    #         height=fig_size[1] * 70,
+    #         scene=dict(
+    #             aspectmode='data',
+    #             xaxis_title='X',
+    #             yaxis_title='Y',
+    #             zaxis_title='Z'
+    #         ),
+    #         showlegend=False
+    #     )
+    #
+    #     figures.append(zoom_fig)
+
+    return figures
+
+
+def visualize_classified_point_cloud(pcl, model_name, args_shape, scaling_factor="1",
+                                     zoom_point_indices=None, zoom_k=21, fig_size=(15, 12)):
+    """
+    Visualize classified point cloud with enhanced colors and improved visual clarity.
+
+    Parameters:
+    -----------
+    pcl : numpy.ndarray
+        Point cloud data with shape (n_points, 3)
+    model_name : str
+        Name of the model used for classification
+    args_shape : dict
+        Shape arguments for the model
+    scaling_factor : str, optional
+        Scaling factor for the point cloud, default is "1"
+    zoom_point_indices : list, optional
+        Indices of points to zoom in on
+    zoom_k : int, optional
+        Number of nearest neighbors to include in zoom view
+    fig_size : tuple, optional
+        Figure size (width, height) in inches, default is (15, 12)
+
+    Returns:
+    --------
+    list
+        List of plotly figures
+    """
+    # Use original point cloud
+    noisy_pcl = pcl
+
+    # Get classification outputs
+    colors, scaling_fac = classifyPoints(model_name=model_name,
+                                         pcl_src=noisy_pcl,
+                                         pcl_interest=noisy_pcl,
+                                         args_shape=args_shape,
+                                         scaling_factor=scaling_factor)
+
+    # Get raw classification scores including the edge class (index 4)
+    all_class_scores = colors.detach().cpu().numpy().squeeze()
+    class_scores = all_class_scores[:, :4]  # First 4 classes (non-edge)
+    edge_scores = all_class_scores[:, 4]  # Edge class scores
+
+    # Get the predicted class for each point from the first 4 classes
+    predicted_class = np.argmax(class_scores, axis=1)
+
+    # Create a mask for non-edge points (where edge score is not the highest)
+    non_edge_mask = np.zeros(len(predicted_class), dtype=bool)
+
+    # For each point, check if any of the first 4 class scores is higher than the edge score
+    for i in range(len(predicted_class)):
+        max_non_edge_score = np.max(class_scores[i])
+        if max_non_edge_score > edge_scores[i]:
+            non_edge_mask[i] = True
+
+    # Define maximally discriminative, perceptually optimized color palette
+    # Selected using advanced color theory principles for maximum visual differentiation
+    # These colors maintain distinctiveness under various lighting conditions and for colorblind viewers
+    fixed_class_colors = [
+        '#FF0000',  # Class 0: Pure Red (RGB: 255,0,0)
+        '#00B7FF',  # Class 1: Azure Blue (RGB: 0,183,255)
+        '#FFFF00',  # Class 2: Pure Yellow (RGB: 255,255,0)
+        '#7F00FF'  # Class 3: Violet (RGB: 127,0,255)
+    ]
+
+    # Class names for legend (customize these based on your application)
+    class_names = [
+        "Surface Type A",
+        "Surface Type B",
+        "Surface Type C",
+        "Surface Type D"
+    ]
+
+    # Assign colors based on predicted class
+    color_values = []
+    for i in range(len(noisy_pcl)):
+        cls = predicted_class[i]
+        color = fixed_class_colors[cls]
+        color_values.append(color)
+
+    # Create a list to store all figures
+    figures = []
+
+    # Create main point cloud figure
+    main_fig = go.Figure()
+
+    # Add traces for each class to enable proper legend
+    for class_idx in range(4):
+        mask = predicted_class == class_idx
+        if np.any(mask):  # Only add class if points exist
+            main_fig.add_trace(
+                go.Scatter3d(
+                    x=noisy_pcl[mask, 0],
+                    y=noisy_pcl[mask, 1],
+                    z=noisy_pcl[mask, 2],
+                    mode='markers',
+                    marker=dict(
+                        size=4,
+                        color=fixed_class_colors[class_idx],
+                        opacity=0.9,
+                        symbol='circle',
+                        line=dict(
+                            width=0.5,
+                            color='rgba(0,0,0,0.3)'
+                        ),
+                    ),
+                    name=class_names[class_idx],
+                )
+            )
+
+    # Update main figure layout with enhanced visual properties
+    main_fig.update_layout(
+        title=dict(
+            text="Point Cloud Surface Classification",
+            font=dict(size=22, color='#333333')
+        ),
+        width=fig_size[0] * 100,
+        height=fig_size[1] * 100,
+        scene=dict(
+            aspectmode='data',
+            xaxis=dict(
+                title=dict(text='X', font=dict(size=16)),
+                gridcolor='#DDDDDD',
+                backgroundcolor='rgba(255,255,255,0.95)',
+                showbackground=True
             ),
-            row=1, col=1
-        )
-
-    # Create color scale legends (separate annotation)
-    annotations = []
-    for i, (cls_name, cls_color) in enumerate(zip(class_names, class_colors)):
-        annotations.append(dict(
-            x=1.01,
-            y=0.9 - i * 0.2,
-            xref="paper",
-            yref="paper",
-            text=f"{cls_name} Confidence",
-            showarrow=False,
-            font=dict(
-                family="Arial",
-                size=12,
-                color="#000000"
+            yaxis=dict(
+                title=dict(text='Y', font=dict(size=16)),
+                gridcolor='#DDDDDD',
+                backgroundcolor='rgba(255,255,255,0.95)',
+                showbackground=True
+            ),
+            zaxis=dict(
+                title=dict(text='Z', font=dict(size=16)),
+                gridcolor='#DDDDDD',
+                backgroundcolor='rgba(255,255,255,0.95)',
+                showbackground=True
+            ),
+            camera=dict(
+                eye=dict(x=1.5, y=1.5, z=1.2)
             )
-        ))
+        ),
+        showlegend=True,
+        legend=dict(
+            itemsizing='constant',
+            font=dict(size=14),
+            bgcolor='rgba(255,255,255,0.7)',
+            bordercolor='#CCCCCC',
+            borderwidth=1
+        ),
+        margin=dict(l=10, r=10, b=10, t=50),
+        paper_bgcolor='white',
+        plot_bgcolor='white'
+    )
 
-    fig.update_layout(annotations=annotations)
+    # Add zoom view if indices are provided
+    if zoom_point_indices is not None and len(zoom_point_indices) > 0:
+        # For each point to zoom in on, create a separate figure
+        for idx in zoom_point_indices:
+            # Find k nearest neighbors
+            point = noisy_pcl[idx]
+            distances = np.sum((noisy_pcl - point) ** 2, axis=1)
+            nearest_indices = np.argsort(distances)[:zoom_k]
 
-    return fig
+            zoom_fig = go.Figure()
 
+            # Add center point with distinctive appearance
+            zoom_fig.add_trace(
+                go.Scatter3d(
+                    x=[noisy_pcl[idx, 0]],
+                    y=[noisy_pcl[idx, 1]],
+                    z=[noisy_pcl[idx, 2]],
+                    mode='markers',
+                    marker=dict(
+                        size=8,
+                        color='red',
+                        symbol='diamond',
+                        line=dict(width=1, color='black')
+                    ),
+                    name='Focus Point'
+                )
+            )
 
+            # Add neighboring points by class
+            for class_idx in range(4):
+                mask = (predicted_class[nearest_indices] == class_idx) & (nearest_indices != idx)
+                if np.any(mask):
+                    zoom_fig.add_trace(
+                        go.Scatter3d(
+                            x=noisy_pcl[nearest_indices[mask], 0],
+                            y=noisy_pcl[nearest_indices[mask], 1],
+                            z=noisy_pcl[nearest_indices[mask], 2],
+                            mode='markers',
+                            marker=dict(
+                                size=5,
+                                color=fixed_class_colors[class_idx],
+                                opacity=0.9,
+                            ),
+                            name=class_names[class_idx]
+                        )
+                    )
+
+            # Update zoom figure layout
+            zoom_fig.update_layout(
+                title=f"Detailed View of Point {idx}",
+                width=fig_size[0] * 60,
+                height=fig_size[1] * 60,
+                scene=dict(
+                    aspectmode='data',
+                    xaxis_title='X',
+                    yaxis_title='Y',
+                    zaxis_title='Z'
+                ),
+                showlegend=True
+            )
+
+            figures.append(zoom_fig)
+
+    # Add main figure at the beginning of the list
+    figures.insert(0, main_fig)
+
+    return figures
 def get_k_nearest_neighbors_indices(pcl, query_point, k=21):
     """
     Get indices of k nearest neighbors for a query point
@@ -457,14 +642,89 @@ def create_paper_figure(pcl, model_name, args_shape, scaling_factor="1", zoom_po
 
 
 def claude_plotting(model_name=None, args_shape=None, scaling_factor=None, rgb=False, add_noise=True):
-    pcls, label = load_data()
-    pcl = pcls[174][:]
-    fig = visualize_classified_point_cloud(pcl, model_name=model_name, args_shape=args_shape)
-    fig.show()
+    # pcls, label = load_data()
+    pcl_person = np.load("persons_pcls.npy")
+    pcl_guitar = np.load("guitar_pcls.npy")
+    # pcl_airplane = np.load("airplane_pcls.npy")
+    # pcl_bath = np.load("bath_pcls.npy")
+    # pcl = pcls[162][:]
+    shapes = [47, 86, 162,174,176,179]
+    shapes = [86, 162,174,179]
+    shapes = [86,174,179]
+    for idx in shapes:
+        pcl = np.load(f'{idx}.npy')
+        figures = visualize_classified_point_cloud(pcl, model_name=model_name, args_shape=args_shape)
+        for fig in figures:
+            fig.show()
 
-    fig_paper = create_paper_figure(pcl, model_name=model_name, args_shape=args_shape)
-    fig_paper.savefig('classification_figure.pdf', dpi=300, bbox_inches='tight')
+    # humans =[3,12,17,19]
+    humans =[12]
+    for idx in humans:
+        pcl = pcl_person[idx, :, :]
+        figures = visualize_classified_point_cloud(pcl, model_name=model_name, args_shape=args_shape)
+        for fig in figures:
+            fig.show()
+    # guitars =[5,11]
+    # for idx in guitars:
+    #     pcl = pcl_guitar[idx, :, :]
+    #     figures = visualize_classified_point_cloud(pcl, model_name=model_name, args_shape=args_shape)
+    #     for fig in figures:
+    #         fig.show()
 
+def rotate_point_cloud(pcl, rotation_angles=(0, 0, 0)):
+    """
+    Rotate a 3D point cloud using Euler angles.
+
+    Args:
+        pcl: Input point cloud (numpy array of shape Nx3)
+        rotation_angles: Tuple of (rx, ry, rz) rotation angles in degrees
+                         to rotate around the x, y, and z axes respectively
+
+    Returns:
+        rotated_pcl: Rotated point cloud (numpy array of shape Nx3)
+    """
+    # Ensure the point cloud is in float format
+    pcl = np.asarray(pcl, dtype=np.float32)
+    # Convert angles from degrees to radians
+    rx, ry, rz = np.radians(rotation_angles)
+
+    # Rotation matrix around x-axis
+    Rx = np.array([
+        [1, 0, 0],
+        [0, np.cos(rx), -np.sin(rx)],
+        [0, np.sin(rx), np.cos(rx)]
+    ])
+
+    # Rotation matrix around y-axis
+    Ry = np.array([
+        [np.cos(ry), 0, np.sin(ry)],
+        [0, 1, 0],
+        [-np.sin(ry), 0, np.cos(ry)]
+    ])
+
+    # Rotation matrix around z-axis
+    Rz = np.array([
+        [np.cos(rz), -np.sin(rz), 0],
+        [np.sin(rz), np.cos(rz), 0],
+        [0, 0, 1]
+    ])
+
+    # Combined rotation matrix (applying rotations in order Z, Y, X)
+    # This is the extrinsic rotation sequence, which is most commonly used
+    R = np.dot(Rz, np.dot(Ry, Rx))
+
+    # Apply rotation to the point cloud (each point is a row in the array)
+    rotated_pcl = np.dot(pcl, R.T)
+
+    # Ensure the returned point cloud is of float type
+    rotated_pcl = rotated_pcl.astype(np.float32)
+
+    return rotated_pcl
+
+
+# Example usage:
+# rotated_cloud = rotate_point_cloud(point_cloud, (30, 45, 10))
+# This rotates the point cloud 30° around x-axis, 45° around y-axis, and 10° around z-axis
 
 def visualize_classified_point_cloud_static(pcl, model_name, args_shape, scaling_factor="1",
                                             zoom_point_indices=None, zoom_k=21, fig_size=(12, 10),
@@ -489,8 +749,8 @@ def visualize_classified_point_cloud_static(pcl, model_name, args_shape, scaling
     import matplotlib as mpl
 
     # Use the noisy point cloud directly
-    noisy_pcl = pcl
-
+    # noisy_pcl = rotate_point_cloud(pcl, (30, 45, 10))
+    noisy_pcl = rotate_point_cloud(pcl, (0, 0, 0))
     # Get classification outputs
     colors, scaling_fac = classifyPoints(model_name=model_name,
                                          pcl_src=noisy_pcl,
@@ -535,6 +795,7 @@ def visualize_classified_point_cloud_static(pcl, model_name, args_shape, scaling
     fig_main = plt.figure(figsize=fig_size)
     ax_main = fig_main.add_subplot(111, projection='3d')
 
+
     # Plot each class separately in the main plot
     for cls_idx in range(4):
         mask = predicted_class == cls_idx
@@ -547,24 +808,48 @@ def visualize_classified_point_cloud_static(pcl, model_name, args_shape, scaling
 
             ax_main.scatter(
                 cls_points[:, 0], cls_points[:, 1], cls_points[:, 2],
-                c=colors, s=2, alpha=0.7, label=class_names[cls_idx]
+                c=colors, s=10, alpha=0.7, label=class_names[cls_idx]
             )
 
     # Mark zoom points in main plot
     for cls_idx, point_idx in zoom_point_indices.items():
+        # Glow effect (larger, semi-transparent point)
         ax_main.scatter(
             noisy_pcl[point_idx, 0],
             noisy_pcl[point_idx, 1],
             noisy_pcl[point_idx, 2],
-            color=colormaps[cls_idx](0.9), s=30, edgecolor='black',
+            color=colormaps[cls_idx](0.9),
+            s=300, alpha=0.3,  # Larger, transparent point for glow
+            marker='o'
+        )
+
+        # Actual zoom point (sharp and visible)
+        ax_main.scatter(
+            noisy_pcl[point_idx, 0],
+            noisy_pcl[point_idx, 1],
+            noisy_pcl[point_idx, 2],
+            color=colormaps[cls_idx](0.9),
+            s=80, edgecolor='black', linewidth=1.5,
             label=f'{class_names[cls_idx]} Zoom Point'
         )
 
+    ax_main.set_xlim([-1, 1])
+    ax_main.set_ylim([-1, 1])
+    ax_main.set_zlim([-1, 1])
+    # ax_main.grid(False)  # Remove grid from the main plot
+    # ax_main.set_xticks([])
+    # ax_main.set_yticks([])
+    # ax_main.set_zticks([])
+    # ax_main.set_xticklabels([])
+    # ax_main.set_yticklabels([])
+    # ax_main.set_zticklabels([])
+    # ax_main.axis('off')
     ax_main.set_title('Surface Classification')
     ax_main.set_xlabel('X')
     ax_main.set_ylabel('Y')
     ax_main.set_zlabel('Z')
     ax_main.legend()
+    # ax_main.view_init(elev=0, azim=0)
 
     # Save or show the main figure
     if save_path:
@@ -582,6 +867,7 @@ def visualize_classified_point_cloud_static(pcl, model_name, args_shape, scaling
         # Create new figure for this zoom
         fig_zoom = plt.figure(figsize=(10, 8))
         ax_zoom = fig_zoom.add_subplot(111, projection='3d')
+        ax_zoom.grid(False)
 
         # Plot all zoom points with their respective class colors
         for subcls_idx in range(4):
@@ -609,12 +895,14 @@ def visualize_classified_point_cloud_static(pcl, model_name, args_shape, scaling
         ax_zoom.set_xlabel('X')
         ax_zoom.set_ylabel('Y')
         ax_zoom.set_zlabel('Z')
+        ax_zoom.set_xticks([])
+        ax_zoom.set_yticks([])
+        ax_zoom.set_zticks([])
+        ax_zoom.set_xticklabels([])
+        ax_zoom.set_yticklabels([])
+        ax_zoom.set_zticklabels([])
+        ax_zoom.axis('off')
 
-        # Set zoom view limits centered at the zoom point
-        zoom_radius = np.max(np.linalg.norm(zoom_patch - noisy_pcl[point_idx], axis=1)) * 1.2
-        ax_zoom.set_xlim(noisy_pcl[point_idx, 0] - zoom_radius, noisy_pcl[point_idx, 0] + zoom_radius)
-        ax_zoom.set_ylim(noisy_pcl[point_idx, 1] - zoom_radius, noisy_pcl[point_idx, 1] + zoom_radius)
-        ax_zoom.set_zlim(noisy_pcl[point_idx, 2] - zoom_radius, noisy_pcl[point_idx, 2] + zoom_radius)
 
         # Save or show the zoom figure
         if save_path:
@@ -665,7 +953,7 @@ def claude_plotting_static(model_name=None, args_shape=None, scaling_factor=None
         os.makedirs(save_path, exist_ok=True)
 
     pcls, label = load_data()
-    pcl = pcls[174][:]
+    pcl = pcls[162][:]
 
     # Create static plots
     fig = visualize_classified_point_cloud_static(
@@ -1257,6 +1545,171 @@ def vis2(model_name=None, args_shape=None, scaling_factor=None, rgb=False,
             fig_max_embedding = go.Figure(data=data_max_embedding, layout=layout)
             fig_max_embedding.show()
 
+
+def vis2_static(model_name=None, args_shape=None, scaling_factor=None, rgb=False, add_noise=True):
+    """
+    Creates static non-interactive 3D point cloud visualizations using matplotlib.
+    The visualization shows only the points from a side view perspective and
+    adjusts the image boundaries to match the point cloud dimensions.
+
+    Parameters:
+    -----------
+    model_name : str
+        Name of the model to use for classification
+    args_shape : tuple
+        Shape parameters for the classification
+    scaling_factor : float
+        Scaling factor for the point cloud
+    rgb : bool
+        Whether to use RGB color representation
+    add_noise : bool
+        Whether to add noise to the point cloud
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib import cm
+    from mpl_toolkits.mplot3d import Axes3D
+    import os
+
+    # Define shapes to visualize
+    shapes = [86]
+
+    # Define colormaps for different classes
+    colormaps = [cm.plasma, cm.viridis, cm.inferno, cm.cividis, cm.magma]
+    colormaps = [cm.plasma, cm.viridis, cm.cividis, cm.inferno, cm.magma]
+
+    # Define class names for labels
+    names = ['plane', 'peak/pit', 'valley/ridge', 'saddle', 'corner']
+
+    # Configure matplotlib for clean visualization
+    plt.rcParams['figure.facecolor'] = 'none'
+    plt.rcParams['axes.facecolor'] = 'none'
+
+    # Create output directory
+    output_dir = "point_cloud_visualizations"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Iterate through classes and shapes
+    for class_num in [0, 1, 2, 3, 4]:
+        for k in shapes:
+            # Load point cloud data
+            pointcloud = np.load(f"{k}.npy")
+            pointcloud = pointcloud.astype(np.float32)
+
+            # Get classification results
+            colors, scaling_fac = classifyPoints(model_name=model_name,
+                                                 pcl_src=pointcloud,
+                                                 pcl_interest=pointcloud,
+                                                 args_shape=args_shape,
+                                                 scaling_factor=scaling_factor)
+
+            # Process classification results
+            colors = colors.detach().cpu().numpy().squeeze()
+            colors = colors[:, :5]
+
+            # Set all points to the current class for visualization
+            max_embedding_index = class_num * np.ones(len(pointcloud), dtype=int)
+
+            # Get confidence scores for the current class
+            max_embedding_weights = colors[:, class_num]
+
+            # Normalize weights to [0, 1] range
+            min_weight = np.min(max_embedding_weights)
+            max_weight = np.max(max_embedding_weights)
+            max_embedding_weights = (max_embedding_weights - min_weight) / (max_weight - min_weight + 1e-6)
+
+            # Calculate point cloud bounds for precise framing
+            y_min, y_max = np.min(pointcloud[:, 1]), np.max(pointcloud[:, 1])
+            z_min, z_max = np.min(pointcloud[:, 2]), np.max(pointcloud[:, 2])
+
+            # Create a figure with tight bounds
+            fig = plt.figure(dpi=300, frameon=False)
+            ax = fig.add_subplot(111, projection='3d')
+
+            # Map weights to colors
+            mapped_colors = colormaps[class_num](max_embedding_weights)
+
+            # Plot only the points
+            scatter = ax.scatter(
+                pointcloud[:, 0],
+                pointcloud[:, 1],
+                pointcloud[:, 2],
+                c=mapped_colors,
+                s=2.5,  # marker size
+                alpha=1.0  # opacity
+            )
+
+            # Remove all visual elements except points
+            ax.set_axis_off()
+            ax.grid(False)
+            ax.xaxis.pane.fill = False
+            ax.yaxis.pane.fill = False
+            ax.zaxis.pane.fill = False
+            ax.xaxis.pane.set_edgecolor('w')
+            ax.yaxis.pane.set_edgecolor('w')
+            ax.zaxis.pane.set_edgecolor('w')
+
+            # Set side view (YZ plane)
+            ax.view_init(elev=0, azim=90)
+
+            # Set axis limits precisely to point cloud boundaries
+            ax.set_xlim(np.min(pointcloud[:, 0]), np.max(pointcloud[:, 0]))
+            ax.set_ylim(y_min, y_max)
+            ax.set_zlim(z_min, z_max)
+
+            # Disable auto scaling
+            ax.autoscale(False)
+
+            # Remove margins to show only points
+            plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
+
+            # Use tight layout to remove whitespace
+            fig.tight_layout(pad=0)
+
+            # Generate output filename
+            output_file = f"{output_dir}/point_cloud_class{class_num}_shape{k}.png"
+
+            # Save with exact bounding box
+            plt.savefig(output_file,
+                        bbox_inches='tight',
+                        pad_inches=0,
+                        dpi=300,
+                        transparent=True)
+
+            # Close figure to free memory
+            plt.close(fig)
+
+            # Additional step: Further crop image to exact point cloud boundaries
+            try:
+                from PIL import Image
+                import numpy as np
+
+                # Open the saved image
+                img = Image.open(output_file)
+                img_array = np.array(img)
+
+                # Find non-transparent pixels (alpha > 0)
+                if img_array.shape[2] == 4:  # RGBA
+                    non_empty = np.where(img_array[:, :, 3] > 0)
+                    if len(non_empty[0]) > 0 and len(non_empty[1]) > 0:
+                        # Get bounds of content
+                        min_y, max_y = np.min(non_empty[0]), np.max(non_empty[0])
+                        min_x, max_x = np.min(non_empty[1]), np.max(non_empty[1])
+
+                        # Crop to content bounds
+                        img_cropped = img.crop((min_x, min_y, max_x + 1, max_y + 1))
+                        img_cropped.save(output_file)
+                        print(f"Cropped image saved: {output_file}")
+                    else:
+                        print(f"No visible content to crop in {output_file}")
+                else:
+                    print(f"Image does not have alpha channel, skipping cropping for {output_file}")
+            except ImportError:
+                print("PIL not available, skipping final cropping step")
+            except Exception as e:
+                print(f"Error during image cropping: {e}")
+
+    print(f"Static point cloud visualizations saved to '{output_dir}' directory")
 
 def visualizeShapesWithEmbeddings3dMatchCorners(model_name=None, args_shape=None, scaling_factor=None, rgb=False):
     train_set = IndoorDataset(data_augmentation=False)
